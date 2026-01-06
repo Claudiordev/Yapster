@@ -20,6 +20,7 @@ public class Security {
         http.httpBasic(httpBasic -> httpBasic.disable());
 
         http.authorizeHttpRequests(authorizeRequests -> authorizeRequests
+                .requestMatchers("/api/v1/auth/**").permitAll()
                 .anyRequest().authenticated()).formLogin(form-> form.disable());
 
         http.csrf(csrf -> csrf.disable());
