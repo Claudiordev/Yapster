@@ -1,0 +1,33 @@
+services:
+  session_postgres:
+    image: postgres:16
+    container_name: session_postgres
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5432:5432"
+    volumes:
+      - "pgdata:/var/lib/postgresql/data"
+  session:
+    build:
+      context: .
+      dockerfile: session/Dockerfile
+    container_name: session
+    ports:
+      - "8081:8080"
+    depends_on:
+      - session_postgres
+  router:
+    build:
+      context: .
+      dockerfile: router/Dockerfile
+    container_name: router
+    ports:
+      - "8080:8080"
+    depends_on:
+      - session
+
+volumes:
+  pgdata:

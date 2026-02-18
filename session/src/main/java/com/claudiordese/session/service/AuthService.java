@@ -22,6 +22,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
 
+
     public AuthService(UserRepository userRepository, JwtUtils jwtUtils, PasswordEncoder passwordEncoder, ObjectMapper objectMapper) {
         this.userRepository = userRepository;
         this.jwtUtils = jwtUtils;
@@ -29,7 +30,7 @@ public class AuthService {
         this.objectMapper = objectMapper;
     }
 
-    public LoginResponse login(LoginRequest loginRequest) {
+    public LoginResponse login(LoginRequest loginRequest) throws RuntimeException {
         User user = userRepository.findByUsername(loginRequest.username())
                 .orElseThrow(() -> new InterdictedException("403", "User not found"));
 

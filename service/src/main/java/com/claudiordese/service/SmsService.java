@@ -5,6 +5,7 @@ import com.claudiordese.dto.MessageRequest;
 
 import com.claudiordese.exceptions.CircuitBreakerException;
 import com.claudiordese.exceptions.InterdictedException;
+import com.claudiordese.exceptions.InvalidAuthorizationException;
 import com.claudiordese.exceptions.RateLimitException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
@@ -21,11 +22,10 @@ import java.nio.charset.StandardCharsets;
 @Service
 public class SmsService {
 
-    @Value("${twilio.sender.phone_number}")
-    private String senderNumber;
-    private String SID;
+    private final String senderNumber;
+    private final String SID;
     private final RestClient restClient;
-    private Logger logger = LoggerFactory.getLogger(SmsService.class);
+    private final Logger logger = LoggerFactory.getLogger(SmsService.class);
 
     public SmsService(RestClient restClient,
                       @Value("${twilio.sid}") String SID,
@@ -42,9 +42,6 @@ public class SmsService {
     @RateLimiter(name="sms", fallbackMethod = "rateLimitFallback")
     @CircuitBreaker(name="sms", fallbackMethod = "sendFallback")
     public Message sendMessage(MessageRequest messageRequest) {
-        logger.debug("SID: {}",SID);
-        logger.debug("Sender: {}", senderNumber);
-
         return restClient.post().uri("/2010-04-01/Accounts/" + SID + "/Messages.json")
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .body(
@@ -54,7 +51,7 @@ public class SmsService {
                 ).retrieve()
                 .onStatus(status -> status.value() == 401,
                         (request, response) -> {
-                            throw new InterdictedException("401", "No permission to send SMS, verify the service configuration.");
+                            throw new InvalidAuthorizationException("401", "No permission to send SMS, verify the service configuration.");
                         }
                 ).body(Message.class);
     }

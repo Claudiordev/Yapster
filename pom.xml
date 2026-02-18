@@ -24,7 +24,7 @@
 	<modules>
 		<module>session</module>
         <module>service</module>
-		<module>gatew</module>
+		<module>router</module>
 		<module>payment</module>
 		<module>common-utils</module>
 	</modules>

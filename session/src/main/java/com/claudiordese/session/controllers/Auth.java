@@ -18,13 +18,13 @@ import java.util.UUID;
 @Validated
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping("${url.api.base-path}/auth")
 public class Auth {
 
     private final AuthService authService;
 
     @PostMapping
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest loginRequest) throws RuntimeException {
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest loginRequest) {
         LoginResponse loginResponse = authService.login(loginRequest);
         return ResponseEntity.ok(loginResponse);
     }

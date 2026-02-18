@@ -21,6 +21,8 @@ public class Security {
 
         http.authorizeHttpRequests(authorizeRequests -> authorizeRequests
                 .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers("/error").permitAll()
+                .requestMatchers("/error/**").permitAll()
                 .anyRequest().authenticated()).formLogin(form-> form.disable());
 
         http.csrf(csrf -> csrf.disable());

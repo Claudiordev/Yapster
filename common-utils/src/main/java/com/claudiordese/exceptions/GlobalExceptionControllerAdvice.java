@@ -9,17 +9,20 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
 import java.net.URI;
 import java.util.Map;
 
 @ControllerAdvice
-public class GlobalExceptionControlerAdvice {
-    private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionControlerAdvice.class);
+public class GlobalExceptionControllerAdvice {
+    private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionControllerAdvice.class);
 
     private static final Map<Class<? extends Exception>, HttpStatus> STATUS_MAPPING = Map.ofEntries(
-        Map.entry(RateLimitException.class, HttpStatus.TOO_MANY_REQUESTS),
-            Map.entry(CircuitBreakerException.class, HttpStatus.SERVICE_UNAVAILABLE)
+            Map.entry(RateLimitException.class, HttpStatus.TOO_MANY_REQUESTS),
+            Map.entry(CircuitBreakerException.class, HttpStatus.SERVICE_UNAVAILABLE),
+            Map.entry(InterdictedException.class, HttpStatus.FORBIDDEN),
+            Map.entry(InvalidAuthorizationException.class, HttpStatus.UNAUTHORIZED)
     );
 
     @ExceptionHandler(GlobalException.class)
