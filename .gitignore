@@ -38,3 +38,9 @@ build/
 
 ### Next.js ###
 .next/
+
+### Ignored modules ###
+library/
+
+### Documentation ###
+README.md
