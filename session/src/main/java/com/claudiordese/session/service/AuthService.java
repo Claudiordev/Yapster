@@ -49,7 +49,7 @@ public class AuthService {
         String jwt = jwtUtils.generateToken(user);
         RefreshToken refreshToken = createRefreshToken(user.getUsername());
 
-        return new LoginResponse(jwt, refreshToken.getToken(), "Bearer", "3600");
+        return new LoginResponse(jwt, refreshToken.getToken(), "Bearer", jwtUtils.getAccessExpirationSeconds());
     }
 
     @Transactional
@@ -98,7 +98,7 @@ public class AuthService {
 
         String newAccessToken = jwtUtils.generateToken(user);
 
-        return new LoginResponse(newAccessToken, refreshToken.getToken(), "Bearer", "3600");
+        return new LoginResponse(newAccessToken, refreshToken.getToken(), "Bearer", jwtUtils.getAccessExpirationSeconds());
     }
 
     @Transactional

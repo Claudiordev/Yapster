@@ -22,6 +22,9 @@ public class JwtUtils {
     @Value("${jwt.private-key.path}")
     private String privateKeyPath;
 
+    @Value("${jwt.accessExpirationMs}")
+    private long accessExpirationMs;
+
     @PostConstruct
     void init() {
         try {
@@ -31,12 +34,16 @@ public class JwtUtils {
         }
     }
 
+    public long getAccessExpirationSeconds() {
+        return accessExpirationMs / 1000;
+    }
+
     public String generateToken(User user) {
         return Jwts.builder()
                 .setSubject(user.getUsername())
                 .claim("role", user.getRoles().getFirst())
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + (1000 * 60 * 60)))
+                .setExpiration(new Date(System.currentTimeMillis() + accessExpirationMs))
                 .signWith(PRIVATE_KEY, SignatureAlgorithm.RS256)
                 .compact();
     }
