@@ -1,9 +1,5 @@
-import { title } from "@/components/primitives";
+import { SmsPanel } from "@/app/(protected)/sms/_Components/sms-panel";
 
-export default function PricingPage() {
-  return (
-    <div>
-      <h1 className={title()}>Pricing</h1>
-    </div>
-  );
+export default function SmsPage() {
+  return <SmsPanel />;
 }
