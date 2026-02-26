@@ -91,14 +91,18 @@ public class AuthService {
 
     @Transactional
     public LoginResponse refreshAccessToken(String refreshTokenStr) {
-        RefreshToken refreshToken = verifyRefreshToken(refreshTokenStr);
+        RefreshToken oldToken = verifyRefreshToken(refreshTokenStr);
+        String username = oldToken.getUsername();
 
-        User user = userRepository.findByUsername(refreshToken.getUsername())
+        refreshTokenRepository.delete(oldToken);
+
+        User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new InterdictedException("403", "User not found"));
 
         String newAccessToken = jwtUtils.generateToken(user);
+        RefreshToken newRefreshToken = createRefreshToken(username);
 
-        return new LoginResponse(newAccessToken, refreshToken.getToken(), "Bearer", jwtUtils.getAccessExpirationSeconds());
+        return new LoginResponse(newAccessToken, newRefreshToken.getToken(), "Bearer", jwtUtils.getAccessExpirationSeconds());
     }
 
     @Transactional
