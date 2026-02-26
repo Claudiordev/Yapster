@@ -29,6 +29,8 @@ import {
   Logo,
 } from "@/components/icons";
 import {User} from "@heroui/user";
+import {Popover, PopoverTrigger, PopoverContent} from "@heroui/popover";
+import {Card, CardBody} from "@heroui/card";
 
 export const Navbar = () => {
   const router = useRouter();
@@ -91,7 +93,27 @@ export const Navbar = () => {
         </NavbarItem>
         {username && (
           <NavbarItem className="hidden sm:flex gap-2">
-            <User avatarProps={{ className: 'w-5 h-5',src: ''}} description="" name={username} />
+            <Popover placement="bottom-end">
+              <PopoverTrigger>
+                <button className="flex items-center gap-2">
+                  <User avatarProps={{ className: 'w-5 h-5', src: '' }} description="" name={username} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent>
+                <Card className="border-none shadow-none">
+                  <CardBody className="gap-2">
+                    <div>
+                      <p className="text-small text-default-500">Logged in for:</p>
+                      <p className="text-small font-semibold">Value</p>
+                    </div>
+                    <div>
+                      <p className="text-small text-default-500">Balance</p>
+                      <p className="text-small font-semibold">$Value</p>
+                    </div>
+                  </CardBody>
+                </Card>
+              </PopoverContent>
+            </Popover>
           </NavbarItem>
         )}
         <NavbarItem>
