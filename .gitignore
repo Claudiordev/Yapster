@@ -35,3 +35,6 @@ build/
 ### Application properties ###
 **/application.properties
 **/application-*.properties
+
+### Next.js ###
+.next/
