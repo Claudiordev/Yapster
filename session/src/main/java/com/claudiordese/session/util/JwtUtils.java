@@ -31,9 +31,6 @@ public class JwtUtils {
         }
     }
 
-    @Value("${jwt.refreshExpirationMs}")
-    private Long refreshExperitationMs;
-
     public String generateToken(User user) {
         return Jwts.builder()
                 .setSubject(user.getUsername())

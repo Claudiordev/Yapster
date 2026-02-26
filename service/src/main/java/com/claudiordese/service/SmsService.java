@@ -39,8 +39,6 @@ public class SmsService {
         return restClient.get().uri("/2010-04-01/Accounts/{SID}/Messages/{id}").retrieve().body(Message.class);
     }
 
-    @RateLimiter(name="sms", fallbackMethod = "rateLimitFallback")
-    @CircuitBreaker(name="sms", fallbackMethod = "sendFallback")
     public Message sendMessage(MessageRequest messageRequest) {
         return restClient.post().uri("/2010-04-01/Accounts/" + SID + "/Messages.json")
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)

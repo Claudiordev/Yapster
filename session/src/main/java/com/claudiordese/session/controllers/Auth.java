@@ -2,6 +2,7 @@ package com.claudiordese.session.controllers;
 
 import com.claudiordese.session.dto.LoginRequest;
 import com.claudiordese.session.dto.LoginResponse;
+import com.claudiordese.session.dto.RefreshTokenRequest;
 import com.claudiordese.session.dto.RegisterResponse;
 import com.claudiordese.session.dto.UserDto;
 import com.claudiordese.session.service.AuthService;
@@ -53,5 +54,17 @@ public class Auth {
 
     public ResponseEntity<?> updateUsername(@NotBlank @PathVariable("id") String userId, @Valid @RequestParam String newUsername) {
         return ResponseEntity.ok(authService.updateUsername(UUID.fromString(userId), newUsername));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
+        LoginResponse loginResponse = authService.refreshAccessToken(request.refreshToken());
+        return ResponseEntity.ok(loginResponse);
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(@Valid @RequestBody RefreshTokenRequest request) {
+        authService.logout(request.refreshToken());
+        return ResponseEntity.ok().build();
     }
 }
