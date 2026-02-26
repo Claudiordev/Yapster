@@ -10,6 +10,17 @@ services:
       - "5432:5432"
     volumes:
       - "pgdata:/var/lib/postgresql/data"
+  service_postgres:
+    image: postgres:16
+    container_name: service_postgres
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5438:5432"
+    volumes:
+      - "service_pgdata:/var/lib/postgresql/data"
   session:
     build:
       context: .
@@ -19,6 +30,18 @@ services:
       - "8081:8080"
     depends_on:
       - session_postgres
+  service:
+    build:
+      context: .
+      dockerfile: service/Dockerfile
+    container_name: service
+    ports:
+      - "8082:8080"
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://service_postgres:5432/mydatabase
+    depends_on:
+      - service_postgres
   router:
     build:
       context: .
@@ -28,6 +51,8 @@ services:
       - "8080:8080"
     depends_on:
       - session
+      - service
 
 volumes:
   pgdata:
+  service_pgdata:
