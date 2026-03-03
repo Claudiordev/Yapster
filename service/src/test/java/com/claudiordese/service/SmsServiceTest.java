@@ -1,18 +1,28 @@
 package com.claudiordese.service;
 
+import com.claudiordese.client.SessionClient;
 import com.claudiordese.dto.MessageRequest;
 import com.claudiordese.exceptions.InterdictedException;
+import com.claudiordese.exceptions.InvalidAuthorizationException;
+import org.apache.catalina.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+
+import java.math.BigDecimal;
+import java.util.List;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -21,17 +31,24 @@ public class SmsServiceTest {
 
     private SmsService smsService;
     private MockRestServiceServer server;
+    private SessionClient sessionClient;
 
     @BeforeEach
     void setup() {
         RestClient.Builder builder = RestClient.builder().baseUrl("https://api.twilio.com");
         server = MockRestServiceServer.bindTo(builder).build();
         RestClient client = builder.build();
+        sessionClient = mock(SessionClient.class);
 
         String sender = "+15551234567";
         String sid = "AC123";
 
-        smsService = new SmsService(client,sid,sender);
+        smsService = new SmsService(client,sessionClient,sid,sender);
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("testuser", null, List.of())
+        );
+        when(sessionClient.getBalance("testuser")).thenReturn(new BigDecimal("100.00"));
     }
 
     @Test
@@ -62,7 +79,7 @@ public class SmsServiceTest {
     void sendMessage_when401() {
         server.expect(requestTo("https://api.twilio.com/2010-04-01/Accounts/AC123/Messages.json")).andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
-        assertThrows(InterdictedException.class,
+        assertThrows(InvalidAuthorizationException.class,
                 () -> smsService.sendMessage(new MessageRequest("+46712345600", "Hello world")));
 
         server.verify();
