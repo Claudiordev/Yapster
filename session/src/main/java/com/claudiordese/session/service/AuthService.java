@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -67,6 +68,12 @@ public class AuthService {
         userRepository.save(user);
 
         return new RegisterResponse(user.getId().toString());
+    }
+
+    public BigDecimal getBalanceByUsername(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new InterdictedException("403", "User not found"));
+        return user.getBalance();
     }
 
     public UserDto getUserById(UUID id) throws InterdictedException {

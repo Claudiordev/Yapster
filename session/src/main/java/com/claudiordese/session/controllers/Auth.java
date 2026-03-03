@@ -36,6 +36,11 @@ public class Auth {
         return ResponseEntity.ok(registerResponse);
     }
 
+    @GetMapping("/user/balance/{username}")
+    public ResponseEntity<?> getBalance(@NotBlank @PathVariable("username") String username) {
+        return ResponseEntity.ok(authService.getBalanceByUsername(username));
+    }
+
     @GetMapping("/user/{id}")
     @ConditionalOnProperty(
             name = "features.forgot-username.enabled",
