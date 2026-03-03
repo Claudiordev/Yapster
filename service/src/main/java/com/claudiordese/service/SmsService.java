@@ -1,5 +1,6 @@
 package com.claudiordese.service;
 
+import com.claudiordese.client.SessionClient;
 import com.claudiordese.dto.Message;
 import com.claudiordese.dto.MessageRequest;
 
@@ -13,9 +14,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
@@ -25,12 +28,15 @@ public class SmsService {
     private final String senderNumber;
     private final String SID;
     private final RestClient restClient;
+    private final SessionClient sessionClient;
     private final Logger logger = LoggerFactory.getLogger(SmsService.class);
 
     public SmsService(RestClient restClient,
+                      SessionClient sessionClient,
                       @Value("${twilio.sid}") String SID,
                       @Value("${twilio.sender.phone_number}") String senderNumber) {
         this.restClient = restClient;
+        this.sessionClient = sessionClient;
         this.SID = SID;
         this.senderNumber = senderNumber;
     }
@@ -40,6 +46,13 @@ public class SmsService {
     }
 
     public Message sendMessage(MessageRequest messageRequest) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        BigDecimal balance = sessionClient.getBalance(username);
+
+        if (balance.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new InterdictedException("403", "Insufficient balance");
+        }
+
         return restClient.post().uri("/2010-04-01/Accounts/" + SID + "/Messages.json")
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .body(
