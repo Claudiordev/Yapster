@@ -21,6 +21,31 @@ services:
       - "5438:5432"
     volumes:
       - "service_pgdata:/var/lib/postgresql/data"
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    volumes:
+      - "zookeeper_data:/var/lib/zookeeper/data"
+      - "zookeeper_log:/var/lib/zookeeper/log"
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    volumes:
+      - "kafka_data:/var/lib/kafka/data"
   discovery:
     build:
       context: .
@@ -51,6 +76,26 @@ services:
     depends_on:
       - service_postgres
       - discovery
+  trading:
+    build:
+      context: .
+      dockerfile: trading/Dockerfile
+    container_name: trading
+    ports:
+      - "8083:8083"
+    depends_on:
+      - discovery
+      - kafka
+  metrics:
+    build:
+      context: .
+      dockerfile: metrics/Dockerfile
+    container_name: metrics
+    ports:
+      - "8084:8084"
+    depends_on:
+      - discovery
+      - kafka
   router:
     build:
       context: .
@@ -62,7 +107,11 @@ services:
       - discovery
       - session
       - service
+      - trading
 
 volumes:
   pgdata:
   service_pgdata:
+  kafka_data:
+  zookeeper_data:
+  zookeeper_log:
