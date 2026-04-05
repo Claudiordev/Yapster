@@ -22,3 +22,7 @@ public class RefreshToken {
     private Instant expiryDate;
     private boolean revoked;
 }
+
+
+
+//TODO Add a scheduler job on SQL to set the revoked to true in the table

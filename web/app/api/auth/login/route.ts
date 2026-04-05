@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { apiPost, ApiError } from "@/lib/api-client";
-import { setAuthCookie } from "@/lib/auth";
+import { setAuthCookies } from "@/lib/auth";
 import type { LoginRequest, LoginResponse } from "@/lib/auth";
 
 export async function POST(request: Request) {
@@ -10,7 +10,11 @@ export async function POST(request: Request) {
 
     const data = await apiPost<LoginRequest, LoginResponse>("/auth", body);
 
-    await setAuthCookie(data.accessToken, Number(data.expiresInSeconds));
+    await setAuthCookies(
+      data.accessToken,
+      data.refreshToken,
+      data.expiresIn,
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {

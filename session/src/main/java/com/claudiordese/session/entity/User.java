@@ -3,6 +3,7 @@ package com.claudiordese.session.entity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -41,6 +42,7 @@ public class User {
     private List<Role> roles = new ArrayList<>();
 
     @Column(name= "balance", nullable = false, precision = 12, scale = 2)
+    @ColumnDefault("0")
     private BigDecimal balance = new BigDecimal(0);
 
     @Override

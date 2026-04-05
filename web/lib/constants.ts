@@ -1,6 +1,7 @@
 export const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:8080";
 
 export const AUTH_COOKIE_NAME = "auth-token";
+export const REFRESH_COOKIE_NAME = "refresh-token";
 
 export const AUTH_COOKIE_OPTIONS = {
   httpOnly: true,

@@ -16,7 +16,7 @@ public class LoggingInterceptor implements WebFilter {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         var req = exchange.getRequest();
-        logger.info("Request URI: {}, Path: {}", req.getURI(), req.getPath());
+        logger.info("Request URI: {}, route path: {}", req.getURI(), req.getPath());
         return chain.filter(exchange);
     }
 }
