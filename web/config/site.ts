@@ -19,6 +19,14 @@ export const siteConfig = {
     {
       label: "SMS",
       href: "/sms",
+    },
+    {
+      label: "Metrics",
+      href: "/metrics",
+    },
+    {
+      label: "Settings",
+      href: "/settings",
     }
   ],
   navMenuItems: [

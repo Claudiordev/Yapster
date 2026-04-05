@@ -1,9 +1,20 @@
 import { NextResponse } from "next/server";
 
-import { clearAuthCookie } from "@/lib/auth";
+import { apiPost } from "@/lib/api-client";
+import { clearAuthCookies, getRefreshToken } from "@/lib/auth";
 
 export async function POST() {
-  await clearAuthCookie();
+  const refreshToken = await getRefreshToken();
+
+  if (refreshToken) {
+    try {
+      await apiPost("/auth/logout", { refreshToken });
+    } catch {
+      // Clear cookies regardless of backend response
+    }
+  }
+
+  await clearAuthCookies();
 
   return NextResponse.json({ success: true });
 }
