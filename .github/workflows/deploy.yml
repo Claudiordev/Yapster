@@ -1,0 +1,49 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master, feat-ci-cd-deployment]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code from repo to runner
+        uses: actions/checkout@v4
+
+      - name: Inject application.properties onto services
+        run: |
+          mkdir -p discovery/src/main/resources
+          mkdir -p session/src/main/resources
+          mkdir -p service/src/main/resources
+          mkdir -p trading/src/main/resources
+          mkdir -p metrics/src/main/resources
+          mkdir -p router/src/main/resources
+          echo "${{ secrets.DISCOVERY_PROPERTIES }}" > discovery/src/main/resources/application.properties
+          echo "${{ secrets.SESSION_PROPERTIES }}" > session/src/main/resources/application.properties
+          echo "${{ secrets.SERVICE_PROPERTIES }}" > service/src/main/resources/application.properties
+          echo "${{ secrets.TRADING_PROPERTIES }}" > trading/src/main/resources/application.properties
+          echo "${{ secrets.METRICS_PROPERTIES }}" > metrics/src/main/resources/application.properties
+          echo "${{ secrets.ROUTER_PROPERTIES }}" > router/src/main/resources/application.properties
+
+      - name: Stop existing containers
+        run: |
+          docker compose down --remove-orphans || true
+          docker rm -f kafka zookeeper session_postgres service_postgres discovery session service trading metrics router 2>/dev/null || true
+
+      - name: Build and start services
+        run: docker compose up -d --build
+
+      - name: Wait for services to start
+        run: sleep 30
+
+      - name: Health check - Discovery
+        run: curl -sf http://localhost:8761/actuator/health || echo "Discovery not ready yet"
+
+      - name: Health check - Router
+        run: curl -sf http://localhost:8080/actuator/health || echo "Router not ready yet"
+
+      - name: Clean up Docker resources
+        run: docker image prune -f
