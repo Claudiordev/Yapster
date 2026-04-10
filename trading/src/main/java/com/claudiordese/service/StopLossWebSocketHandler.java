@@ -173,24 +173,16 @@ public class StopLossWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private static final int MAX_SELL_RETRIES = 5;
-
     private void executeSell(String tokenId, PositionManager.Position position, double bestBid, String reason) {
-        for (int attempt = 1; attempt <= MAX_SELL_RETRIES; attempt++) {
-            logger.warn("{} SELL attempt {}/{} | token={} | bestBid={}", reason, attempt, MAX_SELL_RETRIES, tokenId, bestBid);
-            boolean success = orderService.placeSellOrder(position.blockId(), tokenId, position.shares(), bestBid);
-            if (success) {
-                positionManager.closePosition(tokenId, reason, bestBid);
-                unsubscribe(tokenId);
-                return;
-            }
-            logger.error("{} SELL attempt {}/{} FAILED | token={}", reason, attempt, MAX_SELL_RETRIES, tokenId);
-            if (attempt < MAX_SELL_RETRIES) {
-                try { Thread.sleep(1000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
-            }
+        String label = String.format("%s SELL | token=%s | bestBid=%s", reason, tokenId, bestBid);
+        boolean success = RetryExecutor.execute(label,
+                () -> orderService.placeSellOrder(position.blockId(), tokenId, position.shares(), bestBid));
+
+        if (success) {
+            positionManager.closePosition(tokenId, reason, bestBid);
+        } else {
+            positionManager.closePosition(tokenId, reason + "_FAILED", bestBid);
         }
-        logger.error("{} SELL EXHAUSTED all {} retries | token={} | closing position anyway", reason, MAX_SELL_RETRIES, tokenId);
-        positionManager.closePosition(tokenId, reason + "_FAILED", bestBid);
         unsubscribe(tokenId);
     }
 }
