@@ -166,6 +166,10 @@ public class TradingController {
         }
     }
 
+    /**
+     * Check conditional token balance for a specific token.
+     * GET /api/v1/trading/balance/token?tokenId=...
+     */
     @GetMapping("/balance/token")
     public ResponseEntity<String> getTokenBalance(@RequestParam String tokenId) {
         if (!polymarketAuth.hasApiCredentials()) {
@@ -181,6 +185,10 @@ public class TradingController {
         }
     }
 
+    /**
+     * Update balance allowance (approve exchange to transfer tokens).
+     * POST /api/v1/trading/approve?tokenId=...
+     */
     @PostMapping("/approve")
     public ResponseEntity<String> updateAllowance(@RequestParam(required = false) String tokenId) {
         if (!polymarketAuth.hasApiCredentials()) {
@@ -205,6 +213,11 @@ public class TradingController {
         }
     }
 
+    /**
+     * Place a market BUY order.
+     * Example: POST /api/v1/trading/order?tokenId=...&amount=1.0
+     * Automatically fetches the best ask price from the orderbook.
+     */
     @PostMapping("/order")
     public ResponseEntity<String> placeMarketBuyOrder(
             @RequestParam String tokenId,
@@ -249,6 +262,10 @@ public class TradingController {
         }
     }
 
+    /**
+     * Place a market BUY order using the block ID from TradingHandler.
+     * Example: POST /api/v1/trading/order/block?blockId=1772737500&side=up&amount=1.0
+     */
     @PostMapping("/order/block")
     public ResponseEntity<String> placeBlockOrder(
             @RequestParam long blockId,
@@ -266,6 +283,10 @@ public class TradingController {
         return placeMarketBuyOrder(tokenId, amount);
     }
 
+    /**
+     * Resolve token IDs for a block.
+     * GET /api/v1/trading/resolve?blockId=1773838500
+     */
     @GetMapping("/resolve")
     public ResponseEntity<?> resolveTokens(@RequestParam long blockId) {
         MarketResolver.MarketTokens tokens = marketResolver.resolve(blockId);
@@ -279,6 +300,11 @@ public class TradingController {
         ));
     }
 
+    /**
+     * Place a market SELL order by tokenId.
+     * POST /api/v1/trading/sell?tokenId=...&shares=1.49&price=0.55
+     * If price is omitted, uses the best bid from the orderbook.
+     */
     @PostMapping("/sell")
     public ResponseEntity<String> placeMarketSellOrder(
             @RequestParam String tokenId,
@@ -316,6 +342,10 @@ public class TradingController {
         }
     }
 
+    /**
+     * Get open and closed positions.
+     * GET /api/v1/trading/positions
+     */
     @GetMapping("/positions")
     public ResponseEntity<Map<String, Object>> getPositions() {
         return ResponseEntity.ok(Map.of(
