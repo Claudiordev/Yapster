@@ -73,17 +73,10 @@ All orders are cryptographically signed using EIP-712 signatures on the Polygon 
 
 ### Running Locally
 
-Start the infrastructure services:
+Start the infrastructure services with all the backend services:
 
 ```bash
 docker-compose up -d
-```
-
-Build and run the backend:
-
-```bash
-./mvnw clean install
-./mvnw spring-boot:run -pl trading
 ```
 
 Start the frontend:
