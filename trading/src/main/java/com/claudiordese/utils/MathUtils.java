@@ -30,7 +30,14 @@ public final class MathUtils {
     /**
      * Converts a human-readable token amount to on-chain representation
      * using 6 decimal places (USDC/Polymarket standard).
-     * Example: toTokenDecimals(1.5) = 1500000
+     * USDC tokens don't use decimals on-chain.
+     * They use integers where 6 decimal places are implied.
+     * This is a blockchain standard, smart contracts work with integers, not floats.
+     *   Human-readable  →  On-chain integer
+     *   $1.50           →  1,500,000
+     *   $0.01           →  10,000
+     *   $1.00           →  1,000,000
+     * Example: toTokenDecimals(1.5) = 1500000 = Math.pow(10^6) = 1,000,000 * 1.5
      */
     public static long toTokenDecimals(double x) {
         double f = Math.pow(10, TOKEN_DECIMALS) * x;
