@@ -3,6 +3,7 @@ package com.claudiordese.service;
 import com.claudiordese.dto.OrderEvent;
 import com.claudiordese.signing.OrderSigner;
 import com.claudiordese.signing.PolymarketAuth;
+import com.claudiordese.utils.MathUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -166,7 +167,7 @@ public class OrderService {
                 shares = actualShares;
             }
 
-            shares = Math.floor(shares * 100) / 100.0;
+            shares = MathUtils.roundDown(shares, 2);
 
             if (shares <= 0) {
                 logger.warn("No shares to sell for token {}", tokenId);

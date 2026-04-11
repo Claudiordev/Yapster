@@ -6,6 +6,8 @@ import org.web3j.crypto.Keys;
 import org.web3j.crypto.Sign;
 import org.web3j.utils.Numeric;
 
+import com.claudiordese.utils.MathUtils;
+
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
@@ -30,8 +32,6 @@ public class OrderSigner {
     // Signature type constants
     public static final int EOA = 0;
     public static final int POLY_PROXY = 1;
-
-    private static final int TOKEN_DECIMALS = 6;
 
     // EIP-712 type hashes
     private static final byte[] DOMAIN_TYPEHASH = Hash.sha3(
@@ -75,12 +75,12 @@ public class OrderSigner {
      */
     public Map<String, Object> buildSignedMarketBuyOrder(String tokenId, double amount, double price, int feeRateBps, boolean negRisk) {
         // For market BUY: makerAmount = USDC spent, takerAmount = shares received
-        double rawMakerAmt = roundDown(amount, 2);
-        double rawTakerAmt = rawMakerAmt / roundNormal(price, 2);
-        rawTakerAmt = roundDown(rawTakerAmt, 4);
+        double rawMakerAmt = MathUtils.roundDown(amount, 2);
+        double rawTakerAmt = rawMakerAmt / MathUtils.roundNormal(price, 2);
+        rawTakerAmt = MathUtils.roundDown(rawTakerAmt, 4);
 
-        long makerAmount = toTokenDecimals(rawMakerAmt);
-        long takerAmount = toTokenDecimals(rawTakerAmt);
+        long makerAmount = MathUtils.toTokenDecimals(rawMakerAmt);
+        long takerAmount = MathUtils.toTokenDecimals(rawTakerAmt);
 
         return buildSignedOrder(tokenId, makerAmount, takerAmount, BUY, feeRateBps, negRisk);
     }
@@ -96,12 +96,12 @@ public class OrderSigner {
      */
     public Map<String, Object> buildSignedMarketSellOrder(String tokenId, double shares, double price, int feeRateBps, boolean negRisk) {
         // For market SELL: makerAmount = shares to sell, takerAmount = USDC to receive
-        double rawMakerAmt = roundDown(shares, 4);
-        double rawTakerAmt = rawMakerAmt * roundNormal(price, 2);
-        rawTakerAmt = roundDown(rawTakerAmt, 2);
+        double rawMakerAmt = MathUtils.roundDown(shares, 4);
+        double rawTakerAmt = rawMakerAmt * MathUtils.roundNormal(price, 2);
+        rawTakerAmt = MathUtils.roundDown(rawTakerAmt, 2);
 
-        long makerAmount = toTokenDecimals(rawMakerAmt);
-        long takerAmount = toTokenDecimals(rawTakerAmt);
+        long makerAmount = MathUtils.toTokenDecimals(rawMakerAmt);
+        long takerAmount = MathUtils.toTokenDecimals(rawTakerAmt);
 
         return buildSignedOrder(tokenId, makerAmount, takerAmount, SELL, feeRateBps, negRisk);
     }
@@ -191,21 +191,6 @@ public class OrderSigner {
         System.arraycopy(padLeft32(BigInteger.valueOf(sigType).toByteArray()), 0, data, offset, 32);
 
         return Hash.sha3(data);
-    }
-
-    private static long toTokenDecimals(double x) {
-        double f = Math.pow(10, TOKEN_DECIMALS) * x;
-        return Math.round(f);
-    }
-
-    private static double roundDown(double x, int decimals) {
-        double factor = Math.pow(10, decimals);
-        return Math.floor(x * factor) / factor;
-    }
-
-    private static double roundNormal(double x, int decimals) {
-        double factor = Math.pow(10, decimals);
-        return Math.round(x * factor) / factor;
     }
 
     private static byte[] padLeft32(byte[] input) {
