@@ -1,5 +1,7 @@
 package com.claudiordese.service;
 
+import com.claudiordese.utils.OrderBookUtils;
+import com.claudiordese.utils.RetryExecutor;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -130,17 +132,7 @@ public class StopLossWebSocketHandler extends TextWebSocketHandler {
 
             JsonNode root = objectMapper.readTree(payload);
 
-            // We're looking for book events with bids
-            JsonNode bids = root.get("bids");
-            if (bids == null || bids.isEmpty()) return;
-
-            // Best bid is the highest price — bids are sorted ascending
-            double bestBid = 0;
-            for (JsonNode bid : bids) {
-                double price = bid.get("price").asDouble();
-                if (price > bestBid) bestBid = price;
-            }
-
+            double bestBid = OrderBookUtils.findBestBid(root.get("bids"));
             if (bestBid <= 0) return;
 
             PositionManager.Position position = positionManager.getPosition(tokenId);

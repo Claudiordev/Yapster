@@ -1,9 +1,12 @@
 package com.claudiordese.service;
 
+import com.claudiordese.client.MarketResolver;
+import com.claudiordese.client.PolymarketApiClient;
 import com.claudiordese.dto.OrderEvent;
 import com.claudiordese.signing.OrderSigner;
 import com.claudiordese.signing.PolymarketAuth;
 import com.claudiordese.utils.MathUtils;
+import com.claudiordese.utils.RetryExecutor;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;

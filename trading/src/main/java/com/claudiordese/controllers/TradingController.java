@@ -1,15 +1,16 @@
 package com.claudiordese.controllers;
 
+import com.claudiordese.client.MarketResolver;
+import com.claudiordese.client.PolymarketApiClient;
 import com.claudiordese.dto.HitEvent;
 import com.claudiordese.dto.OrderEvent;
 import com.claudiordese.service.HitConsumer;
-import com.claudiordese.service.MarketResolver;
 import com.claudiordese.service.OrderService;
-import com.claudiordese.service.PolymarketApiClient;
 import com.claudiordese.service.PositionManager;
 import com.claudiordese.service.TradingHandler;
 import com.claudiordese.service.WebSocketConnectionManager;
 import com.claudiordese.signing.PolymarketAuth;
+import com.claudiordese.utils.OrderBookUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -72,12 +73,8 @@ public class TradingController {
             HttpHeaders headers = PolymarketApiClient.toHttpHeaders(polymarketAuth.buildL1Headers());
             ResponseEntity<String> response = apiClient.deriveApiKey(headers);
 
-            JsonNode json = objectMapper.readTree(response.getBody());
-            polymarketAuth.setApiCredentials(
-                    json.get("apiKey").asText(),
-                    json.get("secret").asText(),
-                    json.get("passphrase").asText()
-            );
+            PolymarketApiClient.ApiCredentials creds = apiClient.extractApiCredentials(response.getBody());
+            polymarketAuth.setApiCredentials(creds.apiKey(), creds.secret(), creds.passphrase());
         } catch (Exception e) {
             logger.warn("Could not auto-derive API credentials: {}", e.getMessage());
         }
@@ -137,12 +134,8 @@ public class TradingController {
             HttpHeaders headers = PolymarketApiClient.toHttpHeaders(polymarketAuth.buildL1Headers());
             ResponseEntity<String> response = apiClient.deriveApiKey(headers);
 
-            JsonNode json = objectMapper.readTree(response.getBody());
-            polymarketAuth.setApiCredentials(
-                    json.get("apiKey").asText(),
-                    json.get("secret").asText(),
-                    json.get("passphrase").asText()
-            );
+            PolymarketApiClient.ApiCredentials creds = apiClient.extractApiCredentials(response.getBody());
+            polymarketAuth.setApiCredentials(creds.apiKey(), creds.secret(), creds.passphrase());
             return ResponseEntity.ok(response.getBody());
         } catch (HttpClientErrorException e) {
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
@@ -318,13 +311,9 @@ public class TradingController {
 
             if (bestBid <= 0) {
                 JsonNode book = apiClient.getOrderBook(tokenId);
-                JsonNode bids = book.get("bids");
-                if (bids == null || bids.isEmpty()) {
+                bestBid = OrderBookUtils.findBestBid(book.get("bids"));
+                if (bestBid <= 0) {
                     return ResponseEntity.badRequest().body("No bids in orderbook for this token");
-                }
-                for (JsonNode bid : bids) {
-                    double p = bid.get("price").asDouble();
-                    if (p > bestBid) bestBid = p;
                 }
             }
 

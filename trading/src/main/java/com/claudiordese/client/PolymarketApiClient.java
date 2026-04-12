@@ -1,4 +1,4 @@
-package com.claudiordese.service;
+package com.claudiordese.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -83,6 +83,18 @@ public class PolymarketApiClient {
         return new OrderResponse(success, orderId, status, makingAmt, takingAmt, txHash);
     }
 
+    /**
+     * Extracts API credentials (apiKey, secret, passphrase) from a derive/create API key response.
+     */
+    public ApiCredentials extractApiCredentials(String responseBody) throws Exception {
+        JsonNode json = objectMapper.readTree(responseBody);
+        return new ApiCredentials(
+                json.get("apiKey").asText(),
+                json.get("secret").asText(),
+                json.get("passphrase").asText()
+        );
+    }
+
     public ResponseEntity<String> deriveApiKey(HttpHeaders headers) {
         return restTemplate.exchange(
                 CLOB_BASE + "/auth/derive-api-key",
@@ -103,4 +115,6 @@ public class PolymarketApiClient {
             String takingAmount,
             String transactionHash
     ) {}
+
+    public record ApiCredentials(String apiKey, String secret, String passphrase) {}
 }
