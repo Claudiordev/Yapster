@@ -1,5 +1,6 @@
 package com.claudiordese.client;
 
+import com.claudiordese.dto.MarketTokens;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -74,5 +75,4 @@ public class MarketResolver {
         return events.get(0);
     }
 
-    public record MarketTokens(long blockId, String upTokenId, String downTokenId) {}
 }

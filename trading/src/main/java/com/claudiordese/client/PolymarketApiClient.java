@@ -1,5 +1,7 @@
 package com.claudiordese.client;
 
+import com.claudiordese.dto.ApiCredentials;
+import com.claudiordese.dto.OrderResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -107,14 +109,4 @@ public class PolymarketApiClient {
                 HttpMethod.POST, new HttpEntity<>(headers), String.class);
     }
 
-    public record OrderResponse(
-            boolean success,
-            String orderId,
-            String status,
-            String makingAmount,
-            String takingAmount,
-            String transactionHash
-    ) {}
-
-    public record ApiCredentials(String apiKey, String secret, String passphrase) {}
 }

@@ -2,7 +2,9 @@ package com.claudiordese.service;
 
 import com.claudiordese.client.MarketResolver;
 import com.claudiordese.client.PolymarketApiClient;
+import com.claudiordese.dto.MarketTokens;
 import com.claudiordese.dto.OrderEvent;
+import com.claudiordese.dto.OrderResponse;
 import com.claudiordese.signing.OrderSigner;
 import com.claudiordese.signing.PolymarketAuth;
 import com.claudiordese.utils.MathUtils;
@@ -96,7 +98,7 @@ public class OrderService {
 
         try {
             double amount = 1.0;
-            MarketResolver.MarketTokens tokens = marketResolver.resolve(blockId);
+            MarketTokens tokens = marketResolver.resolve(blockId);
             if (tokens == null) {
                 saveOrder(new OrderEvent(blockId, side, null, amount, 0, false, null, "FAILED", null, null, null, "Market not found"));
                 return false;
@@ -123,7 +125,7 @@ public class OrderService {
             ResponseEntity<String> response = apiClient.postOrder(body, headers);
 
             logger.info("BUY RESPONSE | block={} | body={}", blockId, response.getBody());
-            PolymarketApiClient.OrderResponse parsed = apiClient.parseOrderResponse(response.getBody());
+            OrderResponse parsed = apiClient.parseOrderResponse(response.getBody());
 
             OrderEvent event = new OrderEvent(blockId, side, tokenId, amount, bestAsk, parsed.success(),
                     parsed.orderId(), parsed.status(), parsed.makingAmount(), parsed.takingAmount(), parsed.transactionHash(), null);
@@ -189,7 +191,7 @@ public class OrderService {
             HttpHeaders headers = PolymarketApiClient.toHttpHeaders(polymarketAuth.buildL2Headers("POST", "/order", body));
             ResponseEntity<String> response = apiClient.postOrder(body, headers);
 
-            PolymarketApiClient.OrderResponse parsed = apiClient.parseOrderResponse(response.getBody());
+            OrderResponse parsed = apiClient.parseOrderResponse(response.getBody());
 
             OrderEvent event = new OrderEvent(blockId, "SELL", tokenId, shares, bestBid, parsed.success(),
                     parsed.orderId(), parsed.status(), parsed.makingAmount(), parsed.takingAmount(), parsed.transactionHash(), null);

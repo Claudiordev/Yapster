@@ -2,7 +2,9 @@ package com.claudiordese.controllers;
 
 import com.claudiordese.client.MarketResolver;
 import com.claudiordese.client.PolymarketApiClient;
+import com.claudiordese.dto.ApiCredentials;
 import com.claudiordese.dto.HitEvent;
+import com.claudiordese.dto.MarketTokens;
 import com.claudiordese.dto.OrderEvent;
 import com.claudiordese.service.HitConsumer;
 import com.claudiordese.service.OrderService;
@@ -73,7 +75,7 @@ public class TradingController {
             HttpHeaders headers = PolymarketApiClient.toHttpHeaders(polymarketAuth.buildL1Headers());
             ResponseEntity<String> response = apiClient.deriveApiKey(headers);
 
-            PolymarketApiClient.ApiCredentials creds = apiClient.extractApiCredentials(response.getBody());
+            ApiCredentials creds = apiClient.extractApiCredentials(response.getBody());
             polymarketAuth.setApiCredentials(creds.apiKey(), creds.secret(), creds.passphrase());
         } catch (Exception e) {
             logger.warn("Could not auto-derive API credentials: {}", e.getMessage());
@@ -134,7 +136,7 @@ public class TradingController {
             HttpHeaders headers = PolymarketApiClient.toHttpHeaders(polymarketAuth.buildL1Headers());
             ResponseEntity<String> response = apiClient.deriveApiKey(headers);
 
-            PolymarketApiClient.ApiCredentials creds = apiClient.extractApiCredentials(response.getBody());
+            ApiCredentials creds = apiClient.extractApiCredentials(response.getBody());
             polymarketAuth.setApiCredentials(creds.apiKey(), creds.secret(), creds.passphrase());
             return ResponseEntity.ok(response.getBody());
         } catch (HttpClientErrorException e) {
@@ -265,7 +267,7 @@ public class TradingController {
             @RequestParam(defaultValue = "up") String side,
             @RequestParam(defaultValue = "1.0") double amount) {
 
-        MarketResolver.MarketTokens tokens = marketResolver.resolve(blockId);
+        MarketTokens tokens = marketResolver.resolve(blockId);
         if (tokens == null) {
             return ResponseEntity.badRequest().body("Market not found for blockId: " + blockId);
         }
@@ -282,7 +284,7 @@ public class TradingController {
      */
     @GetMapping("/resolve")
     public ResponseEntity<?> resolveTokens(@RequestParam long blockId) {
-        MarketResolver.MarketTokens tokens = marketResolver.resolve(blockId);
+        MarketTokens tokens = marketResolver.resolve(blockId);
         if (tokens == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Market not found for blockId: " + blockId));
         }

@@ -1,5 +1,6 @@
 package com.claudiordese.service;
 
+import com.claudiordese.dto.Position;
 import com.claudiordese.utils.OrderBookUtils;
 import com.claudiordese.utils.RetryExecutor;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -135,7 +136,7 @@ public class StopLossWebSocketHandler extends TextWebSocketHandler {
             double bestBid = OrderBookUtils.findBestBid(root.get("bids"));
             if (bestBid <= 0) return;
 
-            PositionManager.Position position = positionManager.getPosition(tokenId);
+            Position position = positionManager.getPosition(tokenId);
             if (position == null) {
                 unsubscribe(tokenId);
                 return;
@@ -165,7 +166,7 @@ public class StopLossWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private void executeSell(String tokenId, PositionManager.Position position, double bestBid, String reason) {
+    private void executeSell(String tokenId, Position position, double bestBid, String reason) {
         String label = String.format("%s SELL | token=%s | bestBid=%s", reason, tokenId, bestBid);
         boolean success = RetryExecutor.execute(label,
                 () -> orderService.placeSellOrder(position.blockId(), tokenId, position.shares(), bestBid));
