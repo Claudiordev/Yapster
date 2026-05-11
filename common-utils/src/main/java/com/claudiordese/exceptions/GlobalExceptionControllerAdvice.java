@@ -1,5 +1,6 @@
 package com.claudiordese.exceptions;
 
+import com.claudiordese.utils.ProblemDetails;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -9,9 +10,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
 
-import java.net.URI;
 import java.util.Map;
 
 @ControllerAdvice
@@ -22,12 +21,14 @@ public class GlobalExceptionControllerAdvice {
             Map.entry(RateLimitException.class, HttpStatus.TOO_MANY_REQUESTS),
             Map.entry(CircuitBreakerException.class, HttpStatus.SERVICE_UNAVAILABLE),
             Map.entry(InterdictedException.class, HttpStatus.FORBIDDEN),
-            Map.entry(InvalidAuthorizationException.class, HttpStatus.UNAUTHORIZED)
+            Map.entry(InvalidAuthorizationException.class, HttpStatus.UNAUTHORIZED),
+            Map.entry(NotFound.class, HttpStatus.NOT_FOUND),
+            Map.entry(UsernameTaken.class, HttpStatus.CONFLICT)
     );
 
     @ExceptionHandler(GlobalException.class)
-    public ResponseEntity<?> handleLibraryException(GlobalException e, HttpServletRequest request) {
-        logger.warn("Error: {}, details: {}",e.getCode(),e.getMessage());
+    public ResponseEntity<ProblemDetail> handleLibraryException(GlobalException e, HttpServletRequest request) {
+        logger.warn("Error: {}, details: {}", e.getCode(), e.getMessage());
         HttpStatus httpStatus = STATUS_MAPPING.entrySet()
                 .stream()
                 .filter(y -> y.getKey().isAssignableFrom(e.getClass()))
@@ -35,15 +36,8 @@ public class GlobalExceptionControllerAdvice {
                 .findFirst()
                 .orElse(HttpStatus.INTERNAL_SERVER_ERROR);
 
-        var problemDetail = ProblemDetail.forStatus(httpStatus);
-        problemDetail.setTitle(e.getCode());
-        problemDetail.setDetail(e.getMessage());
-        problemDetail.setType(URI.create("http://localhost:8080/error/" + e.getCode()));
-        problemDetail.setProperty("code", e.getCode());
-        problemDetail.setProperty("message", e.getMessage());
-        problemDetail.setInstance(URI.create(request.getRequestURI()));
-
-        return ResponseEntity.status(httpStatus).body(problemDetail);
+        ProblemDetail problem = ProblemDetails.of(httpStatus, e.getCode(), e.getMessage(), request.getRequestURI());
+        return ResponseEntity.status(httpStatus).body(problem);
     }
 
     @PostConstruct
