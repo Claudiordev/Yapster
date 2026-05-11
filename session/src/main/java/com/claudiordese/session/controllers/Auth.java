@@ -1,7 +1,7 @@
 package com.claudiordese.session.controllers;
 
 import com.claudiordese.session.dto.LoginRequest;
-import com.claudiordese.session.dto.LoginResponse;
+import com.claudiordese.session.dto.TokenResponse;
 import com.claudiordese.session.dto.RefreshTokenRequest;
 import com.claudiordese.session.dto.RegisterResponse;
 import com.claudiordese.session.dto.UserDto;
@@ -26,8 +26,8 @@ public class Auth {
 
     @PostMapping
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest loginRequest) {
-        LoginResponse loginResponse = authService.login(loginRequest);
-        return ResponseEntity.ok(loginResponse);
+        TokenResponse tokenResponse = authService.login(loginRequest);
+        return ResponseEntity.ok(tokenResponse);
     }
 
     @PostMapping("/register")
@@ -63,8 +63,8 @@ public class Auth {
 
     @PostMapping("/refresh")
     public ResponseEntity<?> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
-        LoginResponse loginResponse = authService.refreshAccessToken(request.refreshToken());
-        return ResponseEntity.ok(loginResponse);
+        TokenResponse tokenResponse = authService.refreshAccessToken(request.refreshToken());
+        return ResponseEntity.ok(tokenResponse);
     }
 
     @PostMapping("/logout")

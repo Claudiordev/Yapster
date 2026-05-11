@@ -21,7 +21,9 @@ public class GlobalExceptionControllerAdvice {
             Map.entry(RateLimitException.class, HttpStatus.TOO_MANY_REQUESTS),
             Map.entry(CircuitBreakerException.class, HttpStatus.SERVICE_UNAVAILABLE),
             Map.entry(InterdictedException.class, HttpStatus.FORBIDDEN),
-            Map.entry(InvalidAuthorizationException.class, HttpStatus.UNAUTHORIZED)
+            Map.entry(InvalidAuthorizationException.class, HttpStatus.UNAUTHORIZED),
+            Map.entry(NotFound.class, HttpStatus.NOT_FOUND),
+            Map.entry(UsernameTaken.class, HttpStatus.CONFLICT)
     );
 
     @ExceptionHandler(GlobalException.class)
