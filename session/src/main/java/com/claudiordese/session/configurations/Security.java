@@ -14,19 +14,4 @@ public class Security {
     public PasswordEncoder bCryptPasswordEncoder() {
         return new BCryptPasswordEncoder();
     }
-
-    @Bean
-    public SecurityFilterChain configure(HttpSecurity http) throws Exception {
-        http.httpBasic(httpBasic -> httpBasic.disable());
-
-        http.authorizeHttpRequests(authorizeRequests -> authorizeRequests
-                .requestMatchers("/api/v1/auth/**").permitAll()
-                .requestMatchers("/error").permitAll()
-                .requestMatchers("/error/**").permitAll()
-                .anyRequest().authenticated()).formLogin(form-> form.disable());
-
-        http.csrf(csrf -> csrf.disable());
-
-        return http.build();
-    }
 }

@@ -1,4 +1,4 @@
-package com.claudiordese.session.dto;
+package com.claudiordese.session.controllers.response;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 

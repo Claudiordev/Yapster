@@ -2,14 +2,16 @@ package com.claudiordese.session.service;
 
 import com.claudiordese.exceptions.*;
 import com.claudiordese.security.config.JwtSecurityProperties;
-import com.claudiordese.session.dto.LoginRequest;
-import com.claudiordese.session.dto.TokenResponse;
-import com.claudiordese.session.dto.RegisterResponse;
+import com.claudiordese.session.controllers.response.TokenResponse;
 import com.claudiordese.session.dto.UserDto;
 import com.claudiordese.session.entity.RefreshToken;
 import com.claudiordese.session.entity.User;
 import com.claudiordese.session.repository.RefreshTokenRepository;
 import com.claudiordese.session.repository.UserRepository;
+import com.claudiordese.session.service.commands.LoginCommand;
+import com.claudiordese.session.service.commands.RegisterCommand;
+import com.claudiordese.session.service.result.LoginResult;
+import com.claudiordese.session.service.result.RegisterResult;
 import com.claudiordese.session.util.JwtUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
@@ -38,34 +40,45 @@ public class AuthService {
         this.jwtSecurityProperties = jwtSecurityProperties;
     }
 
-    public TokenResponse login(LoginRequest loginRequest) throws RuntimeException {
-        User user = userRepository.findByUsername(loginRequest.username())
+    public LoginResult login(LoginCommand loginCommand) throws RuntimeException {
+        User user = userRepository.findByUsername(loginCommand.username())
                 .orElseThrow(() -> new NotFound("not_found", "User not found"));
 
-        if (!passwordEncoder.matches(loginRequest.password(), user.getPassword())) {
+        if (!passwordEncoder.matches(loginCommand.password(), user.getPassword())) {
             throw new InterdictedException("invalid_credentials", "Incorrect username or password");
         }
         String jwt = jwtUtils.generateToken(user,jwtSecurityProperties.getAccessExpirationMs());
         RefreshToken refreshToken = createRefreshToken(user.getUsername());
 
-        return new TokenResponse(jwt, refreshToken.getToken(), "Bearer", jwtSecurityProperties.getAccessExpirationMs());
+        return new LoginResult(jwt, refreshToken.getToken(), "Bearer", jwtSecurityProperties.getAccessExpirationMs());
     }
 
     @Transactional
-    public RegisterResponse addUser(LoginRequest loginRequest) throws UsernameTaken{
-        if (userRepository.findByUsername(loginRequest.username()).isPresent()) {
+    public RegisterResult registerUser(RegisterCommand registerCommand) throws UsernameTaken{
+        if (userRepository.findByUsername(registerCommand.username()).isPresent()) {
             throw new UsernameTaken("username_taken", "Username is already in use");
         }
 
-        String encodedPassword = passwordEncoder.encode(loginRequest.password());
+        if (!registerCommand.emailsMatching()) {
+            throw new EmailMismatchException("email_mismatch", "Email and confirm email do not match");
+        }
+
+        if (userRepository.findByEmail(registerCommand.email()).isPresent()) {
+            throw new EmailTakenException("email_taken", "Email is already taken");
+        }
+
+        String encodedPassword = passwordEncoder.encode(registerCommand.password());
 
         User user = new User();
-        user.setUsername(loginRequest.username());
+        user.setUsername(registerCommand.username());
+        user.setEmail(registerCommand.email());
         user.setPassword(encodedPassword);
 
         userRepository.save(user);
 
-        return new RegisterResponse(user.getId().toString());
+        return new RegisterResult(
+                user.getId().toString(),
+                user.getUsername());
     }
 
     public BigDecimal getBalanceByUsername(String username) throws NotFound{
@@ -87,6 +100,7 @@ public class AuthService {
             user.setUsername(newUsername);
             userRepository.save(user);
 
+
             return true;
         } catch (RuntimeException e) {
             throw new NotFound("not_found", "User not found");
@@ -95,7 +109,7 @@ public class AuthService {
 
     @Transactional
     public TokenResponse refreshAccessToken(String refreshTokenStr) throws NotFound {
-        RefreshToken oldToken = verifyRefreshToken(refreshTokenStr);
+        RefreshToken oldToken = jwtUtils.verifyRefreshToken(refreshTokenStr);
         String username = oldToken.getUsername();
 
         refreshTokenRepository.delete(oldToken);
@@ -122,21 +136,5 @@ public class AuthService {
         refreshToken.setExpiryDate(Instant.now().plusMillis(jwtSecurityProperties.getRefreshExpirationMs()));
         refreshToken.setRevoked(false);
         return refreshTokenRepository.save(refreshToken);
-    }
-
-    private RefreshToken verifyRefreshToken(String token) throws NotFound {
-        RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
-                .orElseThrow(() -> new NotFound("not_found", "Token not found"));
-
-        if (refreshToken.isRevoked()) {
-            throw new TokenRevoked("token_revoked", "Token has been revoked");
-        }
-
-        if (refreshToken.getExpiryDate().isBefore(Instant.now())) {
-            refreshTokenRepository.delete(refreshToken);
-            throw new TokenExpired("token_expired", "Token has expired");
-        }
-
-        return refreshToken;
     }
 }

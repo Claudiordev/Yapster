@@ -1,6 +1,11 @@
 package com.claudiordese.session.util;
 
+import com.claudiordese.exceptions.NotFound;
+import com.claudiordese.exceptions.TokenExpired;
+import com.claudiordese.exceptions.TokenRevoked;
+import com.claudiordese.session.entity.RefreshToken;
 import com.claudiordese.session.entity.User;
+import com.claudiordese.session.repository.RefreshTokenRepository;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import jakarta.annotation.PostConstruct;
@@ -11,6 +16,7 @@ import java.io.InputStream;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
 
@@ -21,6 +27,12 @@ public class JwtUtils {
 
     @Value("${jwt.private-key.path}")
     private String privateKeyPath;
+
+    private final RefreshTokenRepository refreshTokenRepository;
+
+    public JwtUtils(RefreshTokenRepository refreshTokenRepository) {
+        this.refreshTokenRepository = refreshTokenRepository;
+    }
 
     @PostConstruct
     void init() {
@@ -33,7 +45,7 @@ public class JwtUtils {
 
     public String generateToken(User user, long expirationMs) {
         return Jwts.builder()
-                .setSubject(user.getUsername())
+                .setSubject(user.getId().toString())
                 .claim("role", user.getRoles().getFirst())
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + expirationMs))
@@ -55,5 +67,21 @@ public class JwtUtils {
 
             return KeyFactory.getInstance("RSA").generatePrivate(spec);
         }
+    }
+
+    public RefreshToken verifyRefreshToken(String token) throws NotFound {
+        RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
+                .orElseThrow(() -> new NotFound("not_found", "Token not found"));
+
+        if (refreshToken.isRevoked()) {
+            throw new TokenRevoked("token_revoked", "Token has been revoked");
+        }
+
+        if (refreshToken.getExpiryDate().isBefore(Instant.now())) {
+            refreshTokenRepository.delete(refreshToken);
+            throw new TokenExpired("token_expired", "Token has expired");
+        }
+
+        return refreshToken;
     }
 }

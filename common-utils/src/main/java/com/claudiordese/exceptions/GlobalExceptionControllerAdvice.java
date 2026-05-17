@@ -23,7 +23,9 @@ public class GlobalExceptionControllerAdvice {
             Map.entry(InterdictedException.class, HttpStatus.FORBIDDEN),
             Map.entry(InvalidAuthorizationException.class, HttpStatus.UNAUTHORIZED),
             Map.entry(NotFound.class, HttpStatus.NOT_FOUND),
-            Map.entry(UsernameTaken.class, HttpStatus.CONFLICT)
+            Map.entry(UsernameTaken.class, HttpStatus.CONFLICT),
+            Map.entry(EmailMismatchException.class, HttpStatus.BAD_REQUEST),
+            Map.entry(EmailTakenException.class, HttpStatus.CONFLICT)
     );
 
     @ExceptionHandler(GlobalException.class)
