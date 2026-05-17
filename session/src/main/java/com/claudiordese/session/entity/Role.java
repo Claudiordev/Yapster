@@ -5,13 +5,13 @@ import lombok.Setter;
 
 @Entity
 @Table(name = "roles", schema = "public", uniqueConstraints = {
-        @UniqueConstraint(name = "roles_idx_1", columnNames = {"username","role"})
+        @UniqueConstraint(name = "roles_idx_1", columnNames = {"user_id","role"})
 })
 public class Role {
 
     @Setter
     @ManyToOne
-    @JoinColumn(name = "username", referencedColumnName = "username", nullable = false)
+    @JoinColumn(name = "user_id", referencedColumnName = "id", nullable = false)
     private User user;
 
     @Id
