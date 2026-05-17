@@ -1,4 +1,8 @@
 services:
+
+  # ============================================================
+  # Databases
+  # ============================================================
   session_postgres:
     image: postgres:16
     container_name: session_postgres
@@ -10,6 +14,7 @@ services:
       - "5432:5432"
     volumes:
       - "pgdata:/var/lib/postgresql/data"
+
   service_postgres:
     image: postgres:16
     container_name: service_postgres
@@ -21,6 +26,10 @@ services:
       - "5438:5432"
     volumes:
       - "service_pgdata:/var/lib/postgresql/data"
+
+  # ============================================================
+  # Kafka
+  # ============================================================
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.0
     container_name: zookeeper
@@ -32,6 +41,7 @@ services:
     volumes:
       - "zookeeper_data:/var/lib/zookeeper/data"
       - "zookeeper_log:/var/lib/zookeeper/log"
+
   kafka:
     image: confluentinc/cp-kafka:7.6.0
     container_name: kafka
@@ -46,6 +56,10 @@ services:
       - "9092:9092"
     volumes:
       - "kafka_data:/var/lib/kafka/data"
+
+  # ============================================================
+  # Services
+  # ============================================================
   discovery:
     build:
       context: .
@@ -53,6 +67,7 @@ services:
     container_name: discovery
     ports:
       - "8761:8761"
+
   session:
     build:
       context: .
@@ -63,6 +78,7 @@ services:
     depends_on:
       - session_postgres
       - discovery
+
   service:
     build:
       context: .
@@ -76,6 +92,7 @@ services:
     depends_on:
       - service_postgres
       - discovery
+
   metrics:
     build:
       context: .
@@ -86,6 +103,7 @@ services:
     depends_on:
       - discovery
       - kafka
+
   router:
     build:
       context: .
