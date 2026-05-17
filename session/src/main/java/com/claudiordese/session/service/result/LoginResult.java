@@ -1,4 +1,10 @@
 package com.claudiordese.session.service.result;
 
-public record LoginResult() {
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+public record LoginResult(
+        String accessToken,
+        String refreshToken,
+        String tokenType,
+        long expiresIn) {
 }

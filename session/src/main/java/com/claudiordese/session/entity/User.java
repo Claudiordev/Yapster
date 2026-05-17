@@ -35,7 +35,7 @@ public class User {
     @Column(name = "password", nullable = false)
     private String password;
 
-    @Column(name = "enabled")
+    @Column(name = "enabled", unique = true)
     private int enabled = 1;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -44,6 +44,9 @@ public class User {
     @Column(name= "balance", nullable = false, precision = 12, scale = 2)
     @ColumnDefault("0")
     private BigDecimal balance = new BigDecimal(0);
+
+    @Column(name = "email", nullable = false, unique = true)
+    private String email;
 
     @Override
     public boolean equals(Object o) {

@@ -1,4 +1,4 @@
-package com.claudiordese.session.dto;
+package com.claudiordese.session.controllers.request;
 
 import jakarta.validation.constraints.NotBlank;
 
