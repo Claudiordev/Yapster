@@ -1,73 +1,106 @@
 import { cookies } from "next/headers";
+import { importSPKI, jwtVerify, type JWTPayload } from "jose";
 
+import { apiPost, ApiError } from "./api-client";
 import {
-  API_BASE_URL,
   AUTH_COOKIE_NAME,
   AUTH_COOKIE_OPTIONS,
+  JWT_PUBLIC_KEY,
+  REFRESH_COOKIE_MAX_AGE_SECONDS,
   REFRESH_COOKIE_NAME,
 } from "./constants";
+
+const JWT_ALG = "RS256";
 
 export interface LoginRequest {
   username: string;
   password: string;
 }
 
-export interface LoginResponse {
+export interface RegisterRequest {
+  username: string;
+  email: string;
+  confirmEmail: string;
+  password: string;
+}
+
+// Wire format returned by the session service (snake_case via @JsonProperty).
+export interface SessionTokenResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number; // milliseconds
+}
+
+export interface TokenPair {
   accessToken: string;
   refreshToken: string;
   tokenType: string;
-  expiresIn: number;
+  // Seconds until the access token expires — already converted from the
+  // backend's millisecond representation.
+  accessExpiresInSeconds: number;
 }
 
-export interface RegisterResponse {
-  userId: string;
+export interface SessionRegisterResponse {
+  id: string;
+  username: string;
 }
 
-export function decodeJwtPayload(
-  token: string,
-): { sub: string; role: string; exp: number } | null {
+export interface AuthClaims extends JWTPayload {
+  sub: string;
+  role?: string;
+}
+
+export function toTokenPair(response: SessionTokenResponse): TokenPair {
+  return {
+    accessToken: response.access_token,
+    refreshToken: response.refresh_token,
+    tokenType: response.token_type,
+    accessExpiresInSeconds: Math.max(1, Math.floor(response.expires_in / 1000)),
+  };
+}
+
+let cachedKey: Promise<CryptoKey> | null = null;
+
+function getPublicKey(): Promise<CryptoKey> {
+  if (!cachedKey) {
+    cachedKey = importSPKI(JWT_PUBLIC_KEY, JWT_ALG);
+  }
+
+  return cachedKey;
+}
+
+export async function verifyJwt(token: string): Promise<AuthClaims | null> {
   try {
-    const parts = token.split(".");
+    const { payload } = await jwtVerify(token, await getPublicKey(), {
+      algorithms: [JWT_ALG],
+    });
 
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
-
-    return payload;
+    return payload as AuthClaims;
   } catch {
     return null;
   }
 }
 
-export function isTokenExpired(token: string): boolean {
-  const payload = decodeJwtPayload(token);
-
-  if (!payload?.exp) return true;
-
-  return payload.exp * 1000 <= Date.now();
-}
-
 export async function getAuthToken(): Promise<string | undefined> {
   const cookieStore = await cookies();
+  const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
-  const token:string | undefined = cookieStore.get(AUTH_COOKIE_NAME)?.value;
-
-  if (isTokenExpired(token ?? '')) {
-    const refreshToken = await getRefreshToken();
-    if (refreshToken !== undefined && refreshToken !== "") {
-      const response = await refreshAccessToken(refreshToken);
-      if (response) {
-        await setAuthCookies(
-            response.accessToken,
-            response.refreshToken,
-            response.expiresIn
-        )
-
-        return response.accessToken;
-      }
-    }
+  if (token && (await verifyJwt(token))) {
+    return token;
   }
 
-  return cookieStore.get(AUTH_COOKIE_NAME)?.value;
+  const refreshToken = cookieStore.get(REFRESH_COOKIE_NAME)?.value;
+
+  if (!refreshToken) return undefined;
+
+  const refreshed = await refreshAccessToken(refreshToken);
+
+  if (!refreshed) return undefined;
+
+  await setAuthCookies(refreshed);
+
+  return refreshed.accessToken;
 }
 
 export async function getRefreshToken(): Promise<string | undefined> {
@@ -76,21 +109,17 @@ export async function getRefreshToken(): Promise<string | undefined> {
   return cookieStore.get(REFRESH_COOKIE_NAME)?.value;
 }
 
-export async function setAuthCookies(
-  accessToken: string,
-  refreshToken: string,
-  accessExpiresInSeconds: number,
-): Promise<void> {
+export async function setAuthCookies(pair: TokenPair): Promise<void> {
   const cookieStore = await cookies();
 
-  cookieStore.set(AUTH_COOKIE_NAME, accessToken, {
+  cookieStore.set(AUTH_COOKIE_NAME, pair.accessToken, {
     ...AUTH_COOKIE_OPTIONS,
-    maxAge: accessExpiresInSeconds,
+    maxAge: pair.accessExpiresInSeconds,
   });
 
-  cookieStore.set(REFRESH_COOKIE_NAME, refreshToken, {
+  cookieStore.set(REFRESH_COOKIE_NAME, pair.refreshToken, {
     ...AUTH_COOKIE_OPTIONS,
-    maxAge: 7 * 24 * 60 * 60,
+    maxAge: REFRESH_COOKIE_MAX_AGE_SECONDS,
   });
 }
 
@@ -102,23 +131,17 @@ export async function clearAuthCookies(): Promise<void> {
 }
 
 export async function refreshAccessToken(
-    refreshToken: string,
-): Promise<{
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
-} | null> {
+  refreshToken: string,
+): Promise<TokenPair | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
-    });
+    const data = await apiPost<{ refreshToken: string }, SessionTokenResponse>(
+      "/auth/refresh",
+      { refreshToken },
+    );
 
-    if (!response.ok) return null;
-
-    return response.json();
-  } catch {
-    return null;
+    return toTokenPair(data);
+  } catch (error) {
+    if (error instanceof ApiError) return null;
+    throw error;
   }
 }

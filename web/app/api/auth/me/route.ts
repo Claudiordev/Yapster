@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { getAuthToken, decodeJwtPayload } from "@/lib/auth";
+import { apiGet, ApiError } from "@/lib/api-client";
+import { getAuthToken, verifyJwt } from "@/lib/auth";
+
+interface SessionUser {
+  id: string;
+  username: string;
+}
 
 export async function GET() {
   const token = await getAuthToken();
@@ -9,14 +15,31 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const payload = decodeJwtPayload(token);
+  const claims = await verifyJwt(token);
 
-  if (!payload) {
+  if (!claims) {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 
-  return NextResponse.json({
-    username: payload.sub,
-    role: payload.role,
-  });
+  try {
+    const user = await apiGet<SessionUser>("/user", token);
+
+    return NextResponse.json({
+      id: user.id,
+      username: user.username,
+      role: claims.role ?? null,
+    });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status },
+      );
+    }
+
+    return NextResponse.json(
+      { error: "Failed to load user" },
+      { status: 500 },
+    );
+  }
 }

@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import NextLink from "next/link";
 import { Button } from "@heroui/button";
 import { Form } from "@heroui/form";
 import { Input } from "@heroui/input";
+import { Link } from "@heroui/link";
 
 import { ROUTES } from "@/lib/constants";
 
@@ -108,6 +110,13 @@ export function LoginForm() {
           Reset
         </Button>
       </div>
+
+      <p className="text-small text-default-500 text-center w-full">
+        Need an account?{" "}
+        <Link as={NextLink} href={ROUTES.REGISTER} size="sm">
+          Create one
+        </Link>
+      </p>
     </Form>
   );
 }

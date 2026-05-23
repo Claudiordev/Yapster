@@ -1,39 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
+import { importSPKI, jwtVerify } from "jose";
 
 import {
-  AUTH_COOKIE_NAME,
-  REFRESH_COOKIE_NAME,
-  PUBLIC_ROUTES,
-  ROUTES,
   API_BASE_URL,
+  AUTH_COOKIE_NAME,
   AUTH_COOKIE_OPTIONS,
+  JWT_PUBLIC_KEY,
+  PUBLIC_ROUTES,
+  REFRESH_COOKIE_MAX_AGE_SECONDS,
+  REFRESH_COOKIE_NAME,
+  ROUTES,
 } from "./lib/constants";
 
-function isTokenValid(token: string): boolean {
+const JWT_ALG = "RS256";
+
+let cachedKey: Promise<CryptoKey> | null = null;
+
+function getPublicKey(): Promise<CryptoKey> {
+  if (!cachedKey) {
+    cachedKey = importSPKI(JWT_PUBLIC_KEY, JWT_ALG);
+  }
+
+  return cachedKey;
+}
+
+async function isTokenValid(token: string): Promise<boolean> {
   try {
-    const parts = token.split(".");
+    await jwtVerify(token, await getPublicKey(), { algorithms: [JWT_ALG] });
 
-    if (parts.length !== 3) return false;
-
-    const payload = JSON.parse(
-      Buffer.from(parts[1], "base64url").toString(),
-    );
-
-    if (!payload.exp) return false;
-
-    return payload.exp * 1000 > Date.now();
+    return true;
   } catch {
     return false;
   }
 }
 
-async function refreshAccessToken(
-  refreshToken: string,
-): Promise<{
+interface RefreshResult {
   accessToken: string;
   refreshToken: string;
-  expiresIn: number;
-} | null> {
+  accessExpiresInSeconds: number;
+}
+
+async function refreshAccessToken(
+  refreshToken: string,
+): Promise<RefreshResult | null> {
   try {
     const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: "POST",
@@ -43,7 +52,17 @@ async function refreshAccessToken(
 
     if (!response.ok) return null;
 
-    return response.json();
+    const data = (await response.json()) as {
+      access_token: string;
+      refresh_token: string;
+      expires_in: number;
+    };
+
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      accessExpiresInSeconds: Math.max(1, Math.floor(data.expires_in / 1000)),
+    };
   } catch {
     return null;
   }
@@ -58,9 +77,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith(route),
   );
 
-  let hasValidToken = token != null && isTokenValid(token);
+  let hasValidToken = token != null && (await isTokenValid(token));
 
-  // Attempt refresh if access token is missing/expired but refresh token exists
   if (!hasValidToken && refreshToken) {
     const refreshed = await refreshAccessToken(refreshToken);
 
@@ -73,11 +91,11 @@ export async function middleware(request: NextRequest) {
 
       response.cookies.set(AUTH_COOKIE_NAME, refreshed.accessToken, {
         ...AUTH_COOKIE_OPTIONS,
-        maxAge: refreshed.expiresIn,
+        maxAge: refreshed.accessExpiresInSeconds,
       });
       response.cookies.set(REFRESH_COOKIE_NAME, refreshed.refreshToken, {
         ...AUTH_COOKIE_OPTIONS,
-        maxAge: 7 * 24 * 60 * 60,
+        maxAge: REFRESH_COOKIE_MAX_AGE_SECONDS,
       });
 
       return response;

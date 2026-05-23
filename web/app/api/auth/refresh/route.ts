@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { apiPost, ApiError } from "@/lib/api-client";
-import { getRefreshToken, setAuthCookies, clearAuthCookies } from "@/lib/auth";
-import type { LoginResponse } from "@/lib/auth";
+import {
+  clearAuthCookies,
+  getRefreshToken,
+  setAuthCookies,
+  toTokenPair,
+  type SessionTokenResponse,
+} from "@/lib/auth";
 
 export async function POST() {
   const refreshToken = await getRefreshToken();
@@ -15,16 +20,12 @@ export async function POST() {
   }
 
   try {
-    const data = await apiPost<{ refreshToken: string }, LoginResponse>(
+    const data = await apiPost<{ refreshToken: string }, SessionTokenResponse>(
       "/auth/refresh",
       { refreshToken },
     );
 
-    await setAuthCookies(
-      data.accessToken,
-      data.refreshToken,
-      data.expiresIn,
-    );
+    await setAuthCookies(toTokenPair(data));
 
     return NextResponse.json({ success: true });
   } catch (error) {
