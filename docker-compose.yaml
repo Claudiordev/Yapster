@@ -10,42 +10,6 @@ services:
       - "5432:5432"
     volumes:
       - "pgdata:/var/lib/postgresql/data"
-  service_postgres:
-    image: postgres:16
-    container_name: service_postgres
-    environment:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: mydatabase
-    ports:
-      - "5438:5432"
-    volumes:
-      - "service_pgdata:/var/lib/postgresql/data"
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.6.0
-    container_name: zookeeper
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-    volumes:
-      - "zookeeper_data:/var/lib/zookeeper/data"
-      - "zookeeper_log:/var/lib/zookeeper/log"
-  kafka:
-    image: confluentinc/cp-kafka:7.6.0
-    container_name: kafka
-    depends_on:
-      - zookeeper
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    ports:
-      - "9092:9092"
-    volumes:
-      - "kafka_data:/var/lib/kafka/data"
   discovery:
     build:
       context: .
@@ -63,40 +27,6 @@ services:
     depends_on:
       - session_postgres
       - discovery
-  service:
-    build:
-      context: .
-      dockerfile: service/Dockerfile
-    container_name: service
-    ports:
-      - "8082:8080"
-    environment:
-      - SERVER_PORT=8080
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://service_postgres:5432/mydatabase
-    depends_on:
-      - service_postgres
-      - discovery
-  metrics:
-    build:
-      context: .
-      dockerfile: metrics/Dockerfile
-    container_name: metrics
-    ports:
-      - "8084:8084"
-    depends_on:
-      - discovery
-      - kafka
-  router:
-    build:
-      context: .
-      dockerfile: router/Dockerfile
-    container_name: router
-    ports:
-      - "8080:8080"
-    depends_on:
-      - discovery
-      - session
-      - service
 
 volumes:
   pgdata:
