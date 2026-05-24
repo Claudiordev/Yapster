@@ -30,6 +30,7 @@
 		<module>discovery</module>
 		<module>trading</module>
 		<module>metrics</module>
+		<module>comms</module>
 	</modules>
 	<scm>
 		<connection/>
