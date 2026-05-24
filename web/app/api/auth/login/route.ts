@@ -1,20 +1,23 @@
 import { NextResponse } from "next/server";
 
 import { apiPost, ApiError } from "@/lib/api-client";
-import { setAuthCookies } from "@/lib/auth";
-import type { LoginRequest, LoginResponse } from "@/lib/auth";
+import {
+  setAuthCookies,
+  toTokenPair,
+  type LoginRequest,
+  type SessionTokenResponse,
+} from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
     const body: LoginRequest = await request.json();
 
-    const data = await apiPost<LoginRequest, LoginResponse>("/auth", body);
-
-    await setAuthCookies(
-      data.accessToken,
-      data.refreshToken,
-      data.expiresIn,
+    const data = await apiPost<LoginRequest, SessionTokenResponse>(
+      "/auth",
+      body,
     );
+
+    await setAuthCookies(toTokenPair(data));
 
     return NextResponse.json({ success: true });
   } catch (error) {
