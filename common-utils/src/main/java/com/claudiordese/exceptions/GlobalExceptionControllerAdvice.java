@@ -17,7 +17,23 @@ import java.util.Map;
 public class GlobalExceptionControllerAdvice {
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionControllerAdvice.class);
 
+    /**
+     * One exception class per HTTP status. Differentiate the specific reason via the
+     * exception's {@code code} and {@code message} fields, not by subclassing.
+     * Legacy specific exceptions (UsernameTaken, InvalidAuthorizationException, …)
+     * are kept for compatibility — new code should use the general families.
+     */
     private static final Map<Class<? extends Exception>, HttpStatus> STATUS_MAPPING = Map.ofEntries(
+            // General families — preferred for new code
+            Map.entry(BadRequestException.class, HttpStatus.BAD_REQUEST),
+            Map.entry(UnauthorizedException.class, HttpStatus.UNAUTHORIZED),
+            Map.entry(ForbiddenException.class, HttpStatus.FORBIDDEN),
+            Map.entry(NotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(ConflictException.class, HttpStatus.CONFLICT),
+            Map.entry(TooManyRequestsException.class, HttpStatus.TOO_MANY_REQUESTS),
+            Map.entry(ServiceUnavailableException.class, HttpStatus.SERVICE_UNAVAILABLE),
+
+            // Legacy specific exceptions — kept for existing services
             Map.entry(RateLimitException.class, HttpStatus.TOO_MANY_REQUESTS),
             Map.entry(CircuitBreakerException.class, HttpStatus.SERVICE_UNAVAILABLE),
             Map.entry(InterdictedException.class, HttpStatus.FORBIDDEN),
