@@ -1,5 +1,6 @@
 package com.claudiordese.signing;
 
+import com.claudiordese.utils.CryptoUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -7,7 +8,6 @@ import org.springframework.stereotype.Component;
 import org.web3j.crypto.ECKeyPair;
 import org.web3j.crypto.Hash;
 import org.web3j.crypto.Keys;
-import org.web3j.crypto.Sign;
 import org.web3j.utils.Numeric;
 
 import javax.crypto.Mac;
@@ -130,28 +130,13 @@ public class PolymarketAuth {
     public String signClobAuth(String timestamp, long nonce) {
         byte[] domainSeparator = buildDomainSeparator();
         byte[] structHash = buildStructHash(timestamp, nonce);
-
-        byte[] encoded = new byte[2 + 32 + 32];
-        encoded[0] = 0x19;
-        encoded[1] = 0x01;
-        System.arraycopy(domainSeparator, 0, encoded, 2, 32);
-        System.arraycopy(structHash, 0, encoded, 34, 32);
-
-        byte[] digest = Hash.sha3(encoded);
-        Sign.SignatureData sig = Sign.signMessage(digest, keyPair, false);
-
-        byte[] sigBytes = new byte[65];
-        System.arraycopy(sig.getR(), 0, sigBytes, 0, 32);
-        System.arraycopy(sig.getS(), 0, sigBytes, 32, 32);
-        sigBytes[64] = sig.getV()[0];
-
-        return Numeric.toHexString(sigBytes);
+        return CryptoUtils.signEip712(domainSeparator, structHash, keyPair);
     }
 
     private byte[] buildDomainSeparator() {
         byte[] nameHash = Hash.sha3(DOMAIN_NAME.getBytes(StandardCharsets.UTF_8));
         byte[] versionHash = Hash.sha3(DOMAIN_VERSION.getBytes(StandardCharsets.UTF_8));
-        byte[] chainIdBytes = padLeft32(CHAIN_ID.toByteArray());
+        byte[] chainIdBytes = CryptoUtils.padLeft32(CHAIN_ID.toByteArray());
 
         byte[] data = new byte[32 * 4];
         System.arraycopy(EIP712_DOMAIN_TYPEHASH, 0, data, 0, 32);
@@ -163,9 +148,9 @@ public class PolymarketAuth {
     }
 
     private byte[] buildStructHash(String timestamp, long nonce) {
-        byte[] addressBytes = padLeft32(Numeric.hexStringToByteArray(address));
+        byte[] addressBytes = CryptoUtils.padLeft32(Numeric.hexStringToByteArray(address));
         byte[] timestampHash = Hash.sha3(timestamp.getBytes(StandardCharsets.UTF_8));
-        byte[] nonceBytes = padLeft32(BigInteger.valueOf(nonce).toByteArray());
+        byte[] nonceBytes = CryptoUtils.padLeft32(BigInteger.valueOf(nonce).toByteArray());
         byte[] messageHash = Hash.sha3(ATTESTATION_MESSAGE.getBytes(StandardCharsets.UTF_8));
 
         byte[] data = new byte[32 * 5];
@@ -178,14 +163,4 @@ public class PolymarketAuth {
         return Hash.sha3(data);
     }
 
-    private static byte[] padLeft32(byte[] input) {
-        if (input.length == 32) return input;
-        byte[] padded = new byte[32];
-        if (input.length > 32) {
-            System.arraycopy(input, input.length - 32, padded, 0, 32);
-        } else {
-            System.arraycopy(input, 0, padded, 32 - input.length, input.length);
-        }
-        return padded;
-    }
 }

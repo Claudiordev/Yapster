@@ -1,5 +1,6 @@
 package com.claudiordese.service;
 
+import com.claudiordese.dto.Position;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -16,26 +17,6 @@ public class PositionManager {
 
     private final Map<String, Position> openPositions = new ConcurrentHashMap<>();
     private final List<Position> closedPositions = new CopyOnWriteArrayList<>();
-
-    public record Position(
-            long blockId,
-            String tokenId,
-            String side,
-            double entryPrice,
-            double shares,
-            long openedAtMs,
-            String closeReason,
-            double closePrice,
-            long closedAtMs
-    ) {
-        public Position(long blockId, String tokenId, String side, double entryPrice, double shares, long openedAtMs) {
-            this(blockId, tokenId, side, entryPrice, shares, openedAtMs, null, 0, 0);
-        }
-
-        public Position close(String reason, double closePrice) {
-            return new Position(blockId, tokenId, side, entryPrice, shares, openedAtMs, reason, closePrice, System.currentTimeMillis());
-        }
-    }
 
     public void openPosition(long blockId, String tokenId, String side, double entryPrice, double shares) {
         Position pos = new Position(blockId, tokenId, side, entryPrice, shares, System.currentTimeMillis());
