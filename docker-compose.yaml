@@ -21,6 +21,17 @@ services:
       - "5438:5432"
     volumes:
       - "service_pgdata:/var/lib/postgresql/data"
+  comms_postgres:
+    image: postgres:16
+    container_name: comms_postgres
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5439:5432"
+    volumes:
+      - "comms_pgdata:/var/lib/postgresql/data"
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.0
     container_name: zookeeper
@@ -86,6 +97,27 @@ services:
     depends_on:
       - discovery
       - kafka
+  comms:
+    build:
+      context: .
+      dockerfile: comms/Dockerfile
+    container_name: comms
+    ports:
+      - "8085:8080"
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_APPLICATION_NAME=COMMS
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://comms_postgres:5432/mydatabase
+      - SPRING_DATASOURCE_USERNAME=myuser
+      - SPRING_DATASOURCE_PASSWORD=mypassword
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - EUREKA_CLIENT_SERVICE-URL_DEFAULTZONE=http://discovery:8761/eureka/
+      - SECURITY_JWT_AUTHENTICATED-PATHS=/api/**
+    depends_on:
+      - comms_postgres
+      - discovery
+      - kafka
   router:
     build:
       context: .
@@ -101,6 +133,7 @@ services:
 volumes:
   pgdata:
   service_pgdata:
+  comms_pgdata:
   kafka_data:
   zookeeper_data:
   zookeeper_log:
