@@ -9,8 +9,8 @@ export async function POST() {
   if (refreshToken) {
     try {
       await apiPost("/auth/logout", { refreshToken });
-    } catch {
-      // Clear cookies regardless of backend response
+    } catch (error) {
+      console.error("Failed to revoke refresh token on backend:", error);
     }
   }
 
