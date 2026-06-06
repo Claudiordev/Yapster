@@ -1,21 +1,23 @@
 import { NextResponse } from "next/server";
 
-import { apiPost, ApiError } from "@/lib/api-client";
+import { apiGet, ApiError } from "@/lib/api-client";
 import { getAuthToken } from "@/lib/auth";
 
-interface SendSmsRequest {
+export interface ConversationDto {
   receiver: string;
-  message: string;
+  messages: ConversationMessageDto[];
 }
 
-interface SendSmsResponse {
-  providerId: string;
+export interface ConversationMessageDto {
+  id: string;
+  body: string;
   status: string;
-  price?: string | null;
-  priceUnit?: string | null;
+  providerId?: string | null;
+  errorMessage?: string | null;
+  createdAt: string;
 }
 
-export async function POST(request: Request) {
+export async function GET() {
   try {
     const token = await getAuthToken();
 
@@ -26,13 +28,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const body: SendSmsRequest = await request.json();
-
-    const data = await apiPost<SendSmsRequest, SendSmsResponse>(
-      "/messages",
-      body,
-      token,
-    );
+    const data = await apiGet<ConversationDto[]>("/messages", token);
 
     return NextResponse.json(data);
   } catch (error) {

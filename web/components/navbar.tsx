@@ -27,6 +27,7 @@ import {
   DiscordIcon,
   SearchIcon,
   Logo,
+  ChatBubbleIcon,
 } from "@/components/icons";
 import {User} from "@heroui/user";
 import {Popover, PopoverTrigger, PopoverContent} from "@heroui/popover";
@@ -51,33 +52,59 @@ export const Navbar = () => {
     router.refresh();
   }
 
+  function iconFor(label: string) {
+    if (label === "Messages") return <ChatBubbleIcon size={16} />;
+
+    return null;
+  }
+
   return (
-    <HeroUINavbar maxWidth="xl" position="sticky">
+    <HeroUINavbar
+      classNames={{
+        base: "bg-zinc-900/90 backdrop-blur-md border-b border-zinc-800/60 shadow-lg shadow-black/40",
+        wrapper: "px-4",
+        item: [
+          "text-zinc-300 hover:text-white transition-colors",
+          "data-[active=true]:text-red-400 data-[active=true]:font-medium",
+        ],
+        brand: "text-zinc-100",
+        toggleIcon: "text-zinc-300",
+      }}
+      isBlurred
+      maxWidth="xl"
+      position="sticky"
+    >
       <NavbarContent className="basis-1/5 sm:basis-full" justify="start">
         <NavbarBrand as="li" className="gap-3 max-w-fit">
           <NextLink
-            className="flex justify-start items-center gap-1"
+            className="flex justify-start items-center gap-2 text-zinc-100 hover:text-white transition-colors"
             href="/"
           >
-            <Logo />
-            <p className="font-bold text-inherit">WebPhone</p>
+            <span className="text-red-500">
+              <Logo />
+            </span>
+            <p className="font-bold text-inherit tracking-tight">Yapp</p>
           </NextLink>
         </NavbarBrand>
         <ul className="hidden lg:flex gap-4 justify-start ml-2">
-          {siteConfig.navItems.map((item) => (
-            <NavbarItem key={item.href}>
-              <NextLink
-                className={clsx(
-                  linkStyles({ color: "foreground" }),
-                  "data-[active=true]:text-primary data-[active=true]:font-medium",
-                )}
-                color="foreground"
-                href={item.href}
-              >
-                {item.label}
-              </NextLink>
-            </NavbarItem>
-          ))}
+          {siteConfig.navItems.map((item) => {
+            const icon = iconFor(item.label);
+
+            return (
+              <NavbarItem key={item.href}>
+                <NextLink
+                  className={clsx(
+                    "inline-flex items-center gap-1.5 text-zinc-300 hover:text-white transition-colors",
+                    "data-[active=true]:text-red-400 data-[active=true]:font-medium",
+                  )}
+                  href={item.href}
+                >
+                  {icon}
+                  {item.label}
+                </NextLink>
+              </NavbarItem>
+            );
+          })}
         </ul>
       </NavbarContent>
 
@@ -87,7 +114,7 @@ export const Navbar = () => {
       >
         <NavbarItem className="hidden sm:flex gap-2">
           <Link isExternal aria-label="Github" href={siteConfig.links.github}>
-            <GithubIcon className="text-default-500" />
+            <GithubIcon className="text-zinc-400 hover:text-white transition-colors" />
           </Link>
           <ThemeSwitch />
         </NavbarItem>

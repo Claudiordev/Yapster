@@ -1,6 +1,4 @@
-import { Link } from "@heroui/link";
-
-import { Navbar } from "@/components/navbar";
+import { LeftSidebar } from "@/components/left-sidebar";
 
 export default function ProtectedLayout({
   children,
@@ -8,20 +6,11 @@ export default function ProtectedLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative flex flex-col h-screen">
-      <Navbar />
-      <main className="container mx-auto max-w-7xl pt-16 px-6 flex-grow">
+    <div className="flex flex-row h-screen overflow-hidden">
+      <LeftSidebar />
+      <main className="flex-grow flex flex-col overflow-auto px-6 py-4">
         {children}
       </main>
-      <footer className="w-full flex items-center justify-center py-3">
-        <Link
-          isExternal
-          className="flex items-center gap-1 text-current"
-          href="https://heroui.com?utm_source=next-app-template"
-          title="heroui.com homepage"
-        >
-        </Link>
-      </footer>
     </div>
   );
 }

@@ -9,4 +9,26 @@
 @theme {
     --font-sans: "font", sans-serif;
     --font-mono: "monospace", monospace;
+
+    /* Coral palette — matches the dashboard reference (#ff5a5f at its center) */
+    --color-coral-50:  #fff5f5;
+    --color-coral-100: #ffe5e6;
+    --color-coral-200: #ffc5c8;
+    --color-coral-300: #ffa1a6;
+    --color-coral-400: #ff7e85;
+    --color-coral-500: #ff5a5f;
+    --color-coral-600: #e54850;
+    --color-coral-700: #c93b42;
+    --color-coral-800: #a52f37;
+    --color-coral-900: #842830;
+}
+
+@keyframes voice-wave {
+    0%, 100% { transform: scaleY(0.25); }
+    50% { transform: scaleY(1); }
+}
+
+.voice-wave-bar {
+    transform-origin: center;
+    animation: voice-wave 1.1s ease-in-out infinite;
 }
