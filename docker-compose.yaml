@@ -9,7 +9,18 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - "pgdata:/var/lib/postgresql/data"
+      - "session_postgres:/var/lib/postgresql/data"
+  comms_postgres:
+    image: postgres:16
+    container_name: comms_postgres
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: comms
+    ports:
+      - "5433:5432"
+    volumes:
+      - "comms_postgres:/var/lib/postgresql/data"
   discovery:
     build:
       context: .
@@ -27,10 +38,31 @@ services:
     depends_on:
       - session_postgres
       - discovery
+  router:
+    build:
+      context: .
+      dockerfile: router/Dockerfile
+    container_name: router
+    ports:
+      - "8080:8080"
+    depends_on:
+      - discovery
+      - session
+  comms:
+    build:
+      context: .
+      dockerfile: comms/Dockerfile
+    container_name: comms
+    ports:
+      - "8082:8082"
+    depends_on:
+      - comms_postgres
+      - discovery
 
 volumes:
-  pgdata:
+  session_postgres:
   service_pgdata:
+  comms_postgres:
   kafka_data:
   zookeeper_data:
   zookeeper_log:
