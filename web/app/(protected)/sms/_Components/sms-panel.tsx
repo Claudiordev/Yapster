@@ -1,76 +1,174 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Button } from "@heroui/button";
-import { Card, CardBody } from "@heroui/card";
-import { Chip } from "@heroui/chip";
-import { Divider } from "@heroui/divider";
-import { Form } from "@heroui/form";
-import { Input } from "@heroui/input";
-import { Spinner } from "@heroui/spinner";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { SendIcon } from "./send-icon";
+import { CallModal } from "./call-modal";
+import { ChatList } from "./chat-list";
+import { ChatThread } from "./chat-thread";
+import { ContactModal } from "./contact-modal";
+import { useContacts } from "./use-contacts";
+import { ChatMessage } from "./chat-types";
 
-interface ChatMessage {
-  id: string;
-  body: string;
-  to: string;
-  status: string;
-  pending: boolean;
-  error?: string;
-  dateSent?: string;
-  price?: string;
-  priceUnit?: string;
+interface ConversationDto {
+  receiver: string;
+  messages: {
+    id: string;
+    body: string;
+    status: string;
+    providerId?: string | null;
+    errorMessage?: string | null;
+    createdAt: string;
+  }[];
 }
 
-function statusColor(status: string) {
-  switch (status) {
-    case "delivered":
-    case "sent":
-      return "success" as const;
-    case "failed":
-      return "danger" as const;
-    default:
-      return "warning" as const;
-  }
-}
+const STATUS_REFRESH_DELAY_MS = 5_000;
 
 export function SmsPanel() {
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [messageText, setMessageText] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [activeRecipient, setActiveRecipient] = useState<string | null>(null);
+  const [draftRecipient, setDraftRecipient] = useState("");
+  const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [editingRecipient, setEditingRecipient] = useState<string | null>(null);
+  const [callingRecipient, setCallingRecipient] = useState<string | null>(null);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { displayName, hasContact, setContactName } = useContacts();
 
+  // Load persisted conversations on mount
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    fetch("/api/sms/conversations")
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((conversations: ConversationDto[]) => {
+        const loaded: ChatMessage[] = conversations.flatMap((conv) =>
+          conv.messages.map((m) => ({
+            id: m.id,
+            providerId: m.providerId ?? undefined,
+            body: m.body,
+            to: conv.receiver,
+            status: m.status.toLowerCase(),
+            pending: false,
+            error: m.errorMessage ?? undefined,
+            sentAt: new Date(m.createdAt).getTime(),
+          })),
+        );
+
+        setMessages(loaded);
+      })
+      .catch(() => {
+        // ignore — empty state if backend is down or returns nothing
+      });
+  }, []);
+
+  const { threadsByRecipient, recipients } = useMemo(() => {
+    const grouped = new Map<string, ChatMessage[]>();
+
+    for (const msg of messages) {
+      const arr = grouped.get(msg.to) ?? [];
+
+      arr.push(msg);
+      grouped.set(msg.to, arr);
+    }
+    Array.from(grouped.values()).forEach((arr) =>
+      arr.sort((a, b) => a.sentAt - b.sentAt),
+    );
+    const sortedRecipients = Array.from(grouped.entries()).sort(
+      ([, a], [, b]: [string, ChatMessage[]]) =>
+        b[b.length - 1].sentAt - a[a.length - 1].sentAt,
+    );
+
+    return { threadsByRecipient: grouped, recipients: sortedRecipients };
   }, [messages]);
+
+  const activeMessages = activeRecipient
+    ? (threadsByRecipient.get(activeRecipient) ?? [])
+    : [];
+
+  const currentRecipient = activeRecipient ?? draftRecipient;
+  const canSend =
+    messageText.trim().length > 0 && currentRecipient.trim().length > 0;
+
+  function startNewChat() {
+    setActiveRecipient(null);
+    setDraftRecipient("");
+    setMessageText("");
+  }
+
+  function openContactModal(recipient: string) {
+    setEditingRecipient(recipient);
+  }
+
+  function closeContactModal() {
+    setEditingRecipient(null);
+  }
+
+  function saveContact(name: string) {
+    if (editingRecipient) {
+      setContactName(editingRecipient, name);
+    }
+  }
+
+  // After STATUS_REFRESH_DELAY_MS, pull the latest status for one specific message
+  // by looking it up via providerId in the conversations endpoint.
+  const refreshStatus = useCallback(
+    async (tempId: string, recipient: string, providerId: string) => {
+      try {
+        const res = await fetch("/api/sms/conversations");
+
+        if (!res.ok) return;
+        const conversations: ConversationDto[] = await res.json();
+        const conv = conversations.find((c) => c.receiver === recipient);
+
+        if (!conv) return;
+        const updated = conv.messages.find((m) => m.providerId === providerId);
+
+        if (!updated) return;
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId
+              ? {
+                  ...m,
+                  status: updated.status.toLowerCase(),
+                  error: updated.errorMessage ?? m.error,
+                }
+              : m,
+          ),
+        );
+      } catch {
+        // ignore — message keeps "queued"
+      }
+    },
+    [],
+  );
 
   async function handleSend(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!messageText.trim() || !phoneNumber.trim()) return;
+    if (!canSend) return;
 
-    const tempId = crypto.randomUUID();
+    const recipient = currentRecipient.trim();
     const body = messageText.trim();
+    const tempId = crypto.randomUUID();
 
     const optimistic: ChatMessage = {
       id: tempId,
       body,
-      to: phoneNumber,
-      status: "sending",
+      to: recipient,
+      status: "queued",
       pending: true,
+      sentAt: Date.now(),
     };
 
     setMessages((prev) => [...prev, optimistic]);
     setMessageText("");
+    setActiveRecipient(recipient);
+    setDraftRecipient("");
     setIsSending(true);
 
     try {
       const res = await fetch("/api/sms/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receiver: phoneNumber, message: body }),
+        body: JSON.stringify({ receiver: recipient, message: body }),
       });
 
       if (!res.ok) {
@@ -94,20 +192,29 @@ export function SmsPanel() {
 
       const data = await res.json();
 
+      // Show as "queued" regardless of the provider's immediate response; the
+      // actual lifecycle status will land in `setTimeout` below once the
+      // backend's delayed fetch + persist has run.
       setMessages((prev) =>
         prev.map((m) =>
           m.id === tempId
             ? {
                 ...m,
                 pending: false,
-                status: data.status || "queued",
-                dateSent: data.date_sent,
-                price: data.price,
-                priceUnit: data.price_unit,
+                status: "queued",
+                providerId: data.providerId,
+                price: data.price ?? undefined,
+                priceUnit: data.priceUnit ?? undefined,
               }
             : m,
         ),
       );
+
+      if (data.providerId) {
+        window.setTimeout(() => {
+          refreshStatus(tempId, recipient, data.providerId);
+        }, STATUS_REFRESH_DELAY_MS);
+      }
     } catch {
       setMessages((prev) =>
         prev.map((m) =>
@@ -127,79 +234,57 @@ export function SmsPanel() {
   }
 
   return (
-    <div className="flex flex-col flex-grow h-full gap-4">
-      {/* Phone number input */}
-      <div className="flex-shrink-0">
-        <Input
-          label="Recipient"
-          labelPlacement="outside"
-          placeholder="+1 (555) 123-4567"
-          size="lg"
-          startContent={
-            <span className="text-default-400 text-sm">📞</span>
-          }
-          type="tel"
-          value={phoneNumber}
-          variant="bordered"
-          onValueChange={setPhoneNumber}
+    <>
+      <div className="flex flex-row gap-4 flex-grow min-h-0">
+        <ChatList
+          activeRecipient={activeRecipient}
+          displayName={displayName}
+          hasContact={hasContact}
+          recipients={recipients}
+          onEditContact={openContactModal}
+          onNewChat={startNewChat}
+          onSelectRecipient={setActiveRecipient}
+        />
+
+        <ChatThread
+          activeRecipient={activeRecipient}
+          canSend={canSend}
+          displayName={displayName}
+          draftRecipient={draftRecipient}
+          hasContact={hasContact}
+          isSending={isSending}
+          messageText={messageText}
+          messages={activeMessages}
+          onDraftRecipientChange={setDraftRecipient}
+          onEditContact={openContactModal}
+          onMessageTextChange={setMessageText}
+          onSend={handleSend}
+          onStartCall={setCallingRecipient}
         />
       </div>
 
-      <Divider />
+      <ContactModal
+        currentName={
+          editingRecipient && hasContact(editingRecipient)
+            ? displayName(editingRecipient)
+            : ""
+        }
+        isOpen={editingRecipient !== null}
+        phoneNumber={editingRecipient ?? ""}
+        onClose={closeContactModal}
+        onSave={saveContact}
+      />
 
-      {/* Message history */}
-      <div className="flex-grow overflow-y-auto flex flex-col gap-3 px-1 min-h-0">
-        {messages.length === 0 && (
-          <div className="flex-grow flex items-center justify-center">
-            <p className="text-default-400 text-center text-sm">
-              No messages yet. Enter a phone number and send a message.
-            </p>
-          </div>
-        )}
-
-        {messages.map((msg) => (
-          <div key={msg.id} className="flex justify-end">
-            <div className="max-w-[75%] flex flex-col items-end gap-1">
-              <Card className="bg-primary-50 dark:bg-primary-100/10">
-                <CardBody className="py-2 px-3">
-                  <p className="text-sm">{msg.body}</p>
-                </CardBody>
-              </Card>
-              {msg.error && (
-                <span className="text-danger text-tiny">{msg.error}</span>
-              )}
-            </div>
-          </div>
-        ))}
-
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Message input */}
-      <div className="flex-shrink-0">
-        <Divider className="mb-3" />
-        <Form className="flex flex-row gap-2 items-end" onSubmit={handleSend}>
-          <Input
-            className="flex-grow"
-            isDisabled={!phoneNumber.trim()}
-            name="message"
-            placeholder="Type a message..."
-            value={messageText}
-            variant="bordered"
-            onValueChange={setMessageText}
-          />
-          <Button
-            aria-label="Send message"
-            color="primary"
-            isDisabled={!messageText.trim() || !phoneNumber.trim()}
-            isIconOnly
-            isLoading={isSending}
-            type="submit"
-          >
-            <SendIcon size={18} />
-          </Button>
-        </Form>
-      </div>
-    </div>
+      <CallModal
+        isOpen={callingRecipient !== null}
+        recipientLabel={callingRecipient ? displayName(callingRecipient) : ""}
+        recipientSubLabel={
+          callingRecipient && hasContact(callingRecipient)
+            ? callingRecipient
+            : null
+        }
+        onEndCall={() => setCallingRecipient(null)}
+      />
+    </>
   );
 }

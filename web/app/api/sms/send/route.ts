@@ -9,12 +9,10 @@ interface SendSmsRequest {
 }
 
 interface SendSmsResponse {
-  date_sent: string;
-  body: string;
-  to: string;
-  price: string;
-  price_unit: string;
+  providerId: string;
   status: string;
+  price?: string | null;
+  priceUnit?: string | null;
 }
 
 export async function POST(request: Request) {
@@ -31,7 +29,7 @@ export async function POST(request: Request) {
     const body: SendSmsRequest = await request.json();
 
     const data = await apiPost<SendSmsRequest, SendSmsResponse>(
-      "/message/send",
+      "/messages",
       body,
       token,
     );
