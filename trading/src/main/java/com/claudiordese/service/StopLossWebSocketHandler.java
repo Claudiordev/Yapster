@@ -1,5 +1,8 @@
 package com.claudiordese.service;
 
+import com.claudiordese.dto.Position;
+import com.claudiordese.utils.OrderBookUtils;
+import com.claudiordese.utils.RetryExecutor;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -130,20 +133,10 @@ public class StopLossWebSocketHandler extends TextWebSocketHandler {
 
             JsonNode root = objectMapper.readTree(payload);
 
-            // We're looking for book events with bids
-            JsonNode bids = root.get("bids");
-            if (bids == null || bids.isEmpty()) return;
-
-            // Best bid is the highest price — bids are sorted ascending
-            double bestBid = 0;
-            for (JsonNode bid : bids) {
-                double price = bid.get("price").asDouble();
-                if (price > bestBid) bestBid = price;
-            }
-
+            double bestBid = OrderBookUtils.findBestBid(root.get("bids"));
             if (bestBid <= 0) return;
 
-            PositionManager.Position position = positionManager.getPosition(tokenId);
+            Position position = positionManager.getPosition(tokenId);
             if (position == null) {
                 unsubscribe(tokenId);
                 return;
@@ -173,24 +166,16 @@ public class StopLossWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private static final int MAX_SELL_RETRIES = 5;
+    private void executeSell(String tokenId, Position position, double bestBid, String reason) {
+        String label = String.format("%s SELL | token=%s | bestBid=%s", reason, tokenId, bestBid);
+        boolean success = RetryExecutor.execute(label,
+                () -> orderService.placeSellOrder(position.blockId(), tokenId, position.shares(), bestBid));
 
-    private void executeSell(String tokenId, PositionManager.Position position, double bestBid, String reason) {
-        for (int attempt = 1; attempt <= MAX_SELL_RETRIES; attempt++) {
-            logger.warn("{} SELL attempt {}/{} | token={} | bestBid={}", reason, attempt, MAX_SELL_RETRIES, tokenId, bestBid);
-            boolean success = orderService.placeSellOrder(position.blockId(), tokenId, position.shares(), bestBid);
-            if (success) {
-                positionManager.closePosition(tokenId, reason, bestBid);
-                unsubscribe(tokenId);
-                return;
-            }
-            logger.error("{} SELL attempt {}/{} FAILED | token={}", reason, attempt, MAX_SELL_RETRIES, tokenId);
-            if (attempt < MAX_SELL_RETRIES) {
-                try { Thread.sleep(1000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
-            }
+        if (success) {
+            positionManager.closePosition(tokenId, reason, bestBid);
+        } else {
+            positionManager.closePosition(tokenId, reason + "_FAILED", bestBid);
         }
-        logger.error("{} SELL EXHAUSTED all {} retries | token={} | closing position anyway", reason, MAX_SELL_RETRIES, tokenId);
-        positionManager.closePosition(tokenId, reason + "_FAILED", bestBid);
         unsubscribe(tokenId);
     }
 }

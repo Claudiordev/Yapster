@@ -3,8 +3,10 @@ package com.claudiordese.signing;
 import org.web3j.crypto.ECKeyPair;
 import org.web3j.crypto.Hash;
 import org.web3j.crypto.Keys;
-import org.web3j.crypto.Sign;
 import org.web3j.utils.Numeric;
+
+import com.claudiordese.utils.CryptoUtils;
+import com.claudiordese.utils.MathUtils;
 
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -30,8 +32,6 @@ public class OrderSigner {
     // Signature type constants
     public static final int EOA = 0;
     public static final int POLY_PROXY = 1;
-
-    private static final int TOKEN_DECIMALS = 6;
 
     // EIP-712 type hashes
     private static final byte[] DOMAIN_TYPEHASH = Hash.sha3(
@@ -75,12 +75,12 @@ public class OrderSigner {
      */
     public Map<String, Object> buildSignedMarketBuyOrder(String tokenId, double amount, double price, int feeRateBps, boolean negRisk) {
         // For market BUY: makerAmount = USDC spent, takerAmount = shares received
-        double rawMakerAmt = roundDown(amount, 2);
-        double rawTakerAmt = rawMakerAmt / roundNormal(price, 2);
-        rawTakerAmt = roundDown(rawTakerAmt, 4);
+        double rawMakerAmt = MathUtils.roundDown(amount, 2);
+        double rawTakerAmt = rawMakerAmt / MathUtils.roundNormal(price, 2);
+        rawTakerAmt = MathUtils.roundDown(rawTakerAmt, 4);
 
-        long makerAmount = toTokenDecimals(rawMakerAmt);
-        long takerAmount = toTokenDecimals(rawTakerAmt);
+        long makerAmount = MathUtils.toTokenDecimals(rawMakerAmt);
+        long takerAmount = MathUtils.toTokenDecimals(rawTakerAmt);
 
         return buildSignedOrder(tokenId, makerAmount, takerAmount, BUY, feeRateBps, negRisk);
     }
@@ -96,12 +96,12 @@ public class OrderSigner {
      */
     public Map<String, Object> buildSignedMarketSellOrder(String tokenId, double shares, double price, int feeRateBps, boolean negRisk) {
         // For market SELL: makerAmount = shares to sell, takerAmount = USDC to receive
-        double rawMakerAmt = roundDown(shares, 4);
-        double rawTakerAmt = rawMakerAmt * roundNormal(price, 2);
-        rawTakerAmt = roundDown(rawTakerAmt, 2);
+        double rawMakerAmt = MathUtils.roundDown(shares, 4);
+        double rawTakerAmt = rawMakerAmt * MathUtils.roundNormal(price, 2);
+        rawTakerAmt = MathUtils.roundDown(rawTakerAmt, 2);
 
-        long makerAmount = toTokenDecimals(rawMakerAmt);
-        long takerAmount = toTokenDecimals(rawTakerAmt);
+        long makerAmount = MathUtils.toTokenDecimals(rawMakerAmt);
+        long takerAmount = MathUtils.toTokenDecimals(rawTakerAmt);
 
         return buildSignedOrder(tokenId, makerAmount, takerAmount, SELL, feeRateBps, negRisk);
     }
@@ -117,22 +117,7 @@ public class OrderSigner {
                 new BigInteger(tokenId), makerAmount, takerAmount,
                 0, 0, feeRateBps, side, signatureType);
 
-        // EIP-712: "\x19\x01" || domainSeparator || structHash
-        byte[] encoded = new byte[2 + 32 + 32];
-        encoded[0] = 0x19;
-        encoded[1] = 0x01;
-        System.arraycopy(domainSeparator, 0, encoded, 2, 32);
-        System.arraycopy(structHash, 0, encoded, 34, 32);
-
-        byte[] digest = Hash.sha3(encoded);
-        Sign.SignatureData sig = Sign.signMessage(digest, keyPair, false);
-
-        byte[] sigBytes = new byte[65];
-        System.arraycopy(sig.getR(), 0, sigBytes, 0, 32);
-        System.arraycopy(sig.getS(), 0, sigBytes, 32, 32);
-        sigBytes[64] = sig.getV()[0];
-
-        String signature = Numeric.toHexString(sigBytes);
+        String signature = CryptoUtils.signEip712(domainSeparator, structHash, keyPair);
 
         // Build the order JSON matching Polymarket's expected format
         Map<String, Object> order = new LinkedHashMap<>();
@@ -156,8 +141,8 @@ public class OrderSigner {
     private byte[] buildDomainSeparator(String exchangeAddress) {
         byte[] nameHash = Hash.sha3("Polymarket CTF Exchange".getBytes(StandardCharsets.UTF_8));
         byte[] versionHash = Hash.sha3("1".getBytes(StandardCharsets.UTF_8));
-        byte[] chainIdBytes = padLeft32(BigInteger.valueOf(CHAIN_ID).toByteArray());
-        byte[] contractBytes = padLeft32(Numeric.hexStringToByteArray(exchangeAddress));
+        byte[] chainIdBytes = CryptoUtils.padLeft32(BigInteger.valueOf(CHAIN_ID).toByteArray());
+        byte[] contractBytes = CryptoUtils.padLeft32(Numeric.hexStringToByteArray(exchangeAddress));
 
         byte[] data = new byte[32 * 5];
         System.arraycopy(DOMAIN_TYPEHASH, 0, data, 0, 32);
@@ -177,45 +162,20 @@ public class OrderSigner {
         int offset = 0;
 
         System.arraycopy(ORDER_TYPEHASH, 0, data, offset, 32); offset += 32;
-        System.arraycopy(padLeft32(BigInteger.valueOf(salt).toByteArray()), 0, data, offset, 32); offset += 32;
-        System.arraycopy(padLeft32(Numeric.hexStringToByteArray(maker)), 0, data, offset, 32); offset += 32;
-        System.arraycopy(padLeft32(Numeric.hexStringToByteArray(signer)), 0, data, offset, 32); offset += 32;
-        System.arraycopy(padLeft32(Numeric.hexStringToByteArray(taker)), 0, data, offset, 32); offset += 32;
-        System.arraycopy(padLeft32(tokenId.toByteArray()), 0, data, offset, 32); offset += 32;
-        System.arraycopy(padLeft32(BigInteger.valueOf(makerAmount).toByteArray()), 0, data, offset, 32); offset += 32;
-        System.arraycopy(padLeft32(BigInteger.valueOf(takerAmount).toByteArray()), 0, data, offset, 32); offset += 32;
-        System.arraycopy(padLeft32(BigInteger.valueOf(expiration).toByteArray()), 0, data, offset, 32); offset += 32;
-        System.arraycopy(padLeft32(BigInteger.valueOf(nonce).toByteArray()), 0, data, offset, 32); offset += 32;
-        System.arraycopy(padLeft32(BigInteger.valueOf(feeRateBps).toByteArray()), 0, data, offset, 32); offset += 32;
-        System.arraycopy(padLeft32(BigInteger.valueOf(side).toByteArray()), 0, data, offset, 32); offset += 32;
-        System.arraycopy(padLeft32(BigInteger.valueOf(sigType).toByteArray()), 0, data, offset, 32);
+        System.arraycopy(CryptoUtils.padLeft32(BigInteger.valueOf(salt).toByteArray()), 0, data, offset, 32); offset += 32;
+        System.arraycopy(CryptoUtils.padLeft32(Numeric.hexStringToByteArray(maker)), 0, data, offset, 32); offset += 32;
+        System.arraycopy(CryptoUtils.padLeft32(Numeric.hexStringToByteArray(signer)), 0, data, offset, 32); offset += 32;
+        System.arraycopy(CryptoUtils.padLeft32(Numeric.hexStringToByteArray(taker)), 0, data, offset, 32); offset += 32;
+        System.arraycopy(CryptoUtils.padLeft32(tokenId.toByteArray()), 0, data, offset, 32); offset += 32;
+        System.arraycopy(CryptoUtils.padLeft32(BigInteger.valueOf(makerAmount).toByteArray()), 0, data, offset, 32); offset += 32;
+        System.arraycopy(CryptoUtils.padLeft32(BigInteger.valueOf(takerAmount).toByteArray()), 0, data, offset, 32); offset += 32;
+        System.arraycopy(CryptoUtils.padLeft32(BigInteger.valueOf(expiration).toByteArray()), 0, data, offset, 32); offset += 32;
+        System.arraycopy(CryptoUtils.padLeft32(BigInteger.valueOf(nonce).toByteArray()), 0, data, offset, 32); offset += 32;
+        System.arraycopy(CryptoUtils.padLeft32(BigInteger.valueOf(feeRateBps).toByteArray()), 0, data, offset, 32); offset += 32;
+        System.arraycopy(CryptoUtils.padLeft32(BigInteger.valueOf(side).toByteArray()), 0, data, offset, 32); offset += 32;
+        System.arraycopy(CryptoUtils.padLeft32(BigInteger.valueOf(sigType).toByteArray()), 0, data, offset, 32);
 
         return Hash.sha3(data);
     }
 
-    private static long toTokenDecimals(double x) {
-        double f = Math.pow(10, TOKEN_DECIMALS) * x;
-        return Math.round(f);
-    }
-
-    private static double roundDown(double x, int decimals) {
-        double factor = Math.pow(10, decimals);
-        return Math.floor(x * factor) / factor;
-    }
-
-    private static double roundNormal(double x, int decimals) {
-        double factor = Math.pow(10, decimals);
-        return Math.round(x * factor) / factor;
-    }
-
-    private static byte[] padLeft32(byte[] input) {
-        if (input.length == 32) return input;
-        byte[] padded = new byte[32];
-        if (input.length > 32) {
-            System.arraycopy(input, input.length - 32, padded, 0, 32);
-        } else {
-            System.arraycopy(input, 0, padded, 32 - input.length, input.length);
-        }
-        return padded;
-    }
 }

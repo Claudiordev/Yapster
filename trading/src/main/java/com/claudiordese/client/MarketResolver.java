@@ -1,5 +1,6 @@
-package com.claudiordese.service;
+package com.claudiordese.client;
 
+import com.claudiordese.dto.MarketTokens;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -12,6 +13,7 @@ public class MarketResolver {
 
     private static final Logger logger = LoggerFactory.getLogger(MarketResolver.class);
     private static final String GAMMA_API = "https://gamma-api.polymarket.com";
+    private static final String SLUG_PREFIX = "btc-updown-5m-";
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -23,20 +25,12 @@ public class MarketResolver {
      */
     public MarketTokens resolve(long blockId) {
         try {
-            String slug = "btc-updown-5m-" + blockId;
-            String url = GAMMA_API + "/events?slug=" + slug;
-            String body = restTemplate.getForObject(url, String.class);
-            JsonNode events = objectMapper.readTree(body);
+            JsonNode event = fetchEvent(blockId);
+            if (event == null) return null;
 
-            if (events == null || events.isEmpty()) {
-                logger.warn("No event found for slug: {}", slug);
-                return null;
-            }
-
-            JsonNode event = events.get(0);
             JsonNode markets = event.get("markets");
             if (markets == null || markets.isEmpty()) {
-                logger.warn("No markets found for slug: {}", slug);
+                logger.warn("No markets found for blockId: {}", blockId);
                 return null;
             }
 
@@ -44,7 +38,7 @@ public class MarketResolver {
             String upTokenId = tokenIds.get(0).asText();
             String downTokenId = tokenIds.get(1).asText();
 
-            logger.info("Resolved {}: Up={}, Down={}", slug, upTokenId, downTokenId);
+            logger.info("Resolved block {}: Up={}, Down={}", blockId, upTokenId, downTokenId);
             return new MarketTokens(blockId, upTokenId, downTokenId);
         } catch (Exception e) {
             logger.error("Failed to resolve market for blockId {}: {}", blockId, e.getMessage());
@@ -57,15 +51,10 @@ public class MarketResolver {
      */
     public JsonNode resolveEvent(long blockId) {
         try {
-            String slug = "btc-updown-5m-" + blockId;
-            String url = GAMMA_API + "/events?slug=" + slug;
-            String body = restTemplate.getForObject(url, String.class);
-            JsonNode events = objectMapper.readTree(body);
-
-            if (events == null || events.isEmpty()) return null;
-
-            JsonNode event = events.get(0);
-            logger.info("Event for block {}: {}", blockId, event);
+            JsonNode event = fetchEvent(blockId);
+            if (event != null) {
+                logger.info("Event for block {}: {}", blockId, event);
+            }
             return event;
         } catch (Exception e) {
             logger.error("Failed to fetch event for blockId {}: {}", blockId, e.getMessage());
@@ -73,5 +62,17 @@ public class MarketResolver {
         }
     }
 
-    public record MarketTokens(long blockId, String upTokenId, String downTokenId) {}
+    private JsonNode fetchEvent(long blockId) throws Exception {
+        String slug = SLUG_PREFIX + blockId;
+        String url = GAMMA_API + "/events?slug=" + slug;
+        String body = restTemplate.getForObject(url, String.class);
+        JsonNode events = objectMapper.readTree(body);
+
+        if (events == null || events.isEmpty()) {
+            logger.warn("No event found for blockId: {}", blockId);
+            return null;
+        }
+        return events.get(0);
+    }
+
 }
