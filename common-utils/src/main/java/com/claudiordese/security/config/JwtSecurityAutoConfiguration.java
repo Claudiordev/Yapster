@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -41,6 +42,17 @@ public class JwtSecurityAutoConfiguration {
     @ConditionalOnMissingBean
     public JwtValidator jwtValidator(JwtSecurityProperties properties) {
         return new JwtValidator(properties.getPublicKeyPath());
+    }
+
+    /**
+     * Prometheus scrapes hit this endpoint every ~15s on every service.
+     * Bypassing the security filter chain keeps the scrapes out of DEBUG
+     * security logs without lowering log verbosity for real requests.
+     */
+    @Bean
+    @ConditionalOnMissingBean(name = "metricsScrapeIgnoringCustomizer")
+    public WebSecurityCustomizer metricsScrapeIgnoringCustomizer() {
+        return web -> web.ignoring().requestMatchers("/actuator/prometheus");
     }
 
     @Bean
