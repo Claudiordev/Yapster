@@ -1,0 +1,29 @@
+/* App color tokens — every value becomes a Tailwind utility
+   (e.g. bg-brand, text-brand, hover:bg-brand-hover, dark:bg-surface-sidebar). */
+@theme {
+    /* Brand reds */
+    --color-brand: #ff3b47;        /* primary accent (buttons, icons, active) */
+    --color-brand-hover: #e62d3a;  /* hover state of brand surfaces */
+    --color-brand-deep: #7d1d24;   /* muted deep wine — selected chat row */
+
+    /* Coral palette — matches the dashboard reference (#ff5a5f at its center) */
+    --color-coral-50:  #fff5f5;
+    --color-coral-100: #ffe5e6;
+    --color-coral-200: #ffc5c8;
+    --color-coral-300: #ffa1a6;
+    --color-coral-400: #ff7e85;
+    --color-coral-500: #ff5a5f;
+    --color-coral-600: #e54850;
+    --color-coral-700: #c93b42;
+    --color-coral-800: #a52f37;
+    --color-coral-900: #842830;
+
+    /* Dark surfaces (Discord-style greys) */
+    --color-surface-sidebar: #2b2d31; /* left menu column */
+    --color-surface-chat: #313338;    /* messages area */
+    --color-surface-border: #3f4147;  /* divider between panels */
+
+    /* Third-party brand colors (social login) */
+    --color-facebook: #1877f2;
+    --color-discord: #5865f2;
+}

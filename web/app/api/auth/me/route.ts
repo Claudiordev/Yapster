@@ -6,6 +6,8 @@ import { getAuthToken, verifyJwt } from "@/lib/auth";
 interface SessionUser {
   id: string;
   username: string;
+  balance?: number;
+  avatarUrl?: string | null;
 }
 
 export async function GET() {
@@ -27,6 +29,8 @@ export async function GET() {
     return NextResponse.json({
       id: user.id,
       username: user.username,
+      balance: user.balance ?? null,
+      avatarUrl: user.avatarUrl ?? null,
       role: claims.role ?? null,
     });
   } catch (error) {

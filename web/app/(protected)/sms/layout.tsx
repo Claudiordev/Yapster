@@ -4,8 +4,8 @@ export default function SmsLayout({
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col flex-grow text-foreground">
-      <div className="w-full flex flex-col flex-grow">{children}</div>
+    <section className="flex flex-col flex-grow min-h-0 text-foreground">
+      {children}
     </section>
   );
 }

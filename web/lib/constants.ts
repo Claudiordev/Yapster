@@ -8,7 +8,14 @@ export const REFRESH_COOKIE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 export const AUTH_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
+  // Secure cookies require HTTPS, so a Secure cookie is dropped by the browser
+  // over plain http:// — e.g. when reaching the app by LAN IP in Docker. Default
+  // to on in production, but let COOKIE_SECURE override it. Behind real HTTPS,
+  // set COOKIE_SECURE=true.
+  secure:
+    process.env.COOKIE_SECURE != null
+      ? process.env.COOKIE_SECURE === "true"
+      : process.env.NODE_ENV === "production",
   sameSite: "lax" as const,
   path: "/",
 };

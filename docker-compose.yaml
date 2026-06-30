@@ -102,6 +102,20 @@ services:
       - "9090:9090"
     depends_on:
       - session
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: web
+    # Published on the host's 0.0.0.0, so the app is reachable from other
+    # devices at http://<this-machine's-LAN-IP>:3000. The browser only talks to
+    # this container (the BFF); it forwards to the gateway internally, so only
+    # this port needs exposing. Backend URL / JWT key / cookie flags come from
+    # web/.env.production (API_BASE_URL=http://router:8080, COOKIE_SECURE=false).
+    ports:
+      - "3000:3000"
+    depends_on:
+      - router
 
 volumes:
   session_postgres:

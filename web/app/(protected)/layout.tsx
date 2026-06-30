@@ -1,16 +1,28 @@
-import { LeftSidebar } from "@/components/left-sidebar";
+import { getAccount } from "@/lib/get-account";
+import { AccountProvider } from "@/lib/use-account";
 
-export default function ProtectedLayout({
+export default async function ProtectedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const account = await getAccount();
+
   return (
-    <div className="flex flex-row h-screen overflow-hidden">
-      <LeftSidebar />
-      <main className="flex-grow flex flex-col overflow-auto px-6 py-4">
-        {children}
-      </main>
+    <div className="relative h-screen overflow-hidden flex flex-col bg-background">
+      <div
+        aria-hidden
+        className="app-backdrop pointer-events-none absolute inset-0"
+      />
+      <div className="relative z-10 flex flex-col flex-grow min-h-0">
+        <AccountProvider
+          initialAvatarUrl={account?.avatarUrl ?? null}
+          initialBalance={account?.balance ?? 0}
+          initialUsername={account?.username ?? ""}
+        >
+          {children}
+        </AccountProvider>
+      </div>
     </div>
   );
 }

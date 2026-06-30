@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./colors.css";
 
 @plugin '../hero.ts';
 
@@ -9,23 +10,65 @@
 @theme {
     --font-sans: "font", sans-serif;
     --font-mono: "monospace", monospace;
+}
 
-    /* Coral palette — matches the dashboard reference (#ff5a5f at its center) */
-    --color-coral-50:  #fff5f5;
-    --color-coral-100: #ffe5e6;
-    --color-coral-200: #ffc5c8;
-    --color-coral-300: #ffa1a6;
-    --color-coral-400: #ff7e85;
-    --color-coral-500: #ff5a5f;
-    --color-coral-600: #e54850;
-    --color-coral-700: #c93b42;
-    --color-coral-800: #a52f37;
-    --color-coral-900: #842830;
+/* Deep wine-red backdrop for the in-app (protected) pages:
+   a top-center glow over a vertical fade into near-black. */
+.app-backdrop {
+    background:
+        radial-gradient(65% 45% at 50% -5%, rgba(120, 22, 30, 0.85), rgba(70, 13, 18, 0.45) 45%, transparent 75%),
+        linear-gradient(180deg, #220809 0%, #140405 55%, #0a0203 100%);
+}
+
+/* Login sunset sky — dark menu-grey at the top, down through the wine red of a
+   selected chat (#7d1d24), to a bright coral horizon glow. */
+.sunset-sky {
+    background: linear-gradient(180deg,
+        #2b2d31 0%,
+        #3f1f2a 30%,
+        #7d1d24 56%,
+        #d13340 80%,
+        #ff6a5f 100%);
+}
+
+/* Twinkling stars in the dark upper sky. */
+@keyframes twinkle {
+    0%, 100% { opacity: 0.2; transform: scale(0.7); }
+    50%      { opacity: 1;   transform: scale(1.15); }
+}
+
+.star {
+    position: absolute;
+    border-radius: 9999px;
+    background: #fff;
+    box-shadow: 0 0 4px 1px rgba(255, 255, 255, 0.55);
+    animation: twinkle 2.6s ease-in-out infinite;
+}
+
+/* Gentle horizontal drift for floating clouds. */
+@keyframes cloud-drift {
+    0%, 100% { transform: translateX(-22px); }
+    50%      { transform: translateX(22px); }
+}
+
+.cloud-drift {
+    animation: cloud-drift 24s ease-in-out infinite;
 }
 
 @keyframes voice-wave {
     0%, 100% { transform: scaleY(0.25); }
     50% { transform: scaleY(1); }
+}
+
+@keyframes bubble-rise {
+    0%   { transform: translateY(12px) scale(0.4); opacity: 0; }
+    25%  { opacity: 0.9; }
+    100% { transform: translateY(-28px) scale(1); opacity: 0; }
+}
+
+.bubble {
+    animation: bubble-rise 2.8s ease-in-out infinite;
+    box-shadow: 0 0 8px 1px rgba(255, 161, 166, 0.55);
 }
 
 .voice-wave-bar {
