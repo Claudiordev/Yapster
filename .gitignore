@@ -32,6 +32,11 @@ build/
 ### VS Code ###
 .vscode/
 
+### Claude Code ###
+# Personal/local settings stay out of git; the shareable skills under
+# .claude/skills/ can be committed if the team wants them.
+.claude/settings.local.json
+
 ### Application properties ###
 **/application.properties
 **/application-*.properties
@@ -41,6 +46,11 @@ build/
 
 ### Ignored modules ###
 library/
+metrics/
+payment/
+service/
+trading/
+transmission/
 
 ### Documentation ###
 README.md
