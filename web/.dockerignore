@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.gitignore
+*.log
+.DS_Store
+.vscode
+.idea
+# local env overrides must not leak into the image (keep .env.production)
+.env*.local
+Dockerfile
+.dockerignore
+README.md

@@ -1,221 +1,176 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@heroui/button";
-import { Card, CardBody, CardHeader } from "@heroui/card";
-import { Chip } from "@heroui/chip";
-import { Divider } from "@heroui/divider";
-import { Form } from "@heroui/form";
-import { Input } from "@heroui/input";
-import { Spinner } from "@heroui/spinner";
+import { Select, SelectItem } from "@heroui/select";
 
-interface TradingSettings {
-  priceThreshold: number;
-  timeThreshold: number;
-  stopLossPercent: number;
-  takeProfitPercent: number;
+import { MicTest } from "./mic-test";
+
+interface AudioDevice {
+  id: string;
+  label: string;
+}
+
+const INPUT_KEY = "audio-input-device";
+const OUTPUT_KEY = "audio-output-device";
+const INPUT_VOL_KEY = "audio-input-volume";
+const OUTPUT_VOL_KEY = "audio-output-volume";
+
+function VolumeBar({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between text-tiny text-default-500">
+        <span>Volume</span>
+        <span className="tabular-nums">{value}%</span>
+      </div>
+      <input
+        aria-label="Volume"
+        className="w-full cursor-pointer accent-brand"
+        max={100}
+        min={0}
+        type="range"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </div>
+  );
 }
 
 export function SettingsPanel() {
-  const [settings, setSettings] = useState<TradingSettings | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-
-  const [priceThreshold, setPriceThreshold] = useState("");
-  const [timeThreshold, setTimeThreshold] = useState("");
-  const [stopLossPercent, setStopLossPercent] = useState("");
-  const [takeProfitPercent, setTakeProfitPercent] = useState("");
+  const [inputs, setInputs] = useState<AudioDevice[]>([]);
+  const [outputs, setOutputs] = useState<AudioDevice[]>([]);
+  const [input, setInput] = useState("default");
+  const [output, setOutput] = useState("default");
+  const [inputVolume, setInputVolume] = useState(100);
+  const [outputVolume, setOutputVolume] = useState(100);
+  const [available, setAvailable] = useState(true);
 
   useEffect(() => {
-    fetchSettings();
+    setInput(localStorage.getItem(INPUT_KEY) ?? "default");
+    setOutput(localStorage.getItem(OUTPUT_KEY) ?? "default");
+    setInputVolume(Number(localStorage.getItem(INPUT_VOL_KEY) ?? 100));
+    setOutputVolume(Number(localStorage.getItem(OUTPUT_VOL_KEY) ?? 100));
+
+    const md =
+      typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
+
+    // mediaDevices is only present in a secure context (HTTPS/localhost).
+    if (!md?.enumerateDevices) {
+      setAvailable(false);
+
+      return;
+    }
+
+    let active = true;
+
+    md.enumerateDevices()
+      .then((devices) => {
+        if (!active) return;
+
+        const pick = (kind: MediaDeviceKind, prefix: string) =>
+          devices
+            .filter(
+              (d) =>
+                d.kind === kind &&
+                d.deviceId &&
+                d.deviceId !== "default" &&
+                d.deviceId !== "communications",
+            )
+            .map((d, i) => ({
+              id: d.deviceId,
+              label: d.label || `${prefix} ${i + 1}`,
+            }));
+
+        setInputs(pick("audioinput", "Microphone"));
+        setOutputs(pick("audiooutput", "Speaker"));
+      })
+      .catch(() => setAvailable(false));
+
+    return () => {
+      active = false;
+    };
   }, []);
 
-  async function fetchSettings() {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/settings");
-
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "Failed to load settings");
-        return;
-      }
-
-      const data: TradingSettings = await res.json();
-      setSettings(data);
-      setPriceThreshold(String(data.priceThreshold));
-      setTimeThreshold(String(data.timeThreshold / 1000));
-      setStopLossPercent(String(data.stopLossPercent));
-      setTakeProfitPercent(String(data.takeProfitPercent));
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
+  function changeInputVolume(v: number) {
+    setInputVolume(v);
+    localStorage.setItem(INPUT_VOL_KEY, String(v));
   }
 
-  async function handleSave(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setIsSaving(true);
-    setError(null);
-    setSuccess(false);
-
-    try {
-      const res = await fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          priceThreshold: Number(priceThreshold),
-          timeThreshold: Number(timeThreshold) * 1000,
-          stopLossPercent: Number(stopLossPercent),
-          takeProfitPercent: Number(takeProfitPercent),
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "Failed to save settings");
-        return;
-      }
-
-      const data: TradingSettings = await res.json();
-      setSettings(data);
-      setPriceThreshold(String(data.priceThreshold));
-      setTimeThreshold(String(data.timeThreshold / 1000));
-      setStopLossPercent(String(data.stopLossPercent));
-      setTakeProfitPercent(String(data.takeProfitPercent));
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setIsSaving(false);
-    }
+  function changeOutputVolume(v: number) {
+    setOutputVolume(v);
+    localStorage.setItem(OUTPUT_VOL_KEY, String(v));
   }
 
-  const hasChanges =
-    settings !== null &&
-    (Number(priceThreshold) !== settings.priceThreshold ||
-      Number(timeThreshold) * 1000 !== settings.timeThreshold ||
-      Number(stopLossPercent) !== settings.stopLossPercent ||
-      Number(takeProfitPercent) !== settings.takeProfitPercent);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Spinner label="Loading settings..." size="lg" />
-      </div>
-    );
-  }
+  const inputOptions = [{ id: "default", label: "System default" }, ...inputs];
+  const outputOptions = [{ id: "default", label: "System default" }, ...outputs];
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Trading Settings</h1>
-        {success && (
-          <Chip color="success" variant="flat">
-            Settings saved
-          </Chip>
-        )}
-        {error && (
-          <Chip color="danger" variant="flat">
-            {error}
-          </Chip>
-        )}
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-xl font-bold text-foreground">Settings</h1>
+        <p className="text-sm text-default-500">
+          Choose your audio input and output devices.
+        </p>
       </div>
 
-      <Divider />
+      {/* Microphone (input) + Speaker (output) side by side. */}
+      <div className="flex flex-col gap-6 sm:flex-row">
+        <div className="flex w-full flex-col gap-3 sm:w-1/2">
+          <Select
+            label="Microphone"
+            labelPlacement="outside"
+            selectedKeys={[input]}
+            variant="bordered"
+            onSelectionChange={(keys) => {
+              const id = (Array.from(keys)[0] as string) ?? "default";
 
-      <Card>
-        <CardHeader className="flex flex-col items-start gap-1">
-          <h2 className="text-lg font-semibold">Trading Configuration</h2>
-          <p className="text-sm text-default-500">
-            Configure thresholds, stop-loss and take-profit settings.
-          </p>
-        </CardHeader>
-        <Divider />
-        <CardBody>
-          <Form className="flex flex-col gap-6" onSubmit={handleSave}>
-            <Input
-              description="Minimum price change ($) to trigger a trade."
-              label="Price Threshold"
-              labelPlacement="outside"
-              placeholder="e.g. 100"
-              type="number"
-              value={priceThreshold}
-              variant="bordered"
-              onValueChange={setPriceThreshold}
-            />
+              setInput(id);
+              localStorage.setItem(INPUT_KEY, id);
+            }}
+          >
+            {inputOptions.map((d) => (
+              <SelectItem key={d.id}>{d.label}</SelectItem>
+            ))}
+          </Select>
+          <VolumeBar value={inputVolume} onChange={changeInputVolume} />
+        </div>
 
-            <Input
-              description="Time interval (seconds) between trading evaluations."
-              label="Time Threshold"
-              labelPlacement="outside"
-              placeholder="e.g. 120"
-              type="number"
-              value={timeThreshold}
-              variant="bordered"
-              onValueChange={setTimeThreshold}
-            />
+        <div className="flex w-full flex-col gap-3 sm:w-1/2">
+          <Select
+            label="Speaker"
+            labelPlacement="outside"
+            selectedKeys={[output]}
+            variant="bordered"
+            onSelectionChange={(keys) => {
+              const id = (Array.from(keys)[0] as string) ?? "default";
 
-            <Input
-              description="Sell if best bid drops this % below entry price."
-              endContent={
-                <span className="text-default-400 text-sm">%</span>
-              }
-              label="Stop Loss"
-              labelPlacement="outside"
-              placeholder="e.g. 20"
-              type="number"
-              value={stopLossPercent}
-              variant="bordered"
-              onValueChange={setStopLossPercent}
-            />
+              setOutput(id);
+              localStorage.setItem(OUTPUT_KEY, id);
+            }}
+          >
+            {outputOptions.map((d) => (
+              <SelectItem key={d.id}>{d.label}</SelectItem>
+            ))}
+          </Select>
+          <VolumeBar value={outputVolume} onChange={changeOutputVolume} />
+        </div>
+      </div>
 
-            <Input
-              description="Sell if best bid rises this % above entry price."
-              endContent={
-                <span className="text-default-400 text-sm">%</span>
-              }
-              label="Take Profit"
-              labelPlacement="outside"
-              placeholder="e.g. 20"
-              type="number"
-              value={takeProfitPercent}
-              variant="bordered"
-              onValueChange={setTakeProfitPercent}
-            />
+      <div className="h-px bg-divider" />
 
-            <div className="flex gap-2 justify-end w-full">
-              <Button
-                isDisabled={!hasChanges || isSaving}
-                variant="flat"
-                onPress={() => {
-                  if (settings) {
-                    setPriceThreshold(String(settings.priceThreshold));
-                    setTimeThreshold(String(settings.timeThreshold / 1000));
-                    setStopLossPercent(String(settings.stopLossPercent));
-                    setTakeProfitPercent(String(settings.takeProfitPercent));
-                  }
-                }}
-              >
-                Reset
-              </Button>
-              <Button
-                color="primary"
-                isDisabled={!hasChanges}
-                isLoading={isSaving}
-                type="submit"
-              >
-                Save Changes
-              </Button>
-            </div>
-          </Form>
-        </CardBody>
-      </Card>
+      <MicTest deviceId={input} />
+
+      {!available && (
+        <p className="text-tiny text-default-400">
+          Device names require microphone permission and a secure (HTTPS)
+          connection. Showing the system default only.
+        </p>
+      )}
     </div>
   );
 }

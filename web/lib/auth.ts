@@ -64,6 +64,9 @@ let cachedKey: Promise<CryptoKey> | null = null;
 
 function getPublicKey(): Promise<CryptoKey> {
   if (!cachedKey) {
+    if (!JWT_PUBLIC_KEY) {
+      throw new Error("JWT_PUBLIC_KEY is not configured");
+    }
     cachedKey = importSPKI(JWT_PUBLIC_KEY, JWT_ALG);
   }
 

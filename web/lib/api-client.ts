@@ -3,7 +3,7 @@ import { API_BASE_URL } from "./constants";
 export class ApiError extends Error {
   constructor(
     public status: number,
-    message: string,
+    message: string
   ) {
     super(message);
     this.name = "ApiError";
@@ -44,7 +44,13 @@ export async function apiPost<TReq, TRes>(
     throw new ApiError(response.status, message);
   }
 
-  return response.json();
+  if (response.status === 204) {
+    return undefined as TRes;
+  }
+
+  const text = await response.text();
+
+  return (text ? JSON.parse(text) : undefined) as TRes;
 }
 
 export async function apiPut<TReq, TRes>(
@@ -81,7 +87,13 @@ export async function apiPut<TReq, TRes>(
     throw new ApiError(response.status, message);
   }
 
-  return response.json();
+  if (response.status === 204) {
+    return undefined as TRes;
+  }
+
+  const text = await response.text();
+
+  return (text ? JSON.parse(text) : undefined) as TRes;
 }
 
 export async function apiGet<TRes>(
@@ -111,5 +123,11 @@ export async function apiGet<TRes>(
     throw new ApiError(response.status, message);
   }
 
-  return response.json();
+  if (response.status === 204) {
+    return undefined as TRes;
+  }
+
+  const text = await response.text();
+
+  return (text ? JSON.parse(text) : undefined) as TRes;
 }

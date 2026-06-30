@@ -73,6 +73,9 @@ export function useMicStream({
         a.fftSize = 64;
         a.smoothingTimeConstant = 0.7;
         source.connect(a);
+        if (audioCtx.state === "suspended") {
+          audioCtx.resume().catch(() => {});
+        }
         setAnalyser(a);
       } catch {
         // AudioContext is best-effort — keep recording even if it fails

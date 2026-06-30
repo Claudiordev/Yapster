@@ -3,9 +3,8 @@
 import { Avatar } from "@heroui/avatar";
 import { Button } from "@heroui/button";
 
-import { EditIcon } from "./edit-icon";
-import { PhoneIcon } from "./phone-icon";
-import { ChatMessage, formatTime } from "./chat-types";
+import { ChatMessage, formatTime } from "../chat-types";
+import { Icon } from "@/components/icon";
 
 interface ChatListProps {
   recipients: [string, ChatMessage[]][];
@@ -27,22 +26,22 @@ export function ChatList({
   onNewChat,
 }: ChatListProps) {
   return (
-    <aside className="w-72 flex-shrink-0 flex flex-col gap-3 min-h-0 bg-content1 border border-divider rounded-large p-3 shadow-sm">
-      <div className="flex items-center justify-between px-1">
-        <h2 className="text-lg font-semibold tracking-tight text-foreground">
+    <aside className="flex-grow flex flex-col gap-3 min-h-0 p-3">
+      <div className="flex items-center justify-between px-2 pt-1">
+        <span className="text-tiny font-semibold uppercase tracking-wide text-default-500">
           Chats
-        </h2>
+        </span>
         <Button
-          className="bg-[#FF3B47] hover:bg-[#E62D3A] text-white"
+          isIconOnly
+          aria-label="New chat"
+          className="text-default-400 hover:text-foreground"
           size="sm"
-          variant="flat"
+          variant="light"
           onPress={onNewChat}
         >
-          + New
+          <span className="text-lg leading-none">+</span>
         </Button>
       </div>
-
-      <div className="h-px bg-divider" />
 
       <div className="flex-grow overflow-y-auto flex flex-col gap-1 min-h-0">
         {recipients.length === 0 ? (
@@ -63,7 +62,7 @@ export function ChatList({
                 aria-pressed={isActive}
                 className={`group flex items-center gap-3 text-left p-3 rounded-medium transition-colors cursor-pointer ${
                   isActive
-                    ? "bg-[#FF3B47] text-white shadow-md shadow-[#FF3B47]/25"
+                    ? "bg-brand-deep text-white"
                     : "text-foreground hover:bg-default-100"
                 }`}
                 role="button"
@@ -77,12 +76,8 @@ export function ChatList({
                 }}
               >
                 <Avatar
-                  className={`flex-shrink-0 ${
-                    isActive
-                      ? "bg-white text-[#FF3B47] ring-1 ring-white/40"
-                      : "bg-[#FF3B47]/10 text-[#FF3B47] ring-1 ring-[#FF3B47]/20"
-                  }`}
-                  icon={<PhoneIcon size={20} />}
+                  className="flex-shrink-0 bg-default-200 text-brand ring-1 ring-default-300"
+                  icon={<Icon name="phone" size={20} />}
                   size="md"
                 />
 
@@ -102,7 +97,7 @@ export function ChatList({
                       isActive ? "text-white/85" : "text-default-500"
                     }`}
                   >
-                    {saved ? recipient : last.body}
+                    {last.body}
                   </p>
                 </div>
 
@@ -122,7 +117,7 @@ export function ChatList({
                   variant="light"
                   onPress={() => onEditContact(recipient)}
                 >
-                  <EditIcon size={16} />
+                  <Icon name="edit" size={16} />
                 </Button>
               </div>
             );
