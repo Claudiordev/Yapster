@@ -19,6 +19,8 @@ public class JwtSecurityProperties {
     private String publicKeyPath = "keys/public.pem";
     private List<String> publicPaths = List.of(
             "/public/**",
+            "/actuator/beans",
+            "/actuator/info",
             "/actuator/health",
             "/actuator/health/**",
             "/error",

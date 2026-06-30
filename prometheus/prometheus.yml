@@ -1,0 +1,14 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: session
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["session:8081"]
+
+  # Uncomment once comms has micrometer-registry-prometheus too
+  # - job_name: comms
+  #   metrics_path: /actuator/prometheus
+  #   static_configs:
+  #     - targets: ["comms:8082"]
