@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Avatar } from "@heroui/avatar";
 
-import { AvatarUploadModal } from "@/components/avatar-upload-modal";
+import { AvatarUploadModal } from "@/components/AvatarUploadModal";
 import { Icon } from "@/components/icon";
 import { useAccount } from "@/lib/use-account";
 

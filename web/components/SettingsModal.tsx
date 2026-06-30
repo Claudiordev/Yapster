@@ -2,7 +2,7 @@
 
 import { Modal, ModalBody, ModalContent } from "@heroui/modal";
 
-import { SettingsPanel } from "@/app/(protected)/settings/_Components/settings-panel";
+import { SettingsPanel } from "@/app/(protected)/settings/_Components/SettingsPanel";
 
 interface SettingsModalProps {
   isOpen: boolean;

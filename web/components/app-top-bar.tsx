@@ -8,7 +8,7 @@ import { Button } from "@heroui/button";
 
 import { Icon } from "@/components/icon";
 import { navIcon } from "@/components/nav-icon";
-import { SettingsModal } from "@/components/settings-modal";
+import { SettingsModal } from "@/components/SettingsModal";
 import { ThemeSwitch } from "@/components/theme-switch";
 import { siteConfig } from "@/config/site";
 import { isActivePath } from "@/lib/is-active-path";

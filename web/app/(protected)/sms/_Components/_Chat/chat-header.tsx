@@ -6,9 +6,10 @@ import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { addToast } from "@heroui/toast";
 
+import { useUserSearch } from "./useUserSearch";
+
 import { Icon } from "@/components/icon";
-import { MOCK_FRIEND_IDS, MOCK_PHONE_USERS, MOCK_USERS } from "@/lib/mock-data";
-import { Presence } from "@/types";
+import { MOCK_PHONE_USERS } from "@/lib/mock-data";
 
 interface ChatHeaderProps {
   activeRecipient: string | null;
@@ -22,40 +23,30 @@ interface ChatHeaderProps {
   onStartCall: (recipient: string) => void;
 }
 
-const MAX_RESULTS = 10;
+const MAX_PHONE_RESULTS = 10;
 
-// A phone user is someone you text by number (always shown with the phone
-// icon); an app user has a profile (shown with their avatar image + presence).
+// A phone user is texted by number (phone icon); an app user is a platform
+// account from the session service (avatar image or initial). No presence —
+// there's no realtime status yet.
 interface SearchUser {
   id: string;
   name: string;
   type: "phone" | "app";
-  isFriend: boolean;
-  presence?: Presence;
+  avatarUrl?: string | null;
 }
-
-const PRESENCE_DOT: Record<Presence, string> = {
-  online: "bg-emerald-500",
-  away: "bg-amber-400",
-  offline: "bg-default-400",
-};
 
 function UserAvatar({ user }: { user: SearchUser }) {
   return (
-    <div className="relative flex-shrink-0">
-      <Avatar
-        className="bg-brand/10 text-brand ring-1 ring-brand/20"
-        size="md"
-        {...(user.type === "phone"
-          ? { icon: <Icon name="phone" size={18} /> }
-          : { name: user.name.charAt(0).toUpperCase() })}
-      />
-      {user.type === "app" && user.presence && (
-        <span
-          className={`absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full ring-2 ring-content1 ${PRESENCE_DOT[user.presence]}`}
-        />
-      )}
-    </div>
+    <Avatar
+      className="bg-brand/10 text-brand flex-shrink-0 ring-1 ring-brand/20"
+      size="md"
+      {...(user.type === "phone"
+        ? { icon: <Icon name="phone" size={18} /> }
+        : {
+            name: user.name.charAt(0).toUpperCase(),
+            src: user.avatarUrl ?? undefined,
+          })}
+    />
   );
 }
 
@@ -77,55 +68,55 @@ export function ChatHeader({
   const headerHasContact =
     activeRecipient !== null && hasContact(activeRecipient);
 
-  // Your real contacts (phone users, all friends) + mocked phone contacts +
-  // the mock app directory. Phone users are keyed/shown by their number.
+  // Your phone contacts (real recipients + mocked numbers) — texted by number.
   const phoneIds = new Set(recipients);
-  const phoneFriends: SearchUser[] = [
+  const phoneContacts: SearchUser[] = [
     ...recipients.map((r) => ({
       id: r,
       name: displayName(r),
       type: "phone" as const,
-      isFriend: true,
     })),
     ...MOCK_PHONE_USERS.filter((u) => !phoneIds.has(u.phoneNumber)).map((u) => ({
       id: u.phoneNumber,
       name: u.phoneNumber,
       type: "phone" as const,
-      isFriend: true,
     })),
   ];
-  const appUsers: SearchUser[] = MOCK_USERS.filter(
-    (u) => !phoneIds.has(u.id),
-  ).map((u) => ({
-    id: u.id,
-    name: u.name,
-    type: "app",
-    isFriend: MOCK_FRIEND_IDS.has(u.id),
-    presence: u.presence,
-  }));
 
-  // A purely numeric query (digits / phone punctuation) is a phone-number
-  // lookup: match phone users only and show bare numbers — no names, no status.
-  // As soon as a letter is typed it's a name search: everyone, with names,
-  // avatars and presence, friends first.
+  // Numeric query = phone-number lookup (bare numbers). Any letter = a name
+  // search: phone contacts + platform users from the session service.
   const trimmed = draftRecipient.trim();
   const query = trimmed.toLowerCase();
   const isPhoneQuery = /\d/.test(trimmed) && /^[+\d\s()-]+$/.test(trimmed);
   const queryDigits = trimmed.replace(/\D/g, "");
 
-  const matches = isPhoneQuery
-    ? phoneFriends
-        .filter((u) => u.id.replace(/\D/g, "").includes(queryDigits))
-        .slice(0, MAX_RESULTS)
-    : [...phoneFriends, ...appUsers]
-        .filter(
+  const phoneMatches = (
+    isPhoneQuery
+      ? phoneContacts.filter((u) =>
+          u.id.replace(/\D/g, "").includes(queryDigits),
+        )
+      : phoneContacts.filter(
           (u) =>
             !query ||
             u.name.toLowerCase().includes(query) ||
             u.id.toLowerCase().includes(query),
         )
-        .sort((a, b) => Number(b.isFriend) - Number(a.isFriend))
-        .slice(0, MAX_RESULTS);
+  ).slice(0, MAX_PHONE_RESULTS);
+
+  // Platform users come from the session service (paginated). Skip the call for
+  // a numeric query — those only resolve to phone numbers.
+  const { users, loading, hasMore, loadMore } = useUserSearch(
+    isPhoneQuery ? "" : trimmed,
+  );
+  const platformUsers: SearchUser[] = users.map((u) => ({
+    id: u.id,
+    name: u.username,
+    type: "app",
+    avatarUrl: u.avatarUrl,
+  }));
+
+  const hasResults =
+    phoneMatches.length > 0 || platformUsers.length > 0 || loading;
 
   function sendRequest(user: SearchUser) {
     setRequested((prev) => new Set(prev).add(user.id));
@@ -133,6 +124,18 @@ export function ChatHeader({
       title: "Request sent",
       description: `Friend request sent to ${user.name}`,
     });
+  }
+
+  function handleScroll(e: React.UIEvent<HTMLUListElement>) {
+    const el = e.currentTarget;
+
+    if (
+      hasMore &&
+      !loading &&
+      el.scrollHeight - el.scrollTop - el.clientHeight < 48
+    ) {
+      loadMore();
+    }
   }
 
   if (activeRecipient) {
@@ -212,9 +215,14 @@ export function ChatHeader({
           />
         </div>
 
-        {open && matches.length > 0 && (
-          <ul className="absolute left-0 right-0 top-full z-30 mt-2 max-h-80 overflow-y-auto rounded-medium border border-divider bg-content1 py-1 shadow-xl">
-            {matches.map((user) =>
+        {open && hasResults && (
+          <ul
+            className="absolute left-0 right-0 top-full z-30 mt-2 max-h-80 overflow-y-auto rounded-medium border border-divider bg-content1 py-1 shadow-xl"
+            onScroll={handleScroll}
+          >
+            {/* Phone contacts: numeric query shows bare numbers; otherwise a
+                clickable contact row. */}
+            {phoneMatches.map((user) =>
               isPhoneQuery ? (
                 <li key={user.id}>
                   <button
@@ -225,17 +233,13 @@ export function ChatHeader({
                       setOpen(false);
                     }}
                   >
-                    <Avatar
-                      className="bg-brand/10 text-brand flex-shrink-0 ring-1 ring-brand/20"
-                      icon={<Icon name="phone" size={18} />}
-                      size="md"
-                    />
+                    <UserAvatar user={user} />
                     <p className="truncate text-sm font-medium text-foreground tabular-nums">
                       {user.id}
                     </p>
                   </button>
                 </li>
-              ) : user.isFriend ? (
+              ) : (
                 <li key={user.id}>
                   <button
                     className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-default-100"
@@ -252,7 +256,7 @@ export function ChatHeader({
                           {user.name}
                         </p>
                         <span className="flex-shrink-0 rounded bg-brand/15 px-1.5 py-0.5 text-[10px] font-medium text-brand">
-                          Friend
+                          Contact
                         </span>
                       </div>
                       {user.name !== user.id && (
@@ -263,47 +267,50 @@ export function ChatHeader({
                     </div>
                   </button>
                 </li>
-              ) : (
-                <li
-                  key={user.id}
-                  className="flex w-full items-center gap-3 px-3 py-2 hover:bg-default-100"
-                >
-                  <UserAvatar user={user} />
-                  <div className="min-w-0 flex-grow">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {user.name}
-                    </p>
-                    <p className="truncate text-tiny text-default-400">
-                      {user.id}
-                    </p>
-                  </div>
-                  <Button
-                    isIconOnly
-                    aria-label={
-                      requested.has(user.id)
-                        ? "Friend request sent"
-                        : `Add ${user.name} as a friend`
-                    }
-                    className={
-                      requested.has(user.id)
-                        ? "bg-emerald-500/20 text-emerald-500"
-                        : "bg-brand/15 text-brand"
-                    }
-                    isDisabled={requested.has(user.id)}
-                    radius="full"
-                    size="sm"
-                    // Keep focus on the search input so the results dropdown
-                    // stays open — sending an invite just marks the user.
-                    onMouseDown={(e) => e.preventDefault()}
-                    onPress={() => sendRequest(user)}
-                  >
-                    <Icon
-                      name={requested.has(user.id) ? "check" : "plus"}
-                      size={16}
-                    />
-                  </Button>
-                </li>
               ),
+            )}
+
+            {/* Platform users from the session service — add as a friend. */}
+            {platformUsers.map((user) => (
+              <li
+                key={user.id}
+                className="flex w-full items-center gap-3 px-3 py-2 hover:bg-default-100"
+              >
+                <UserAvatar user={user} />
+                <p className="min-w-0 flex-grow truncate text-sm font-medium text-foreground">
+                  {user.name}
+                </p>
+                <Button
+                  isIconOnly
+                  aria-label={
+                    requested.has(user.id)
+                      ? "Friend request sent"
+                      : `Add ${user.name} as a friend`
+                  }
+                  className={
+                    requested.has(user.id)
+                      ? "bg-emerald-500/20 text-emerald-500"
+                      : "bg-brand/15 text-brand"
+                  }
+                  isDisabled={requested.has(user.id)}
+                  radius="full"
+                  size="sm"
+                  // Keep focus on the input so the dropdown stays open.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onPress={() => sendRequest(user)}
+                >
+                  <Icon
+                    name={requested.has(user.id) ? "check" : "plus"}
+                    size={16}
+                  />
+                </Button>
+              </li>
+            ))}
+
+            {loading && (
+              <li className="px-3 py-2 text-center text-tiny text-default-400">
+                Searching…
+              </li>
             )}
           </ul>
         )}

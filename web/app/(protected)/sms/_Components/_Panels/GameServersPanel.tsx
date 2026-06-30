@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { CreateServerModal } from "./create-server-modal";
+import { CreateServerModal } from "./CreateServerModal";
 
 import { Icon } from "@/components/icon";
 
