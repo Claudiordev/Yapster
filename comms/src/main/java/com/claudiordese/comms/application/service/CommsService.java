@@ -7,9 +7,6 @@ import com.claudiordese.comms.application.port.MessageStore;
 import com.claudiordese.comms.application.service.commands.GetMessageCommand;
 import com.claudiordese.comms.application.service.commands.SendMessageCommand;
 import com.claudiordese.comms.application.service.result.MessageResult;
-import com.twilio.exception.ApiException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -28,7 +25,8 @@ public class CommsService {
     private final MessageLogger messageLogger;
     private final Clock clock;
 
-    public CommsService(MessageProviderGateway provider, MessageStore messages,
+    public CommsService(MessageProviderGateway provider,
+                        MessageStore messages,
                         MessageLogger messageLogger,
                         Clock clock) {
         this.provider = provider;
@@ -37,26 +35,27 @@ public class CommsService {
         this.clock = clock;
     }
 
+    /**
+     * Hand the message to the provider and record an audit row. The response
+     * returns as soon as the provider accepts; the eventual delivery status is
+     * captured by a delayed re-fetch in {@link MessageLogger}.
+     */
     public MessageResult send(SendMessageCommand cmd) {
         UUID id = UUID.randomUUID();
         Instant now = Instant.now(clock);
 
+        MessageResult result;
         try {
-            MessageResult result = provider.send(cmd.receiver(), cmd.body());
-
-            messageLogger.scheduleFetchAndRecord(id, cmd, result.providerId(), now);
-            return result;
+            result = provider.send(cmd.receiver(), cmd.body());
         } catch (RuntimeException e) {
             messageLogger.recordFailed(id, cmd, e.getMessage(), now);
             throw e;
         }
+
+        messageLogger.scheduleFetchAndRecord(id, cmd, result.providerId(), now);
+        return result;
     }
 
-    /**
-     * All conversations the given sender has, grouped by recipient. Within a
-     * conversation, messages are oldest-first. Recipients are ordered by the
-     * sender's first message to them.
-     */
     public List<Conversation> conversationsFor(String sender) {
         Map<String, List<Message>> grouped = messages.findAllBySender(sender).stream()
                 .collect(Collectors.groupingBy(
@@ -69,7 +68,7 @@ public class CommsService {
                 .toList();
     }
 
-    public MessageResult getMessage(GetMessageCommand getMessageCommand) {
-        return provider.fetch(getMessageCommand.id());
+    public MessageResult getMessage(GetMessageCommand cmd) {
+        return provider.fetch(cmd.id());
     }
 }

@@ -2,6 +2,7 @@ package com.claudiordese.comms.infrastructure.configurations;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.support.ContextPropagatingTaskDecorator;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -23,6 +24,9 @@ public class AsyncConfig {
         executor.setQueueCapacity(500);
         executor.setThreadNamePrefix("msg-log-");
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardOldestPolicy());
+        // Carry the tracing context onto the worker thread so async audit work
+        // stays attached to the originating request's trace instead of orphaning.
+        executor.setTaskDecorator(new ContextPropagatingTaskDecorator());
         executor.initialize();
 
         return executor;
@@ -36,6 +40,7 @@ public class AsyncConfig {
         scheduler.setThreadNamePrefix("msg-fetch-");
         scheduler.setWaitForTasksToCompleteOnShutdown(true);
         scheduler.setAwaitTerminationSeconds(10);
+        scheduler.setTaskDecorator(new ContextPropagatingTaskDecorator());
         scheduler.initialize();
 
         return scheduler;

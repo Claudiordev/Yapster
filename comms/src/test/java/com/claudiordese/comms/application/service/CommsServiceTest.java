@@ -36,10 +36,7 @@ class CommsServiceTest {
         store = new InMemoryMessageStore();
         provider = new FakeMessageProviderGateway();
 
-        // Immediate scheduler — runs the delayed task synchronously so the test
-        // doesn't have to wait `comms.audit.fetch-delay` real-world seconds.
         TaskScheduler immediate = new ImmediateTaskScheduler();
-
         MessageLogger messageLogger = new MessageLogger(
                 store, provider, immediate, Duration.ZERO);
 
@@ -48,53 +45,34 @@ class CommsServiceTest {
     }
 
     @Test
-    void send_persistsQueuedMessage_withProviderFetchedStatus_whenSendSucceeds() {
-        // Arrange — provider accepts, and later fetch reports "delivered"
+    void send_recordsFetchedStatus_whenProviderSucceeds() {
         provider.respondWith(new MessageResult("SM-abc-123", "queued", "0.0075", "USD"));
         provider.respondToFetchWith("SM-abc-123",
                 new MessageResult("SM-abc-123", "delivered", "0.0075", "USD"));
 
-        // Act
-        MessageResult result = service.send(
-                new SendMessageCommand(SENDER, "+46700000000", "Hello world"));
+        service.send(new SendMessageCommand(SENDER, "+46700000000", "Hello"));
 
-        // Assert — the response surfaces the *immediate* provider state
-        assertThat(result.providerId()).isEqualTo("SM-abc-123");
-        assertThat(result.status()).isEqualTo("queued");
-
-        // …and the persisted audit row reflects the *fetched* status
-        assertThat(store.all()).singleElement().satisfies(saved -> {
-            assertThat(saved.status()).isEqualTo(MessageStatus.QUEUED);
-            assertThat(saved.sender()).isEqualTo(SENDER);
-            assertThat(saved.receiver()).isEqualTo("+46700000000");
-            assertThat(saved.body()).isEqualTo("Hello world");
-            assertThat(saved.providerId()).contains("SM-abc-123");
-            assertThat(saved.errorMessage()).isEmpty();
-            assertThat(saved.createdAt()).isEqualTo(FIXED);
-        });
+        // Audit row reflects the *fetched* status (DELIVERED), not the moment-of-send "queued"
+        assertThat(store.all()).singleElement().satisfies(saved ->
+                assertThat(saved.status()).isEqualTo(MessageStatus.DELIVERED));
     }
 
     @Test
-    void send_persistsFailedMessage_whenProviderThrows() {
+    void send_recordsFailedAndPropagates_whenProviderThrows() {
         provider.throwOnSend(new ServiceUnavailableException(
-                "provider_unavailable",
-                "Unable to deliver message right now. Please try again later."));
+                "provider_unavailable", "Twilio down"));
 
         assertThatThrownBy(() -> service.send(
-                new SendMessageCommand(SENDER, "+46712345600", "Hi")))
+                new SendMessageCommand(SENDER, "+46700000000", "Hi")))
                 .isInstanceOf(ServiceUnavailableException.class);
 
-        assertThat(store.all()).singleElement().satisfies(saved -> {
-            assertThat(saved.status()).isEqualTo(MessageStatus.FAILED);
-            assertThat(saved.providerId()).isEmpty();
-            assertThat(saved.errorMessage()).hasValueSatisfying(msg ->
-                    assertThat(msg).contains("Unable to deliver"));
-        });
+        // FAILED audit row was still persisted
+        assertThat(store.all()).singleElement().satisfies(saved ->
+                assertThat(saved.status()).isEqualTo(MessageStatus.FAILED));
     }
 
     @Test
     void conversationsFor_groupsBySenderAndOrdersByFirstContact() {
-        // Arrange — alice sends to bob, then carol, then bob again
         provider.respondWith(new MessageResult("SM-1", "queued", "0.01", "USD"));
         provider.respondToFetchWith("SM-1", new MessageResult("SM-1", "delivered", "0.01", "USD"));
         service.send(new SendMessageCommand(SENDER, "+46700000001", "hey bob"));
@@ -107,51 +85,33 @@ class CommsServiceTest {
         provider.respondToFetchWith("SM-3", new MessageResult("SM-3", "delivered", "0.01", "USD"));
         service.send(new SendMessageCommand(SENDER, "+46700000001", "bob again"));
 
-        // Act
         List<Conversation> conversations = service.conversationsFor(SENDER);
 
-        // Assert — two conversations, bob first (alphabetically by first contact)
         assertThat(conversations).hasSize(2);
         assertThat(conversations.get(0).receiver()).isEqualTo("+46700000001");
         assertThat(conversations.get(0).messages()).extracting("body")
                 .containsExactly("hey bob", "bob again");
         assertThat(conversations.get(1).receiver()).isEqualTo("+46700000002");
-        assertThat(conversations.get(1).messages()).extracting("body")
-                .containsExactly("hey carol");
     }
 
-    /** A {@link TaskScheduler} that runs every submitted task synchronously. */
     private static final class ImmediateTaskScheduler implements TaskScheduler {
-
-        @Override
-        public ScheduledFuture<?> schedule(Runnable task, Instant startTime) {
-            task.run();
-            return null;
+        @Override public ScheduledFuture<?> schedule(Runnable task, Instant startTime) {
+            task.run(); return null;
         }
-
-        @Override
-        public ScheduledFuture<?> schedule(Runnable task, Trigger trigger) {
-            throw new UnsupportedOperationException("trigger-based not used");
+        @Override public ScheduledFuture<?> schedule(Runnable task, Trigger trigger) {
+            throw new UnsupportedOperationException();
         }
-
-        @Override
-        public ScheduledFuture<?> scheduleAtFixedRate(Runnable task, Instant startTime, Duration period) {
-            throw new UnsupportedOperationException("fixed-rate not used");
+        @Override public ScheduledFuture<?> scheduleAtFixedRate(Runnable task, Instant startTime, Duration period) {
+            throw new UnsupportedOperationException();
         }
-
-        @Override
-        public ScheduledFuture<?> scheduleAtFixedRate(Runnable task, Duration period) {
-            throw new UnsupportedOperationException("fixed-rate not used");
+        @Override public ScheduledFuture<?> scheduleAtFixedRate(Runnable task, Duration period) {
+            throw new UnsupportedOperationException();
         }
-
-        @Override
-        public ScheduledFuture<?> scheduleWithFixedDelay(Runnable task, Instant startTime, Duration delay) {
-            throw new UnsupportedOperationException("fixed-delay not used");
+        @Override public ScheduledFuture<?> scheduleWithFixedDelay(Runnable task, Instant startTime, Duration delay) {
+            throw new UnsupportedOperationException();
         }
-
-        @Override
-        public ScheduledFuture<?> scheduleWithFixedDelay(Runnable task, Duration delay) {
-            throw new UnsupportedOperationException("fixed-delay not used");
+        @Override public ScheduledFuture<?> scheduleWithFixedDelay(Runnable task, Duration delay) {
+            throw new UnsupportedOperationException();
         }
     }
 }

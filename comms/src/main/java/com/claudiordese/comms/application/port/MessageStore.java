@@ -4,7 +4,7 @@ import com.claudiordese.comms.application.domain.Message;
 
 import java.util.List;
 
-public interface MessageStore {
+public interface  MessageStore {
 
     void save(Message message);
 

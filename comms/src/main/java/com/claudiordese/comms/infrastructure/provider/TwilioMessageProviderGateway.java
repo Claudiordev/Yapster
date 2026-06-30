@@ -9,9 +9,11 @@ import com.twilio.rest.api.v2010.account.Message;
 import com.twilio.type.PhoneNumber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(name = "comms.provider", havingValue = "twilio", matchIfMissing = true)
 public class TwilioMessageProviderGateway implements MessageProviderGateway {
 
     private static final Logger logger = LoggerFactory.getLogger(TwilioMessageProviderGateway.class);
