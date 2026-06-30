@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ChatMessage } from "../chat-types";
 
-import { randomId } from "@/lib/random-id";
+import { randomId } from "@/lib/randomId";
 
 interface ConversationDto {
   receiver: string;

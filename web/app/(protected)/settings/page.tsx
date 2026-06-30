@@ -1,4 +1,4 @@
-import { SettingsPanel } from "./_Components/settings-panel";
+import { SettingsPanel } from "./_Components/SettingsPanel";
 
 export default function SettingsPage() {
   return <SettingsPanel />;

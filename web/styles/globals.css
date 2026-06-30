@@ -75,3 +75,52 @@
     transform-origin: center;
     animation: voice-wave 1.1s ease-in-out infinite;
 }
+
+/* Volume slider — brand thumb that keeps the same colour while dragging. */
+.volume-bar {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 9999px;
+    background: rgb(127 127 127 / 0.25);
+    outline: none;
+    cursor: pointer;
+}
+
+.volume-bar::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    background: var(--color-brand);
+    cursor: pointer;
+}
+
+.volume-bar::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border: none;
+    border-radius: 9999px;
+    background: var(--color-brand);
+    cursor: pointer;
+}
+
+/* Keep the thumb red in every state — no colour shift on click/drag/focus. */
+.volume-bar:focus,
+.volume-bar:active {
+    outline: none;
+}
+
+.volume-bar:hover::-webkit-slider-thumb,
+.volume-bar:focus::-webkit-slider-thumb,
+.volume-bar:active::-webkit-slider-thumb {
+    background: var(--color-brand);
+}
+
+.volume-bar:hover::-moz-range-thumb,
+.volume-bar:focus::-moz-range-thumb,
+.volume-bar:active::-moz-range-thumb {
+    background: var(--color-brand);
+}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Select, SelectItem } from "@heroui/select";
 
-import { MicTest } from "./mic-test";
+import { MicTest } from "./MicTest";
 
 interface AudioDevice {
   id: string;
@@ -30,7 +30,7 @@ function VolumeBar({
       </div>
       <input
         aria-label="Volume"
-        className="w-full cursor-pointer accent-brand"
+        className="volume-bar"
         max={100}
         min={0}
         type="range"

@@ -34,11 +34,10 @@ public class UserService {
     }
 
     /**
-     * Case-insensitive username search for the "find people" feature.
-     * Returns public info only and excludes the requester from their results.
+     * Username search for the "find people" feature.
      */
-    public List<UserSummaryDto> searchUsers(UUID requesterId, String query) {
-        return users.searchByUsername(query.trim()).stream()
+    public List<UserSummaryDto> searchUsers(UUID requesterId, String usernameQuery, int page, int size) {
+        return users.searchByUsername(usernameQuery.trim(), page, size).stream()
                 .filter(user -> !user.id().equals(requesterId))
                 .map(user -> new UserSummaryDto(
                         user.id(), user.username(), user.avatarUrl().orElse(null)))

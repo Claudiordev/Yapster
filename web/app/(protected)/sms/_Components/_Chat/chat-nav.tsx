@@ -6,7 +6,7 @@ import { Button } from "@heroui/button";
 import { CHAT_PANELS, type PanelKey } from "../_Panels/panels";
 
 import { Icon } from "@/components/icon";
-import { SettingsModal } from "@/components/settings-modal";
+import { SettingsModal } from "@/components/SettingsModal";
 import { ThemeSwitch } from "@/components/theme-switch";
 import { siteConfig } from "@/config/site";
 import { useAccount } from "@/lib/use-account";
