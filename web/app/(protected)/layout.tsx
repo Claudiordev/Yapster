@@ -1,5 +1,6 @@
 import { getAccount } from "@/lib/get-account";
 import { AccountProvider } from "@/lib/use-account";
+import { AudioSettingsProvider } from "@/lib/use-audio-settings";
 
 export default async function ProtectedLayout({
   children,
@@ -20,7 +21,7 @@ export default async function ProtectedLayout({
           initialBalance={account?.balance ?? 0}
           initialUsername={account?.username ?? ""}
         >
-          {children}
+          <AudioSettingsProvider>{children}</AudioSettingsProvider>
         </AccountProvider>
       </div>
     </div>

@@ -5,15 +5,12 @@ import { Select, SelectItem } from "@heroui/select";
 
 import { MicTest } from "./mic-test";
 
+import { DEFAULT_DEVICE, useAudioSettings } from "@/lib/use-audio-settings";
+
 interface AudioDevice {
   id: string;
   label: string;
 }
-
-const INPUT_KEY = "audio-input-device";
-const OUTPUT_KEY = "audio-output-device";
-const INPUT_VOL_KEY = "audio-input-volume";
-const OUTPUT_VOL_KEY = "audio-output-volume";
 
 function VolumeBar({
   value,
@@ -42,20 +39,24 @@ function VolumeBar({
 }
 
 export function SettingsPanel() {
+  // Device/volume preferences are global (shared with the call flow); the
+  // device *lists* are local UI state since they depend on the browser.
+  const {
+    inputDeviceId,
+    outputDeviceId,
+    inputVolume,
+    outputVolume,
+    setInputDeviceId,
+    setOutputDeviceId,
+    setInputVolume,
+    setOutputVolume,
+  } = useAudioSettings();
+
   const [inputs, setInputs] = useState<AudioDevice[]>([]);
   const [outputs, setOutputs] = useState<AudioDevice[]>([]);
-  const [input, setInput] = useState("default");
-  const [output, setOutput] = useState("default");
-  const [inputVolume, setInputVolume] = useState(100);
-  const [outputVolume, setOutputVolume] = useState(100);
   const [available, setAvailable] = useState(true);
 
   useEffect(() => {
-    setInput(localStorage.getItem(INPUT_KEY) ?? "default");
-    setOutput(localStorage.getItem(OUTPUT_KEY) ?? "default");
-    setInputVolume(Number(localStorage.getItem(INPUT_VOL_KEY) ?? 100));
-    setOutputVolume(Number(localStorage.getItem(OUTPUT_VOL_KEY) ?? 100));
-
     const md =
       typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
 
@@ -96,18 +97,14 @@ export function SettingsPanel() {
     };
   }, []);
 
-  function changeInputVolume(v: number) {
-    setInputVolume(v);
-    localStorage.setItem(INPUT_VOL_KEY, String(v));
-  }
-
-  function changeOutputVolume(v: number) {
-    setOutputVolume(v);
-    localStorage.setItem(OUTPUT_VOL_KEY, String(v));
-  }
-
-  const inputOptions = [{ id: "default", label: "System default" }, ...inputs];
-  const outputOptions = [{ id: "default", label: "System default" }, ...outputs];
+  const inputOptions = [
+    { id: DEFAULT_DEVICE, label: "System default" },
+    ...inputs,
+  ];
+  const outputOptions = [
+    { id: DEFAULT_DEVICE, label: "System default" },
+    ...outputs,
+  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -124,46 +121,42 @@ export function SettingsPanel() {
           <Select
             label="Microphone"
             labelPlacement="outside"
-            selectedKeys={[input]}
+            selectedKeys={[inputDeviceId]}
             variant="bordered"
-            onSelectionChange={(keys) => {
-              const id = (Array.from(keys)[0] as string) ?? "default";
-
-              setInput(id);
-              localStorage.setItem(INPUT_KEY, id);
-            }}
+            onSelectionChange={(keys) =>
+              setInputDeviceId((Array.from(keys)[0] as string) ?? DEFAULT_DEVICE)
+            }
           >
             {inputOptions.map((d) => (
               <SelectItem key={d.id}>{d.label}</SelectItem>
             ))}
           </Select>
-          <VolumeBar value={inputVolume} onChange={changeInputVolume} />
+          <VolumeBar value={inputVolume} onChange={setInputVolume} />
         </div>
 
         <div className="flex w-full flex-col gap-3 sm:w-1/2">
           <Select
             label="Speaker"
             labelPlacement="outside"
-            selectedKeys={[output]}
+            selectedKeys={[outputDeviceId]}
             variant="bordered"
-            onSelectionChange={(keys) => {
-              const id = (Array.from(keys)[0] as string) ?? "default";
-
-              setOutput(id);
-              localStorage.setItem(OUTPUT_KEY, id);
-            }}
+            onSelectionChange={(keys) =>
+              setOutputDeviceId(
+                (Array.from(keys)[0] as string) ?? DEFAULT_DEVICE,
+              )
+            }
           >
             {outputOptions.map((d) => (
               <SelectItem key={d.id}>{d.label}</SelectItem>
             ))}
           </Select>
-          <VolumeBar value={outputVolume} onChange={changeOutputVolume} />
+          <VolumeBar value={outputVolume} onChange={setOutputVolume} />
         </div>
       </div>
 
       <div className="h-px bg-divider" />
 
-      <MicTest deviceId={input} />
+      <MicTest deviceId={inputDeviceId} />
 
       {!available && (
         <p className="text-tiny text-default-400">
