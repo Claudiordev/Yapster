@@ -14,5 +14,5 @@ public interface UserStore {
     boolean existsByEmail(String email);
     User create(String username, String email, String passwordHash);
     User update(User user);
-    List<User> searchByUsername(String fragment);
+    List<User> searchByUsername(String usernameQuery, int page, int size);
 }

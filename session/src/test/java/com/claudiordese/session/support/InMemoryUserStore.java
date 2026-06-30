@@ -51,12 +51,13 @@ public class InMemoryUserStore implements UserStore {
     }
 
     @Override
-    public List<User> searchByUsername(String fragment) {
+    public List<User> searchByUsername(String fragment, int page, int size) {
         String needle = fragment.toLowerCase(Locale.ROOT);
         return byId.values().stream()
                 .filter(u -> u.username().toLowerCase(Locale.ROOT).contains(needle))
                 .sorted((a, b) -> a.username().compareToIgnoreCase(b.username()))
-                .limit(20)
+                .skip((long) page * size)
+                .limit(size)
                 .toList();
     }
 }

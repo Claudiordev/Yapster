@@ -5,6 +5,7 @@ import com.claudiordese.session.application.domain.User;
 import com.claudiordese.session.application.port.UserStore;
 import com.claudiordese.session.infrastructure.entity.RoleEntity;
 import com.claudiordese.session.infrastructure.entity.UserEntity;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -67,8 +68,10 @@ public class JpaUserStore implements UserStore {
     }
 
     @Override
-    public List<User> searchByUsername(String fragment) {
-        return repo.findTop20ByUsernameContainingIgnoreCaseOrderByUsername(fragment).stream()
+    public List<User> searchByUsername(String usernameQuery, int page, int size) {
+        return repo.findByUsernameContainingIgnoreCaseOrderByUsername(
+                        usernameQuery,
+                        PageRequest.of(page, size)).stream()
                 .map(JpaUserStore::toDomain)
                 .toList();
     }

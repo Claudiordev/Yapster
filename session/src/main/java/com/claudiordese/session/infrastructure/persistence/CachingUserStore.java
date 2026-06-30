@@ -78,7 +78,7 @@ public class CachingUserStore implements UserStore {
     }
 
     @Override
-    public List<User> searchByUsername(String fragment) {
-        return delegate.searchByUsername(fragment);
+    public List<User> searchByUsername(String usernameQuery, int page, int size) {
+        return delegate.searchByUsername(usernameQuery, page, size);
     }
 }

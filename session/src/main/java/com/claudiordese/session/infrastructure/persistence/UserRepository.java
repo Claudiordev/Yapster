@@ -1,6 +1,7 @@
 package com.claudiordese.session.infrastructure.persistence;
 
 import com.claudiordese.session.infrastructure.entity.UserEntity;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -15,6 +16,6 @@ interface UserRepository extends JpaRepository<UserEntity, UUID> {
 
     Optional<UserEntity> findByEmail(String email);
 
-    /** Case-insensitive contains-search, capped to keep the endpoint cheap. */
-    List<UserEntity> findTop20ByUsernameContainingIgnoreCaseOrderByUsername(String fragment);
+    /** Case-insensitive contains-search, paginated. */
+    List<UserEntity> findByUsernameContainingIgnoreCaseOrderByUsername(String usernameQuery, Pageable pageable);
 }
