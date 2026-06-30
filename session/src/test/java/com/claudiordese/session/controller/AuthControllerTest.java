@@ -1,6 +1,6 @@
 package com.claudiordese.session.controller;
 
-import com.claudiordese.session.controllers.AuthController;
+import com.claudiordese.session.infrastructure.controllers.AuthController;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

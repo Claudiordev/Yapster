@@ -1,10 +1,12 @@
 package com.claudiordese.session.support;
 
+import com.claudiordese.session.application.domain.Role;
 import com.claudiordese.session.application.domain.User;
 import com.claudiordese.session.application.port.UserStore;
 
-import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -36,7 +38,8 @@ public class InMemoryUserStore implements UserStore {
 
     @Override
     public User create(String username, String email, String passwordHash) {
-        User user = new User(UUID.randomUUID(), username, email, passwordHash, BigDecimal.ZERO, Set.of("USER"));
+        User user = new User(UUID.randomUUID(), username, email, passwordHash,
+                Set.of(new Role("USER")), Optional.empty());
         byId.put(user.id(), user);
         return user;
     }
@@ -45,5 +48,15 @@ public class InMemoryUserStore implements UserStore {
     public User update(User user) {
         byId.put(user.id(), user);
         return user;
+    }
+
+    @Override
+    public List<User> searchByUsername(String fragment) {
+        String needle = fragment.toLowerCase(Locale.ROOT);
+        return byId.values().stream()
+                .filter(u -> u.username().toLowerCase(Locale.ROOT).contains(needle))
+                .sorted((a, b) -> a.username().compareToIgnoreCase(b.username()))
+                .limit(20)
+                .toList();
     }
 }

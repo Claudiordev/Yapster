@@ -1,4 +1,4 @@
-package com.claudiordese.session.infrastructure.controllers.request;
+package com.claudiordese.session.infrastructure.controllers.request.user;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

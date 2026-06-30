@@ -1,6 +1,6 @@
 package com.claudiordese.session.application.domain;
 
-import java.math.BigDecimal;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -9,15 +9,20 @@ public record User(
         String username,
         String email,
         String passwordHash,
-        BigDecimal balance,
-        Set<String> roles
+        Set<Role> roles,
+        Optional<String> avatarUrl
 ) {
 
     public User withUsername(String newUsername) {
-        return new User(id, newUsername, email, passwordHash, balance, roles);
+        return new User(id, newUsername, email, passwordHash, roles, avatarUrl);
     }
 
     public User withPasswordHash(String newPasswordHash) {
-        return new User(id, username, email, newPasswordHash, balance, roles);
+        return new User(id, username, email, newPasswordHash, roles, avatarUrl);
+    }
+
+    public User withAvatarUrl(String newAvatarUrl) {
+        return new User(id, username, email, passwordHash, roles,
+                Optional.ofNullable(newAvatarUrl));
     }
 }

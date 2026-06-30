@@ -1,11 +1,11 @@
 package com.claudiordese.session.infrastructure.controllers;
 
 import com.claudiordese.session.application.service.AuthService;
-import com.claudiordese.session.infrastructure.controllers.request.LoginRequest;
-import com.claudiordese.session.infrastructure.controllers.request.RegisterRequest;
-import com.claudiordese.session.infrastructure.controllers.response.TokenResponse;
-import com.claudiordese.session.infrastructure.controllers.request.RefreshTokenRequest;
-import com.claudiordese.session.infrastructure.controllers.response.RegisterResponse;
+import com.claudiordese.session.infrastructure.controllers.request.auth.LoginRequest;
+import com.claudiordese.session.infrastructure.controllers.request.auth.RegisterRequest;
+import com.claudiordese.session.infrastructure.controllers.response.auth.TokenResponse;
+import com.claudiordese.session.infrastructure.controllers.request.auth.RefreshTokenRequest;
+import com.claudiordese.session.infrastructure.controllers.response.auth.RegisterResponse;
 import com.claudiordese.session.application.service.commands.LoginCommand;
 import com.claudiordese.session.application.service.commands.RegisterCommand;
 import com.claudiordese.session.application.service.result.LoginResult;
