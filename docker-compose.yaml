@@ -38,6 +38,8 @@ services:
     depends_on:
       - session_postgres
       - discovery
+      - minio
+      - redis
   router:
     build:
       context: .
@@ -116,6 +118,33 @@ services:
       - "3000:3000"
     depends_on:
       - router
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # web console
+    volumes:
+      - "minio_data:/data"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   session_postgres:
@@ -125,3 +154,4 @@ volumes:
   zookeeper_data:
   zookeeper_log:
   prometheus_data:
+  minio_data:

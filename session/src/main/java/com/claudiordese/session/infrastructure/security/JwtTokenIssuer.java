@@ -1,6 +1,7 @@
 package com.claudiordese.session.infrastructure.security;
 
 import com.claudiordese.session.application.domain.IssuedToken;
+import com.claudiordese.session.application.domain.Role;
 import com.claudiordese.session.application.domain.User;
 import com.claudiordese.session.application.port.TokenIssuer;
 import io.jsonwebtoken.Jwts;
@@ -39,7 +40,7 @@ public class JwtTokenIssuer implements TokenIssuer {
         long ttlMs = ttl.toMillis();
         String token = Jwts.builder()
                 .setSubject(user.id().toString())
-                .claim("roles", user.roles())
+                .claim("roles", user.roles().stream().map(Role::name).toList())
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + ttlMs))
                 .signWith(privateKey, SignatureAlgorithm.RS256)

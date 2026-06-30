@@ -1,4 +1,4 @@
-package com.claudiordese.session.infrastructure.controllers.response;
+package com.claudiordese.session.infrastructure.controllers.response.auth;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 

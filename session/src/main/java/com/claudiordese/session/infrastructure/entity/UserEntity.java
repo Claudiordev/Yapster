@@ -5,23 +5,15 @@ import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.ColumnDefault;
 
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 @Data
 @Entity
-@Table(name="users", schema = "public")
+@Table(name = "users", schema = "public")
 public class UserEntity {
-    @PrePersist
-    public void prePersist() {
-        RoleEntity role = new RoleEntity();
-        role.setRole("USER");
-        role.setUser(this);
-        this.roles.add(role);
-    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -35,18 +27,22 @@ public class UserEntity {
     @Column(name = "password", nullable = false)
     private String password;
 
-    @Column(name = "enabled", unique = true)
-    private int enabled = 1;
+    @Column(name = "enabled", unique = false)
+    @ColumnDefault("true")
+    private boolean enabled = true;
 
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<RoleEntity> roles = new ArrayList<>();
-
-    @Column(name= "balance", nullable = false, precision = 12, scale = 2)
-    @ColumnDefault("0")
-    private BigDecimal balance = new BigDecimal(0);
+    /** Roles assigned to this user, via the user_roles join table. */
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(name = "user_roles",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id"))
+    private Set<RoleEntity> roles = new HashSet<>();
 
     @Column(name = "email", nullable = false, unique = true)
     private String email;
+
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
 
     @Override
     public boolean equals(Object o) {
