@@ -31,6 +31,7 @@
 		<module>trading</module>
 		<module>metrics</module>
 		<module>comms</module>
+		<module>voice</module>
 	</modules>
 	<scm>
 		<connection/>
