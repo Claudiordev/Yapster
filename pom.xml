@@ -23,13 +23,9 @@
 	</developers>
 	<modules>
 		<module>session</module>
-        <module>service</module>
 		<module>router</module>
-		<module>payment</module>
 		<module>common-utils</module>
 		<module>discovery</module>
-		<module>trading</module>
-		<module>metrics</module>
 		<module>comms</module>
 		<module>voice</module>
 	</modules>
