@@ -1,0 +1,20 @@
+# LiveKit server config for local development.
+# Signaling on 7880 (HTTP/WebSocket); WebRTC media over UDP 50000-50060 with a
+# TCP fallback on 7881. use_external_ip is false because clients reach the server
+# over localhost in this setup.
+port: 7880
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50060
+  use_external_ip: false
+
+# API key -> secret. The secret is the HS256 signing key the voice service uses
+# to mint join tokens; it must match LIVEKIT_API_SECRET passed to that service.
+# Dev-only value — rotate and inject via env/secret store for any real deployment.
+keys:
+  devkey: devsecretdevsecretdevsecret12345
+
+logging:
+  level: info
