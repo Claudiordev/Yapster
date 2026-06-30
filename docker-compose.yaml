@@ -58,6 +58,31 @@ services:
     depends_on:
       - comms_postgres
       - discovery
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: livekit
+    command: --config /etc/livekit.yaml
+    ports:
+      - "7880:7880"                     # signaling (HTTP/WebSocket)
+      - "7881:7881"                     # WebRTC over TCP (fallback)
+      - "50000-50060:50000-50060/udp"   # WebRTC media (RTP/ICE)
+    volumes:
+      - "./livekit/livekit.yaml:/etc/livekit.yaml"
+  voice:
+    build:
+      context: .
+      dockerfile: voice/Dockerfile
+    container_name: voice
+    ports:
+      - "8085:8085"
+    environment:
+      # url is what the browser dials; key/secret must match livekit/livekit.yaml
+      - LIVEKIT_URL=ws://localhost:7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=devsecretdevsecretdevsecret12345
+    depends_on:
+      - discovery
+      - livekit
 
 volumes:
   session_postgres:
