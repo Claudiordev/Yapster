@@ -1,6 +1,6 @@
-package com.claudiordese.voice.infrastructure.livekit;
+package com.claudiordese.voice.infrastructure.adapter.livekit;
 
-import com.claudiordese.voice.application.domain.RoomAccess;
+import com.claudiordese.voice.application.domain.rooms.RoomAccess;
 import com.claudiordese.voice.application.port.RoomAccessProvider;
 import com.claudiordese.voice.infrastructure.configurations.LiveKitProperties;
 import io.jsonwebtoken.Jwts;

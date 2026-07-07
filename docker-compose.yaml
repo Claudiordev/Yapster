@@ -21,6 +21,17 @@ services:
       - "5433:5432"
     volumes:
       - "comms_postgres:/var/lib/postgresql/data"
+  chat_postgres:
+    image: postgres:16
+    container_name: chat_postgres
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: chat
+    ports:
+      - "5435:5432"
+    volumes:
+      - "chat_postgres:/var/lib/postgresql/data"
   discovery:
     build:
       context: .
@@ -88,6 +99,23 @@ services:
     depends_on:
       - discovery
       - livekit
+  chat:
+    build:
+      context: .
+      dockerfile: chat/Dockerfile
+    container_name: chat
+    ports:
+      - "8086:8086"
+    environment:
+      # Override the localhost defaults baked into application.properties so chat
+      # joins the compose network: registers in Eureka via the discovery service
+      # and reaches Postgres by service name (fixes lb://CHAT -> 10.255.255.254).
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka/
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://chat_postgres:5432/chat
+      - MANAGEMENT_OTLP_TRACING_ENDPOINT=http://jaeger:4318/v1/traces
+    depends_on:
+      - discovery
+      - chat_postgres
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger
@@ -104,20 +132,6 @@ services:
       - "9090:9090"
     depends_on:
       - session
-  web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-    container_name: web
-    # Published on the host's 0.0.0.0, so the app is reachable from other
-    # devices at http://<this-machine's-LAN-IP>:3000. The browser only talks to
-    # this container (the BFF); it forwards to the gateway internally, so only
-    # this port needs exposing. Backend URL / JWT key / cookie flags come from
-    # web/.env.production (API_BASE_URL=http://router:8080, COOKIE_SECURE=false).
-    ports:
-      - "3000:3000"
-    depends_on:
-      - router
   redis:
     image: redis:7-alpine
     container_name: redis
@@ -150,6 +164,7 @@ volumes:
   session_postgres:
   service_pgdata:
   comms_postgres:
+  chat_postgres:
   kafka_data:
   zookeeper_data:
   zookeeper_log:

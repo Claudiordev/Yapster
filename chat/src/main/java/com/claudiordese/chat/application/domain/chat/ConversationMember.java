@@ -1,4 +1,8 @@
 package com.claudiordese.chat.application.domain.chat;
 
-public record ConversationMember() {
-}
+import java.util.UUID;
+
+public record ConversationMember(
+        UUID conversationId,
+        UUID userId,
+        long lastReadSeq) {}

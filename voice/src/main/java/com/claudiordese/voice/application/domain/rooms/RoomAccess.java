@@ -1,4 +1,4 @@
-package com.claudiordese.voice.application.domain;
+package com.claudiordese.voice.application.domain.rooms;
 
 /**
  * Everything a client needs to join a voice room on the media server: where to

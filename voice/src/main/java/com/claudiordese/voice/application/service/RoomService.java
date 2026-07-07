@@ -1,6 +1,6 @@
 package com.claudiordese.voice.application.service;
 
-import com.claudiordese.voice.application.domain.RoomAccess;
+import com.claudiordese.voice.application.domain.rooms.RoomAccess;
 import com.claudiordese.voice.application.port.RoomAccessProvider;
 import org.springframework.stereotype.Service;
 

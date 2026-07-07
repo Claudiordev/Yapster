@@ -1,6 +1,6 @@
-package com.claudiordese.voice.infrastructure.controllers;
+package com.claudiordese.voice.infrastructure.controllers.voice;
 
-import com.claudiordese.voice.application.domain.RoomAccess;
+import com.claudiordese.voice.application.domain.rooms.RoomAccess;
 import com.claudiordese.voice.application.service.RoomService;
 import com.claudiordese.voice.infrastructure.controllers.response.RoomAccessResponse;
 import org.springframework.security.core.Authentication;

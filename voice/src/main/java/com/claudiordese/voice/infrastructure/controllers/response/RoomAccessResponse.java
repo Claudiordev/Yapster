@@ -1,6 +1,6 @@
 package com.claudiordese.voice.infrastructure.controllers.response;
 
-import com.claudiordese.voice.application.domain.RoomAccess;
+import com.claudiordese.voice.application.domain.rooms.RoomAccess;
 
 /**
  * Response to the LiveKit SDK: {@code room.connect(serverUrl, token)}.

@@ -1,4 +1,5 @@
 package com.claudiordese.chat.infrastructure.controller.request;
 
-public record StartDmRequest() {
-}
+import java.util.UUID;
+
+public record StartDmRequest(UUID recipientUserId) {}

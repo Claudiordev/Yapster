@@ -3,7 +3,11 @@ package com.claudiordese.chat.infrastructure.adapter.persistence;
 import com.claudiordese.chat.application.domain.chat.Conversation;
 import com.claudiordese.chat.application.domain.chat.ConversationMember;
 import com.claudiordese.chat.application.port.persistence.ConversationStore;
-import com.claudiordese.chat.infrastructure.entity.ConversationEntity;
+import com.claudiordese.chat.infrastructure.adapter.persistence.mapper.ConversationMapper;
+import com.claudiordese.chat.infrastructure.entity.ConversationMemberEntity;
+import com.claudiordese.chat.infrastructure.repository.ConversationMemberRepository;
+import com.claudiordese.chat.infrastructure.repository.ConversationRepository;
+import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -11,67 +15,67 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Component
+@AllArgsConstructor
 public class JpaConversationStore implements ConversationStore {
 
+    private final ConversationRepository conversations;
+    private final ConversationMemberRepository members;
+    private final ConversationMapper mapper;
 
     @Override
     public Conversation create(Conversation c) {
-        ConversationEntity conversationEntity = new ConversationEntity();
-        conversationEntity.setId(c.id());
-        conversationEntity.setType(c.type());
-        conversationEntity.setName(c.name());
-        conversationEntity.setDmKey(c.dmKey());
-        conversationEntity.setCreatedAt(c.createdAt());
-
-        return toDomain(conversationEntity);
+        return mapper.toDomain(conversations.save(mapper.toEntity(c)));
     }
 
     @Override
     public Optional<Conversation> findById(UUID id) {
-        return Optional.empty();
+        return conversations.findById(id).map(mapper::toDomain);
     }
 
     @Override
     public Optional<Conversation> findByDmKey(String dmKey) {
-        return Optional.empty();
+        return conversations.findByDmKey(dmKey).map(mapper::toDomain);
     }
 
     @Override
     public List<Conversation> findForUser(UUID userID) {
-        return List.of();
+        List<UUID> ids = members.findByUserId(userID).stream()
+                .map(ConversationMemberEntity::getConversationId).toList();
+        return conversations.findAllById(ids).stream().map(mapper::toDomain).toList();
     }
 
     @Override
     public List<UUID> membersOf(UUID conversationId) {
-        return List.of();
+        return members.findByConversationId(conversationId).stream()
+                .map(ConversationMemberEntity::getUserId).toList();
     }
 
     @Override
     public boolean isMember(UUID conversationId, UUID userId) {
-        return false;
+        return members.existsByConversationIdAndUserId(conversationId, userId);
     }
 
     @Override
     public ConversationMember addMember(UUID conversationId, UUID userId) {
-        return null;
+        return members.findByConversationIdAndUserId(conversationId, userId)
+                .map(mapper::toDomain)   // already a member → return existing
+                .orElseGet(() -> mapper.toDomain(
+                        members.save(mapper.toEntity(new ConversationMember(conversationId, userId, 0)))));
     }
 
     @Override
     public long lastReadSeq(UUID conversationId, UUID userId) {
-        return 0;
+        return members.findByConversationIdAndUserId(conversationId, userId)
+                .map(ConversationMemberEntity::getLastReadSeq).orElse(0L);
     }
 
     @Override
     public void markRead(UUID conversationId, UUID userId, long seq) {
-
-    }
-
-    public Conversation toDomain(ConversationEntity c) {
-        return new Conversation(
-                c.getId(),
-                c.getType(),
-                c.getName(),
-                c.getDmKey(),
-                c.getCreatedAt());
+        members.findByConversationIdAndUserId(conversationId, userId).ifPresent(e -> {
+            if (seq > e.getLastReadSeq()) {
+                e.setLastReadSeq(seq);
+                members.save(e);
+            }
+        });
     }
 }
