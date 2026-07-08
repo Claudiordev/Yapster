@@ -28,6 +28,7 @@
 		<module>discovery</module>
 		<module>comms</module>
 		<module>voice</module>
+		<module>chat</module>
 	</modules>
 	<scm>
 		<connection/>

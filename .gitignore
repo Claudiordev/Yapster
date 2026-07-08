@@ -44,13 +44,14 @@ build/
 ### Next.js ###
 .next/
 
-### Ignored modules ###
-library/
-metrics/
-payment/
-service/
-trading/
-transmission/
+### Ignored modules (leading slash = repo root ONLY; a bare `service/` also matches
+### nested packages like voice/.../application/service/ and hides real code) ###
+/library/
+/metrics/
+/payment/
+/service/
+/trading/
+/transmission/
 
 ### Documentation ###
 README.md

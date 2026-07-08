@@ -1,6 +1,6 @@
 package com.claudiordese.voice.application.port;
 
-import com.claudiordese.voice.application.domain.RoomAccess;
+import com.claudiordese.voice.application.domain.rooms.RoomAccess;
 
 /**
  * Produces the credentials a peer needs to join a real-time voice room.
