@@ -9,6 +9,7 @@ import java.util.UUID;
 public interface UserStore {
 
     Optional<User> findById(UUID id);
+    List<User> findByIds(List<UUID> ids);
     Optional<User> findByUsername(String username);
     boolean existsByUsername(String username);
     boolean existsByEmail(String email);

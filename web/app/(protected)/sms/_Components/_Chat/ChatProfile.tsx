@@ -6,9 +6,18 @@ import { Avatar } from "@heroui/avatar";
 import { AvatarUploadModal } from "@/components/AvatarUploadModal";
 import { Icon } from "@/components/icon";
 import { useAccount } from "@/lib/use-account";
+import { useRealtime } from "@/lib/useRealtime";
+
+const STATUS = {
+  open: { dot: "bg-emerald-500", label: "Connected" },
+  connecting: { dot: "bg-amber-400", label: "Connecting…" },
+  closed: { dot: "bg-amber-400", label: "Reconnecting…" },
+  disabled: { dot: "bg-default-400", label: "Offline" },
+} as const;
 
 export function ChatProfile() {
-  const { username, balance, avatarUrl } = useAccount();
+  const { username, avatarUrl } = useAccount();
+  const { status } = useRealtime();
   const [avatarOpen, setAvatarOpen] = useState(false);
 
   return (
@@ -31,20 +40,14 @@ export function ChatProfile() {
       </button>
 
       <div className="min-w-0">
-        <p className="text-xs text-default-500 leading-tight">Signed in as</p>
-        <p className="text-sm font-semibold text-foreground truncate">
-          {username ?? "…"}
+        <p className="text-sm font-semibold truncate">{username ?? "…"}</p>
+        <p className="flex items-center gap-1.5 text-xs text-default-500 leading-tight">
+          <span className={`h-2 w-2 rounded-full ${STATUS[status].dot}`} />
+          {STATUS[status].label}
         </p>
       </div>
 
       <div className="flex-grow" />
-
-      <div className="flex flex-shrink-0 items-center gap-1 text-white">
-        <Icon name="dollar" size={16} />
-        <span className="text-sm font-semibold tabular-nums">
-          {balance != null ? balance.toLocaleString() : "…"}
-        </span>
-      </div>
 
       <AvatarUploadModal
         isOpen={avatarOpen}

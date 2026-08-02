@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -19,6 +20,14 @@ public class InMemoryUserStore implements UserStore {
     @Override
     public Optional<User> findById(UUID id) {
         return Optional.ofNullable(byId.get(id));
+    }
+
+    @Override
+    public List<User> findByIds(List<UUID> ids) {
+        return ids.stream()
+                .map(byId::get)
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     @Override

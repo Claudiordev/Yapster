@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState } from "react";
 import type { PlatformUser } from "@/app/api/users/search/route";
 
 const PAGE_SIZE = 20;
-const DEBOUNCE_MS = 300;
 
 interface UserSearchState {
   users: PlatformUser[];
@@ -15,9 +14,11 @@ interface UserSearchState {
 }
 
 /**
- * Debounced, paginated search of platform users via the session service
- * (`/api/users/search`). A blank query clears the results. `loadMore` pulls the
- * next page and appends; `hasMore` is true while a full page keeps coming back.
+ * Paginated search of platform users via the session service
+ * (`/api/users/search`). Fetches whenever the query changes — a stale response
+ * is discarded by the effect's `active` guard. A blank query clears the
+ * results. `loadMore` pulls the next page and appends; `hasMore` is true while a
+ * full page keeps coming back.
  */
 export function useUserSearch(query: string): UserSearchState {
   const trimmed = query.trim();
@@ -39,7 +40,7 @@ export function useUserSearch(query: string): UserSearchState {
     let active = true;
 
     setLoading(true);
-    const timer = setTimeout(async () => {
+    (async () => {
       try {
         const res = await fetch(
           `/api/users/search?query=${encodeURIComponent(trimmed)}&page=0&size=${PAGE_SIZE}`,
@@ -58,11 +59,10 @@ export function useUserSearch(query: string): UserSearchState {
       } finally {
         if (active) setLoading(false);
       }
-    }, DEBOUNCE_MS);
+    })();
 
     return () => {
       active = false;
-      clearTimeout(timer);
     };
   }, [trimmed]);
 

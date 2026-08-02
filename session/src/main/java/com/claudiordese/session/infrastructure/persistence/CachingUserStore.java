@@ -58,6 +58,11 @@ public class CachingUserStore implements UserStore {
     // ── pass-through: not cached ──────────────────────────────────────────────
 
     @Override
+    public List<User> findByIds(List<UUID> ids) {
+        return delegate.findByIds(ids);
+    }
+
+    @Override
     public Optional<User> findByUsername(String username) {
         return delegate.findByUsername(username);
     }

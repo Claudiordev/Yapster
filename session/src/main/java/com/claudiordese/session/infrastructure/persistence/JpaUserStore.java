@@ -31,6 +31,13 @@ public class JpaUserStore implements UserStore {
     }
 
     @Override
+    public List<User> findByIds(List<UUID> ids) {
+        return repo.findAllById(ids).stream()
+                .map(JpaUserStore::toDomain)
+                .toList();
+    }
+
+    @Override
     public Optional<User> findByUsername(String username) {
         return repo.findByUsername(username).map(JpaUserStore::toDomain);
     }

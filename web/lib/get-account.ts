@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 
+import { toRelativeAvatar } from "@/lib/avatar";
 import { API_BASE_URL, AUTH_COOKIE_NAME } from "@/lib/constants";
 
 interface SessionUser {
@@ -10,6 +11,7 @@ interface SessionUser {
 }
 
 export interface Account {
+  userId: string;
   username: string;
   balance: number;
   avatarUrl: string | null;
@@ -41,9 +43,10 @@ export async function getAccount(): Promise<Account | null> {
     const user = (await res.json()) as SessionUser;
 
     return {
+      userId: user.id,
       username: user.username,
       balance: user.balance ?? 0,
-      avatarUrl: user.avatarUrl ?? null,
+      avatarUrl: toRelativeAvatar(user.avatarUrl),
     };
   } catch {
     return null;
