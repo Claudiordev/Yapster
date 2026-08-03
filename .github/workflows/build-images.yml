@@ -1,0 +1,139 @@
+# Builds and pushes a container image for the services whose files
+# actually changed in this push
+name: Build images
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Force-build one service (or "all"), bypassing change detection. Leave as "auto" to only build what actually changed.'
+        required: false
+        type: choice
+        default: auto
+        options: [auto, all, session, router, comms, voice, chat, discovery, web]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: claudiordev/yapster
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Decide which services actually changed. Every Java service also rebuilds on
+  # a common-utils/ or root pom.xml change, since those affect every module
+  # that depends on them via `mvn -pl <service> -am`.
+  # ---------------------------------------------------------------------------
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.decide.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            session:
+              - 'session/**'
+              - 'common-utils/**'
+              - 'pom.xml'
+            router:
+              - 'router/**'
+              - 'common-utils/**'
+              - 'pom.xml'
+            comms:
+              - 'comms/**'
+              - 'common-utils/**'
+              - 'pom.xml'
+            voice:
+              - 'voice/**'
+              - 'common-utils/**'
+              - 'pom.xml'
+            chat:
+              - 'chat/**'
+              - 'common-utils/**'
+              - 'pom.xml'
+            discovery:
+              - 'discovery/**'
+              - 'common-utils/**'
+              - 'pom.xml'
+            web:
+              - 'web/**'
+
+      - name: Decide which services to build
+        id: decide
+        run: |
+          case "${{ github.event.inputs.service || 'auto' }}" in
+            auto)
+              echo "services=${{ steps.filter.outputs.changes }}" >> "$GITHUB_OUTPUT"
+              ;;
+            all)
+              echo 'services=["session","router","comms","voice","chat","discovery","web"]' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo 'services=["${{ github.event.inputs.service }}"]' >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set build context
+        id: ctx
+        run: |
+          if [ "${{ matrix.service }}" = "web" ]; then
+            echo "context=web" >> "$GITHUB_OUTPUT"
+          else
+            echo "context=." >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}
+          tags: |
+            type=sha,format=short
+          labels: |
+            org.opencontainers.image.title=${{ matrix.service }}
+            org.opencontainers.image.description=Yapster ${{ matrix.service }} service
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ steps.ctx.outputs.context }}
+          file: ${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
