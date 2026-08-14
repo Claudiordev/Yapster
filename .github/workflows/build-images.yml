@@ -40,6 +40,11 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          # matrix.service below needs a JSON array; paths-filter's default
+          # list-format is csv, which produces a bare unquoted string like
+          # `session` for a single match -- not valid JSON, so fromJSON()
+          # fails on it downstream.
+          list-format: json
           filters: |
             session:
               - 'session/**'
@@ -73,7 +78,14 @@ jobs:
         run: |
           case "${{ github.event.inputs.service || 'auto' }}" in
             auto)
-              echo "services=${{ steps.filter.outputs.changes }}" >> "$GITHUB_OUTPUT"
+              # Single-quoted: steps.filter.outputs.changes is a JSON array
+              # like ["router"] and gets substituted here as raw text before
+              # bash parses the line. Inside a double-quoted echo string its
+              # embedded " characters would terminate the string early and
+              # get stripped, leaving an unquoted bareword in the JSON
+              # (services=[router]) that fromJSON() can't parse. Single
+              # quotes pass the embedded double quotes through literally.
+              echo 'services=${{ steps.filter.outputs.changes }}' >> "$GITHUB_OUTPUT"
               ;;
             all)
               echo 'services=["session","router","comms","voice","chat","discovery","web"]' >> "$GITHUB_OUTPUT"
