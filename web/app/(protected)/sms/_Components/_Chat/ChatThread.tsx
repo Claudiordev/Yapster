@@ -2,12 +2,15 @@
 
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { Avatar } from "@heroui/avatar";
+import { Button } from "@heroui/button";
 import { Skeleton } from "@heroui/skeleton";
 
 import { MessageComposer } from "../_Message/MessageComposer";
 import { TypingIndicator } from "../_Message/TypingIndicator";
 import type { ThreadMessage } from "../_Message/useMessages";
 import { formatClock } from "../chatTypes";
+
+import { Icon } from "@/components/icon";
 
 /** Display identity for a message's sender, resolved from conversation members. */
 export interface MessageSender {
@@ -28,6 +31,10 @@ interface ChatThreadProps {
   /** Display names of other members currently composing. */
   typingNames: string[];
   onType: () => void;
+  /** Shows the "Add member" action in the header when set (group conversations only). */
+  onAddMember?: () => void;
+  /** Shows the "Manage group" action in the header when set (creator only). */
+  onManageGroup?: () => void;
 }
 
 // Consecutive messages from the same sender within this window are grouped
@@ -65,6 +72,8 @@ export function ChatThread({
   onSend,
   typingNames,
   onType,
+  onAddMember,
+  onManageGroup,
 }: ChatThreadProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // Scroll height captured right before a load-more, so we can keep the
@@ -118,6 +127,32 @@ export function ChatThread({
           size="sm"
         />
         <h2 className="font-semibold truncate text-foreground">{title}</h2>
+        <div className="ml-auto flex items-center gap-1">
+          {onAddMember && (
+            <Button
+              isIconOnly
+              aria-label="Add member"
+              className="text-default-400 hover:text-foreground"
+              size="sm"
+              variant="light"
+              onPress={onAddMember}
+            >
+              <Icon name="plus" size={18} />
+            </Button>
+          )}
+          {onManageGroup && (
+            <Button
+              isIconOnly
+              aria-label="Manage group"
+              className="text-default-400 hover:text-foreground"
+              size="sm"
+              variant="light"
+              onPress={onManageGroup}
+            >
+              <Icon name="settings" size={18} />
+            </Button>
+          )}
+        </div>
       </div>
 
       <div

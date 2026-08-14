@@ -22,12 +22,19 @@ export interface Conversation {
   id: string;
   type: string; // "DM" | "GROUP"
   name: string | null;
+  /** Who created it. Only meaningful (and enforced) for GROUP conversations. */
+  creatorId: string | null;
   members: ConversationMember[]; // other participants (self excluded) — the DM peer(s)
   lastMessage: string | null; // preview text; null when no messages yet
   lastMessageAt: string | null; // ISO instant of the last message
   lastMessageSeq: number | null; // seq of the last message
   lastReadSeq: number; // how far this user has read
   unreadCount: number; // messages in this conversation with seq > lastReadSeq
+}
+
+/** True when `userId` created this group (meaningless/false for DMs). */
+export function isGroupCreator(c: Conversation, userId: string | null): boolean {
+  return c.type === "GROUP" && userId != null && c.creatorId === userId;
 }
 
 /** True when the conversation has messages the current user hasn't read. */

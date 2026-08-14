@@ -18,6 +18,7 @@ export type IconName =
   | "check"
   | "search"
   | "game"
+  | "users"
   | "close";
 
 interface IconProps {
