@@ -48,7 +48,6 @@ services:
       - "8081:8081"
     depends_on:
       - session_postgres
-      - discovery
       - minio
       - redis
   router:
@@ -73,7 +72,6 @@ services:
       - COMMS_PROVIDER=${COMMS_PROVIDER:-twilio}
     depends_on:
       - comms_postgres
-      - discovery
   livekit:
     image: livekit/livekit-server:latest
     container_name: livekit
@@ -97,7 +95,6 @@ services:
       - LIVEKIT_API_KEY=devkey
       - LIVEKIT_API_SECRET=devsecretdevsecretdevsecret12345
     depends_on:
-      - discovery
       - livekit
   chat:
     build:
@@ -114,7 +111,6 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://chat_postgres:5432/chat
       - MANAGEMENT_OTLP_TRACING_ENDPOINT=http://jaeger:4318/v1/traces
     depends_on:
-      - discovery
       - chat_postgres
   jaeger:
     image: jaegertracing/all-in-one:latest
