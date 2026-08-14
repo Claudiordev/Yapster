@@ -38,6 +38,8 @@ public class GlobalExceptionControllerAdvice {
             Map.entry(CircuitBreakerException.class, HttpStatus.SERVICE_UNAVAILABLE),
             Map.entry(InterdictedException.class, HttpStatus.FORBIDDEN),
             Map.entry(InvalidAuthorizationException.class, HttpStatus.UNAUTHORIZED),
+            Map.entry(TokenRevoked.class, HttpStatus.UNAUTHORIZED),
+            Map.entry(TokenExpired.class, HttpStatus.UNAUTHORIZED),
             Map.entry(NotFound.class, HttpStatus.NOT_FOUND),
             Map.entry(UsernameTaken.class, HttpStatus.CONFLICT),
             Map.entry(EmailMismatchException.class, HttpStatus.BAD_REQUEST),
