@@ -31,3 +31,9 @@ export const PUBLIC_ROUTES = [ROUTES.LOGIN, ROUTES.REGISTER];
 // PEM-encoded RS256 public key used to verify JWTs minted by the session service.
 // Defaults to the dev keypair shipped in session/src/main/resources/keys/public.pem.
 export const JWT_PUBLIC_KEY = process.env.JWT_PUBLIC_KEY;
+
+// The OAuth2 provider buttons (Google/GitHub/Facebook/Discord) aren't wired to a
+// backend yet -- off by default until that lands. Read client-side, so this
+// needs the NEXT_PUBLIC_ prefix to be inlined into the browser bundle.
+export const FEATURE_OAUTH2_LOGIN =
+  process.env.NEXT_PUBLIC_FEATURE_OAUTH2_LOGIN === "true";
