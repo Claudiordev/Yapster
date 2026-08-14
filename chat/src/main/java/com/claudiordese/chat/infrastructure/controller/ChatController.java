@@ -7,7 +7,9 @@ import com.claudiordese.chat.infrastructure.controller.request.SendMessageReques
 import com.claudiordese.chat.infrastructure.controller.request.StartDmRequest;
 import com.claudiordese.chat.infrastructure.controller.responses.ConversationResponse;
 import com.claudiordese.chat.infrastructure.controller.responses.ConversationSummaryResponse;
+import com.claudiordese.chat.infrastructure.controller.responses.MemberView;
 import com.claudiordese.chat.infrastructure.controller.responses.MessageResponse;
+import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -52,7 +54,7 @@ public class ChatController {
                             conversationSummary.conversation().id(),
                             conversationSummary.conversation().type().name(),
                             conversationSummary.conversation().name(),
-                            conversationSummary.recipientsIds(),
+                            conversationSummary.recipientsIds().stream().map(userId -> new MemberView(userId, conversationSummary.recipientsStatus().get(userId))).toList(),
                             conversationSummary.message().body(),
                             conversationSummary.message().sentAt(),
                             conversationSummary.message().seq(),
@@ -64,7 +66,7 @@ public class ChatController {
 
     @PostMapping("/{conversationId}/message")
     @ResponseStatus(HttpStatus.CREATED)
-    public MessageResponse sendMessage(@PathVariable UUID conversationId, @RequestBody SendMessageRequest sendMessageRequest, Authentication auth) {
+    public MessageResponse sendMessage(@PathVariable UUID conversationId, @RequestBody @Valid SendMessageRequest sendMessageRequest, Authentication auth) {
         return MessageResponse.of(
                 chatService.sendMessage(
                         conversationId,
