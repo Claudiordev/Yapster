@@ -65,12 +65,16 @@ export function ChatNav({ activePanel, onSelectPanel }: ChatNavProps) {
           <Button
             key={panel.key}
             className={itemClass(activePanel === panel.key)}
+            isDisabled={panel.comingSoon}
             size="md"
             startContent={<Icon name={panel.icon} size={18} />}
             variant={activePanel === panel.key ? "flat" : "light"}
             onPress={() => onSelectPanel(panel.key)}
           >
             {panel.label}
+            {panel.comingSoon && (
+              <span className="text-default-400"> - Coming Soon</span>
+            )}
           </Button>
         ))}
 
