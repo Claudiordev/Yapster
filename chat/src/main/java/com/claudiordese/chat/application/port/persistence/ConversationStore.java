@@ -41,6 +41,16 @@ public interface ConversationStore {
     ConversationMember addMember(UUID conversationId, UUID userId);
 
     /**
+     * Removes a member from a conversation. No-op if they weren't a member.
+     */
+    void removeMember(UUID conversationId, UUID userId);
+
+    /**
+     * Deletes a conversation entirely (members and messages cascade with it).
+     */
+    void delete(UUID conversationId);
+
+    /**
      * @return last read seq for user and conversation
      */
     long lastReadSeq(UUID conversationId, UUID userId);

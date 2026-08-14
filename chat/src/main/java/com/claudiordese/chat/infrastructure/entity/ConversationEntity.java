@@ -32,4 +32,7 @@ public class ConversationEntity {
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 
+    @Column(name = "creator_id", updatable = false)
+    private UUID creatorId;
+
 }

@@ -22,7 +22,8 @@ public class ConversationMapper {
                 e.getType(),
                 e.getName(),
                 e.getDmKey(),
-                e.getCreatedAt());
+                e.getCreatedAt(),
+                e.getCreatorId());
     }
 
     public ConversationEntity toEntity(Conversation c) {
@@ -32,6 +33,7 @@ public class ConversationMapper {
         e.setName(c.name());
         e.setDmKey(c.dmKey());
         e.setCreatedAt(c.createdAt());
+        e.setCreatorId(c.creatorId());
         return e;
     }
 

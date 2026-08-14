@@ -4,9 +4,9 @@ import com.claudiordese.chat.application.domain.chat.Conversation;
 
 import java.util.UUID;
 
-public record ConversationResponse(UUID id, String type, String name) {
+public record ConversationResponse(UUID id, String type, String name, UUID creatorId) {
 
     public static ConversationResponse of(Conversation c) {
-        return new ConversationResponse(c.id(), c.type().name(), c.name());
+        return new ConversationResponse(c.id(), c.type().name(), c.name(), c.creatorId());
     }
 }

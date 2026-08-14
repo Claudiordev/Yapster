@@ -11,7 +11,10 @@ import com.claudiordese.chat.application.domain.event.server.UserStatusEvent;
 import com.claudiordese.chat.application.port.socket.EventGateway;
 import com.claudiordese.chat.application.port.persistence.ConversationStore;
 import com.claudiordese.chat.application.port.persistence.MessageStore;
+import com.claudiordese.exceptions.BadRequestException;
+import com.claudiordese.exceptions.ConflictException;
 import com.claudiordese.exceptions.InterdictedException;
+import com.claudiordese.exceptions.NotFound;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +29,9 @@ import java.util.stream.Collectors;
 @Service
 @AllArgsConstructor
 public class ChatService {
+
+    /** Creator + this many others. */
+    private static final int MAX_GROUP_SIZE = 15;
 
     private final MessageStore messages;
     private final ConversationStore conversations;
@@ -42,7 +48,8 @@ public class ChatService {
                            ConversationType.DM,
                            null,
                            key,
-                           Instant.now()));
+                           Instant.now(),
+                           a));
 
                    conversations.addMember(dm.id(), a);
                    conversations.addMember(dm.id(), b);
@@ -59,7 +66,8 @@ public class ChatService {
                         ConversationType.GROUP,
                         name,
                         null,
-                        Instant.now()
+                        Instant.now(),
+                        creator
                 )
         );
 
@@ -69,6 +77,72 @@ public class ChatService {
         }
 
         return groupConversation;
+    }
+
+    @Transactional
+    public void addMember(UUID conversationId, UUID requesterId, UUID newMemberId) {
+        Conversation conversation = conversations.findById(conversationId)
+                .orElseThrow(() -> new NotFound("not_found", "Conversation not found"));
+
+        if (conversation.type() != ConversationType.GROUP) {
+            throw new BadRequestException("not_a_group", "Members can only be added to a group conversation");
+        }
+
+        List<UUID> members = conversations.membersOf(conversationId);
+
+        if (!members.contains(requesterId)) {
+            throw new InterdictedException("not_a_member", "Not a member of this conversation");
+        }
+
+        if (members.contains(newMemberId)) {
+            throw new ConflictException("already_member", "User is already a member of this group");
+        }
+
+        if (members.size() >= MAX_GROUP_SIZE) {
+            throw new BadRequestException("group_full", "Group already has the maximum of " + MAX_GROUP_SIZE + " members");
+        }
+
+        conversations.addMember(conversationId, newMemberId);
+    }
+
+    @Transactional
+    public void removeMember(UUID conversationId, UUID requesterId, UUID targetUserId) {
+        Conversation conversation = conversations.findById(conversationId)
+                .orElseThrow(() -> new NotFound("not_found", "Conversation not found"));
+
+        if (conversation.type() != ConversationType.GROUP) {
+            throw new BadRequestException("not_a_group", "Members can only be removed from a group conversation");
+        }
+
+        if (!requesterId.equals(conversation.creatorId())) {
+            throw new InterdictedException("not_creator", "Only the creator of this group can remove members");
+        }
+
+        if (targetUserId.equals(conversation.creatorId())) {
+            throw new BadRequestException("cannot_remove_creator", "The creator can't be removed from the group -- delete it instead");
+        }
+
+        if (!conversations.isMember(conversationId, targetUserId)) {
+            throw new NotFound("not_a_member", "That user is not a member of this group");
+        }
+
+        conversations.removeMember(conversationId, targetUserId);
+    }
+
+    @Transactional
+    public void deleteGroup(UUID conversationId, UUID requesterId) {
+        Conversation conversation = conversations.findById(conversationId)
+                .orElseThrow(() -> new NotFound("not_found", "Conversation not found"));
+
+        if (conversation.type() != ConversationType.GROUP) {
+            throw new BadRequestException("not_a_group", "Only group conversations can be deleted this way");
+        }
+
+        if (!requesterId.equals(conversation.creatorId())) {
+            throw new InterdictedException("not_creator", "Only the creator of this group can delete it");
+        }
+
+        conversations.delete(conversationId);
     }
 
     @Transactional

@@ -10,5 +10,6 @@ public record Conversation(
         ConversationType type,
         String name, //group name, null for DMs
         String dmKey, //"userA:user:B"
-        Instant createdAt
+        Instant createdAt,
+        UUID creatorId //who created it; only meaningful (and enforced) for GROUP
 ) {}

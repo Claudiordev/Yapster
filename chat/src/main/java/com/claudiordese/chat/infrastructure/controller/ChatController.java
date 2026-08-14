@@ -1,6 +1,7 @@
 package com.claudiordese.chat.infrastructure.controller;
 
 import com.claudiordese.chat.application.service.ChatService;
+import com.claudiordese.chat.infrastructure.controller.request.AddMemberRequest;
 import com.claudiordese.chat.infrastructure.controller.request.CreateGroupRequest;
 import com.claudiordese.chat.infrastructure.controller.request.MarkReadRequest;
 import com.claudiordese.chat.infrastructure.controller.request.SendMessageRequest;
@@ -37,13 +38,31 @@ public class ChatController {
 
     @PostMapping("/group")
     @ResponseStatus(HttpStatus.CREATED)
-    public ConversationResponse createGroup(@RequestBody CreateGroupRequest request, Authentication auth) {
+    public ConversationResponse createGroup(@RequestBody @Valid CreateGroupRequest request, Authentication auth) {
         return ConversationResponse.of(
                 chatService.createGroup(
                         loggedUser(auth),
                         request.groupName(),
                         request.memberIds()
                 ));
+    }
+
+    @PostMapping("/{conversationId}/members")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void addMember(@PathVariable UUID conversationId, @RequestBody @Valid AddMemberRequest request, Authentication auth) {
+        chatService.addMember(conversationId, loggedUser(auth), request.memberId());
+    }
+
+    @DeleteMapping("/{conversationId}/members/{memberId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removeMember(@PathVariable UUID conversationId, @PathVariable UUID memberId, Authentication auth) {
+        chatService.removeMember(conversationId, loggedUser(auth), memberId);
+    }
+
+    @DeleteMapping("/{conversationId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteGroup(@PathVariable UUID conversationId, Authentication auth) {
+        chatService.deleteGroup(conversationId, loggedUser(auth));
     }
 
     @GetMapping("/conversations")
@@ -54,6 +73,7 @@ public class ChatController {
                             conversationSummary.conversation().id(),
                             conversationSummary.conversation().type().name(),
                             conversationSummary.conversation().name(),
+                            conversationSummary.conversation().creatorId(),
                             conversationSummary.recipientsIds().stream().map(userId -> new MemberView(userId, conversationSummary.recipientsStatus().get(userId))).toList(),
                             conversationSummary.message().body(),
                             conversationSummary.message().sentAt(),
