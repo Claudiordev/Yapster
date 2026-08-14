@@ -8,11 +8,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 
 import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 
 /**
  * Specific event socket gateway with concurrent sessions storage
@@ -26,18 +28,23 @@ public class WebSocketEventGateway implements EventGateway {
      */
     private final Map<String, Set<WebSocketSession>> sessions = new ConcurrentHashMap<>();
     private final ObjectMapper json;
+    private final Executor socketExecutor;
 
-    public WebSocketEventGateway(ObjectMapper json) {
+    public WebSocketEventGateway(ObjectMapper json, Executor socketExecutor) {
         this.json = json;
+        this.socketExecutor = socketExecutor;
     }
 
     public void register(String userId, WebSocketSession session) {
-        sessions.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(session);
+        WebSocketSession safe = new ConcurrentWebSocketSessionDecorator(session, 2_000, 64 * 1024);
+        sessions.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(safe);
     }
 
     public void unregister(String userId, WebSocketSession session) {
         sessions.computeIfPresent(userId, (k, set) -> {
-            set.remove(session);
+            //there's no override of equals or hashcode in ConcurrentWebSocketSessionDecorator so just removing the set by the key string would always point to diffent objects
+            //Using .getId() survives the wrapping since the value is present in the decorator and the real WebSocketSession as well, so removes the real decorator object present in the set
+            set.removeIf(s -> s.getId().equals(session.getId()));
             return set.isEmpty() ? null : set;
         });
     }
@@ -63,24 +70,32 @@ public class WebSocketEventGateway implements EventGateway {
         } catch (Exception e) {
             throw new IllegalStateException("Cannot serialize event: " + event, e);
         }
-
         sendMessage(userId,eventObj,set);
     }
 
     private void sendMessage(String userId, String message, Set<WebSocketSession> sockets) {
         TextMessage socketMessage = new TextMessage(message);
 
+        //Only one write happens per web socket existent (user + device) in the whole application
+        //So independent of the request thread the request has to wait if it's
+        //Being sent to the same user and same device
         for (WebSocketSession s : sockets) {
-            try {
-                if (s.isOpen()) {
-                    synchronized (s) {
+            socketExecutor.execute(() -> {
+                try {
+                    if (s.isOpen()) {
+                        //SocketDecorator doesnt not need synchronized synce it's synchronized by default
                         s.sendMessage(socketMessage);
+                        log.debug("Sending session={} on thread={}", s.getId(), Thread.currentThread().getName());
                     }
+                } catch (Exception e) {
+                    log.warn("Socket is stale {}: {}",userId, e.getMessage());
+                    //One session might be stale or half-closed and so the unregister doesnt catch it
+                    //So we force a close that then will call the unregister method
+                    try {
+                        s.close();
+                    } catch (IOException ignored) {}
                 }
-            } catch (IOException e) {
-                log.warn("Socket is stale {}: {}",userId, e.getMessage());
-                //TODO Remove socket from set for that userId
-            }
+            });
         }
     }
 
