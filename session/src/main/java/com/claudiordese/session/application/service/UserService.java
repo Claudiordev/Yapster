@@ -34,6 +34,17 @@ public class UserService {
     }
 
     /**
+     * Batch profile lookup by id — used to resolve conversation members to
+     * display names/avatars. Unknown ids are simply absent from the result.
+     */
+    public List<UserSummaryDto> getUsersByIds(List<UUID> ids) {
+        return users.findByIds(ids).stream()
+                .map(user -> new UserSummaryDto(
+                        user.id(), user.username(), user.avatarUrl().orElse(null)))
+                .toList();
+    }
+
+    /**
      * Username search for the "find people" feature.
      */
     public List<UserSummaryDto> searchUsers(UUID requesterId, String usernameQuery, int page, int size) {
