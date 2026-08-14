@@ -1,42 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-import { apiGet, ApiError } from "@/lib/api-client";
-import { getAuthToken } from "@/lib/auth";
+import { apiGet } from "@/lib/api-client";
+import { withAuth } from "@/lib/bff";
 
-export async function GET(request: NextRequest) {
-  try {
-    const token = await getAuthToken();
+export const GET = withAuth(async (request, token) => {
+  const type = new URL(request.url).searchParams.get("type");
 
-    if (!token) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 },
-      );
-    }
-
-    const type = request.nextUrl.searchParams.get("type");
-
-    if (type !== "hits" && type !== "orders") {
-      return NextResponse.json(
-        { error: "Invalid type, must be 'hits' or 'orders'" },
-        { status: 400 },
-      );
-    }
-
-    const data = await apiGet(`/metrics/${type}`, token);
-
-    return NextResponse.json(data);
-  } catch (error) {
-    if (error instanceof ApiError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.status },
-      );
-    }
-
+  if (type !== "hits" && type !== "orders") {
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
+      { error: "Invalid type, must be 'hits' or 'orders'" },
+      { status: 400 },
     );
   }
-}
+
+  const data = await apiGet(`/metrics/${type}`, token);
+
+  return NextResponse.json(data);
+});

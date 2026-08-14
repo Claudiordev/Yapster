@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { apiGet, ApiError } from "@/lib/api-client";
-import { getAuthToken, verifyJwt } from "@/lib/auth";
+import { apiGet } from "@/lib/api-client";
+import { toRelativeAvatar } from "@/lib/avatar";
+import { verifyJwt } from "@/lib/auth";
+import { withAuth } from "@/lib/bff";
 
 interface SessionUser {
   id: string;
@@ -10,40 +12,16 @@ interface SessionUser {
   avatarUrl?: string | null;
 }
 
-export async function GET() {
-  const token = await getAuthToken();
-
-  if (!token) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
-
+export const GET = withAuth(async (_request, token) => {
+  // getAuthToken already validated the token; decode it for the role claim.
   const claims = await verifyJwt(token);
+  const user = await apiGet<SessionUser>("/user", token);
 
-  if (!claims) {
-    return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-  }
-
-  try {
-    const user = await apiGet<SessionUser>("/user", token);
-
-    return NextResponse.json({
-      id: user.id,
-      username: user.username,
-      balance: user.balance ?? null,
-      avatarUrl: user.avatarUrl ?? null,
-      role: claims.role ?? null,
-    });
-  } catch (error) {
-    if (error instanceof ApiError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.status },
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Failed to load user" },
-      { status: 500 },
-    );
-  }
-}
+  return NextResponse.json({
+    id: user.id,
+    username: user.username,
+    balance: user.balance ?? null,
+    avatarUrl: toRelativeAvatar(user.avatarUrl),
+    role: claims?.role ?? null,
+  });
+});
