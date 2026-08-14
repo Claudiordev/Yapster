@@ -24,10 +24,12 @@ public class MinioAvatarStorage implements AvatarStorage {
 
     private final MinioClient client;
     private final MinioProperties props;
+    private final AvatarImageProcessor imageProcessor;
 
-    public MinioAvatarStorage(MinioClient client, MinioProperties props) {
+    public MinioAvatarStorage(MinioClient client, MinioProperties props, AvatarImageProcessor imageProcessor) {
         this.client = client;
         this.props = props;
+        this.imageProcessor = imageProcessor;
     }
 
     /** Create the bucket if missing and make it public-read so avatars serve via direct URL. */
@@ -51,15 +53,21 @@ public class MinioAvatarStorage implements AvatarStorage {
 
     @Override
     public String store(UUID userId, byte[] content, String contentType) {
+        // Normalise before storing: square center-crop + downscale + JPEG re-encode.
+        // Turns a multi-MB PNG into a small, sharp, consistently-square avatar so
+        // icons load fast and render crisply. (contentType is validated upstream;
+        // the stored object is always the normalised JPEG.)
+        AvatarImageProcessor.ProcessedImage image = imageProcessor.process(content);
+
         // Unique key per upload → the URL changes each time, so browsers never
         // show a stale cached avatar. (Old objects orphan — a cleanup job later.)
-        String key = userId + "/" + UUID.randomUUID() + extension(contentType);
-        try (InputStream in = new ByteArrayInputStream(content)) {
+        String key = userId + "/" + UUID.randomUUID() + extension(image.contentType());
+        try (InputStream in = new ByteArrayInputStream(image.content())) {
             client.putObject(PutObjectArgs.builder()
                     .bucket(props.bucket())
                     .object(key)
-                    .stream(in, content.length, -1)
-                    .contentType(contentType)
+                    .stream(in, image.content().length, -1)
+                    .contentType(image.contentType())
                     .build());
         } catch (Exception e) {
             log.error("Avatar upload to MinIO failed for {}: {}", userId, e.getMessage());
