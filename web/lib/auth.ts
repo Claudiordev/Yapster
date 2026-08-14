@@ -29,15 +29,14 @@ export interface SessionTokenResponse {
   access_token: string;
   refresh_token: string;
   token_type: string;
-  expires_in: number; // milliseconds
+  expires_in: number; // seconds until the access token expires (OAuth standard)
 }
 
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;
   tokenType: string;
-  // Seconds until the access token expires — already converted from the
-  // backend's millisecond representation.
+  // Seconds until the access token expires (as sent by the backend).
   accessExpiresInSeconds: number;
 }
 
@@ -56,7 +55,7 @@ export function toTokenPair(response: SessionTokenResponse): TokenPair {
     accessToken: response.access_token,
     refreshToken: response.refresh_token,
     tokenType: response.token_type,
-    accessExpiresInSeconds: Math.max(1, Math.floor(response.expires_in / 1000)),
+    accessExpiresInSeconds: Math.max(1, Math.floor(response.expires_in)),
   };
 }
 
