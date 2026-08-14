@@ -8,7 +8,6 @@ import { CHAT_PANELS, type PanelKey } from "../_Panels/panels";
 import { Icon } from "@/components/icon";
 import { SettingsModal } from "@/components/SettingsModal";
 import { ThemeSwitch } from "@/components/theme-switch";
-import { siteConfig } from "@/config/site";
 import { useAccount } from "@/lib/use-account";
 
 interface ChatNavProps {
@@ -36,15 +35,6 @@ export function ChatNav({ activePanel, onSelectPanel }: ChatNavProps) {
         </span>
         <span className="font-bold tracking-tight text-foreground">Yapp</span>
         <div className="flex-grow" />
-        <a
-          aria-label="GitHub"
-          className="text-default-400 hover:text-foreground transition-colors"
-          href={siteConfig.links.github}
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          <Icon name="github" size={18} />
-        </a>
         <ThemeSwitch />
       </div>
 
