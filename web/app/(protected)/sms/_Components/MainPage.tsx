@@ -1,11 +1,16 @@
 "use client";
 
+import { useState } from "react";
+import { Button } from "@heroui/button";
+
+import { NewGroupModal } from "./_Chat/NewGroupModal";
 import { UserSearch } from "./_Chat/UserSearch";
 import { useChat } from "./ChatProvider";
 
 /** The "Main" home panel shown at /sms when no conversation is open. */
 export function MainPage() {
-  const { startConversation } = useChat();
+  const { startConversation, createGroup } = useChat();
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
 
   return (
     <div className="flex flex-col flex-grow min-h-0 bg-background dark:bg-surface-chat">
@@ -20,7 +25,21 @@ export function MainPage() {
         <p className="text-default-400 text-sm text-center">
           Search for someone above to start a conversation.
         </p>
+
+        <Button
+          size="sm"
+          variant="flat"
+          onPress={() => setGroupModalOpen(true)}
+        >
+          New group
+        </Button>
       </div>
+
+      <NewGroupModal
+        isOpen={groupModalOpen}
+        onClose={() => setGroupModalOpen(false)}
+        onCreate={createGroup}
+      />
     </div>
   );
 }

@@ -82,8 +82,11 @@ export function ChatList({
         ) : (
           conversations.map((conversation) => {
             const isActive = conversation.id === activeConversationId;
+            const isGroup = conversation.type === "GROUP";
             const name = conversationName(conversation);
-            const avatarUrl = conversation.members[0]?.avatarUrl ?? undefined;
+            const avatarUrl = isGroup
+              ? undefined
+              : (conversation.members[0]?.avatarUrl ?? undefined);
             const unread = !isActive && isUnread(conversation);
             const preview =
               conversation.lastMessage ??
@@ -104,11 +107,12 @@ export function ChatList({
                 <div className="relative flex-shrink-0">
                   <Avatar
                     className="bg-default-200 text-brand ring-1 ring-default-300"
-                    name={name.charAt(0).toUpperCase()}
+                    icon={isGroup ? <Icon name="users" size={20} /> : undefined}
+                    name={isGroup ? undefined : name.charAt(0).toUpperCase()}
                     size="md"
                     src={avatarUrl}
                   />
-                  {conversation.type !== "GROUP" && (
+                  {!isGroup && (
                     <StatusDot
                       className="absolute bottom-0 right-0"
                       name={name}

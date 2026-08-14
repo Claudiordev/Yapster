@@ -86,3 +86,12 @@ export async function apiPut<TReq, TRes>(
 
   return handleResponse<TRes>(response);
 }
+
+export async function apiDelete<TRes>(path: string, token?: string): Promise<TRes> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+
+  return handleResponse<TRes>(response);
+}

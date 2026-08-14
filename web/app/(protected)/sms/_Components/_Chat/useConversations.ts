@@ -107,11 +107,45 @@ export function useConversations(myUserId: string | null) {
     });
   }, [subscribe, refresh]);
 
+  /** Appends a newly-added member to a group already in the list, if present. */
+  const addMemberToConversation = useCallback(
+    (conversationId: string, member: Conversation["members"][number]) => {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId && !c.members.some((m) => m.id === member.id)
+            ? { ...c, members: [...c.members, member] }
+            : c,
+        ),
+      );
+    },
+    [],
+  );
+
+  /** Drops a member from a group already in the list (the creator removed them). */
+  const removeMemberFromConversation = useCallback(
+    (conversationId: string, userId: string) => {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId
+            ? { ...c, members: c.members.filter((m) => m.id !== userId) }
+            : c,
+        ),
+      );
+    },
+    [],
+  );
+
+  /** Drops a conversation entirely (the creator deleted the group). */
+  const removeConversation = useCallback((conversationId: string) => {
+    setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+  }, []);
+
   const addConversation = useCallback((conversation: Partial<Conversation>) => {
     setConversations((prev) => {
       if (prev.some((c) => c.id === conversation.id)) return prev;
 
-      // `/dm` returns only { id, type, name } — fill the summary fields it omits.
+      // `/dm` returns only { id, type, name, creatorId } — fill the summary
+      // fields it omits.
       const full: Conversation = {
         members: [],
         lastMessage: null,
@@ -121,6 +155,7 @@ export function useConversations(myUserId: string | null) {
         unreadCount: 0,
         name: null,
         type: "DM",
+        creatorId: null,
         ...conversation,
         id: conversation.id!,
       };
@@ -157,5 +192,14 @@ export function useConversations(myUserId: string | null) {
     }).catch(() => {});
   }, []);
 
-  return { conversations, isLoading, refresh, addConversation, markRead };
+  return {
+    conversations,
+    isLoading,
+    refresh,
+    addConversation,
+    addMemberToConversation,
+    removeMemberFromConversation,
+    removeConversation,
+    markRead,
+  };
 }

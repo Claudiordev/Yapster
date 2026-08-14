@@ -1,17 +1,22 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { AddMemberModal } from "./_Chat/AddMemberModal";
 import { ChatThread, type MessageSender } from "./_Chat/ChatThread";
+import { ManageGroupModal } from "./_Chat/ManageGroupModal";
 import { useChat } from "./ChatProvider";
 import { useMessages } from "./_Message/useMessages";
 import { useTyping } from "./_Message/useTyping";
 
-import { conversationName } from "@/lib/chat";
+import { conversationName, isGroupCreator } from "@/lib/chat";
 
 /** The thread for a single conversation, rendered at /sms/[conversationId]. */
 export function ConversationView({ conversationId }: { conversationId: string }) {
-  const { conversations, markRead, account } = useChat();
+  const { conversations, markRead, account, addMember, removeMember, deleteGroup } =
+    useChat();
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
 
   const {
     messages,
@@ -57,19 +62,53 @@ export function ConversationView({ conversationId }: { conversationId: string })
     [typingIds, senders],
   );
 
+  const isGroup = active?.type === "GROUP";
+  const amCreator = active ? isGroupCreator(active, account.userId) : false;
+  const memberIds = useMemo(
+    () => [account.userId, ...(active?.members.map((m) => m.id) ?? [])].filter(
+      (id): id is string => id != null,
+    ),
+    [account.userId, active],
+  );
+
   return (
-    <ChatThread
-      hasMore={hasMore}
-      isLoading={isLoading}
-      isLoadingMore={isLoadingMore}
-      isSending={isSending}
-      messages={messages}
-      senders={senders}
-      title={title}
-      onLoadMore={loadMore}
-      typingNames={typingNames}
-      onSend={sendMessage}
-      onType={notifyTyping}
-    />
+    <>
+      <ChatThread
+        hasMore={hasMore}
+        isLoading={isLoading}
+        isLoadingMore={isLoadingMore}
+        isSending={isSending}
+        messages={messages}
+        senders={senders}
+        title={title}
+        onAddMember={isGroup ? () => setAddMemberOpen(true) : undefined}
+        onLoadMore={loadMore}
+        onManageGroup={amCreator ? () => setManageOpen(true) : undefined}
+        typingNames={typingNames}
+        onSend={sendMessage}
+        onType={notifyTyping}
+      />
+
+      {isGroup && (
+        <AddMemberModal
+          existingMemberIds={memberIds}
+          isOpen={addMemberOpen}
+          onAdd={(user) => addMember(conversationId, user)}
+          onClose={() => setAddMemberOpen(false)}
+        />
+      )}
+
+      {isGroup && active && amCreator && account.userId && (
+        <ManageGroupModal
+          conversation={active}
+          isOpen={manageOpen}
+          myUserId={account.userId}
+          myUsername={account.username}
+          onClose={() => setManageOpen(false)}
+          onDeleteGroup={() => deleteGroup(conversationId)}
+          onRemoveMember={(userId) => removeMember(conversationId, userId)}
+        />
+      )}
+    </>
   );
 }
