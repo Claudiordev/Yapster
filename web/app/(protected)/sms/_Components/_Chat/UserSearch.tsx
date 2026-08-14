@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Avatar } from "@heroui/avatar";
-import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 
 import { useUserSearch } from "./useUserSearch";
@@ -66,35 +65,32 @@ export function UserSearch({ onStartConversation }: UserSearchProps) {
           onScroll={handleScroll}
         >
           {users.map((user) => (
-            <li
-              key={user.id}
-              className="flex w-full items-center gap-3 px-3 py-2 hover:bg-default-100"
-            >
-              <Avatar
-                className="bg-brand/10 text-brand flex-shrink-0 ring-1 ring-brand/20"
-                name={user.username.charAt(0).toUpperCase()}
-                size="md"
-                src={user.avatarUrl ?? undefined}
-              />
-              <p className="min-w-0 flex-grow truncate text-sm font-medium text-foreground">
-                {user.username}
-              </p>
-              <Button
-                isIconOnly
+            <li key={user.id}>
+              <button
                 aria-label={`Message ${user.username}`}
-                className="bg-brand/15 text-brand flex-shrink-0"
-                radius="full"
-                size="sm"
-                // Keep focus so the dropdown doesn't blur-close before onPress.
+                className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-default-100"
+                type="button"
+                // Keep focus so the dropdown doesn't blur-close before onClick.
                 onMouseDown={(e) => e.preventDefault()}
-                onPress={() => {
+                onClick={() => {
                   onStartConversation(user);
                   setOpen(false);
                   setQuery("");
                 }}
               >
-                <Icon name="chat-bubble" size={16} />
-              </Button>
+                <Avatar
+                  className="bg-brand/10 text-brand flex-shrink-0 ring-1 ring-brand/20"
+                  name={user.username.charAt(0).toUpperCase()}
+                  size="md"
+                  src={user.avatarUrl ?? undefined}
+                />
+                <p className="min-w-0 flex-grow truncate text-sm font-medium text-foreground">
+                  {user.username}
+                </p>
+                <span className="bg-brand/15 text-brand flex-shrink-0 rounded-full p-2">
+                  <Icon name="chat-bubble" size={16} />
+                </span>
+              </button>
             </li>
           ))}
 
