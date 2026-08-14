@@ -1,5 +1,7 @@
 package com.claudiordese.chat.application.domain.event.types;
 
 public enum EventType {
-    MESSAGE
+    MESSAGE,
+    TYPING,
+    USER_STATUS_EVENT
 }

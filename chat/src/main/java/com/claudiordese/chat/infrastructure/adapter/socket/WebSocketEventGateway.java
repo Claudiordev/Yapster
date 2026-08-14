@@ -1,6 +1,7 @@
 package com.claudiordese.chat.infrastructure.adapter.socket;
 
-import com.claudiordese.chat.application.domain.event.ServerEvent;
+import com.claudiordese.chat.application.domain.chat.types.UserStatusType;
+import com.claudiordese.chat.application.domain.event.server.ServerEvent;
 import com.claudiordese.chat.application.port.socket.EventGateway;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -27,6 +28,7 @@ public class WebSocketEventGateway implements EventGateway {
      * Sessions are saved here, UUID userId (JWT Sub), Set of WebSocketSession
      */
     private final Map<String, Set<WebSocketSession>> sessions = new ConcurrentHashMap<>();
+    private final Map<String, UserStatusType> sessionsStatus = new ConcurrentHashMap<>();
     private final ObjectMapper json;
     private final Executor socketExecutor;
 
@@ -47,12 +49,25 @@ public class WebSocketEventGateway implements EventGateway {
             set.removeIf(s -> s.getId().equals(session.getId()));
             return set.isEmpty() ? null : set;
         });
+
+        if (!isOnline(userId)) sessionsStatus.remove(userId);
     }
 
     @Override
     public boolean isOnline(String userId) {
         Set<WebSocketSession> set = sessions.get(userId);
         return set != null && !set.isEmpty();
+    }
+
+
+    public UserStatusType statusOf(String userId) {
+        return isOnline(userId) ? sessionsStatus.getOrDefault(userId, UserStatusType.ONLINE) : UserStatusType.OFFLINE;
+    }
+
+    @Override
+    public boolean setStatus(String userId, UserStatusType status) {
+        if (!isOnline(userId)) return false;
+        return sessionsStatus.put(userId, status) != status;
     }
 
     /**

@@ -15,8 +15,8 @@ erDiagram
     }
 
     CONVERSATION_MEMBER {
-        uuid conversation_id PK
-        uuid user_id PK
+        uuid conversation_id PK,FK
+        uuid user_id PK "no FK users live in session"
         bigint last_read_seq
         timestamptz joined_at
     }
@@ -25,7 +25,7 @@ erDiagram
         uuid id PK
         bigint seq
         uuid conversation_id FK
-        uuid sender_id
+        uuid sender_id "no FK users live in session"
         text body
         timestamptz sent_at
     }
