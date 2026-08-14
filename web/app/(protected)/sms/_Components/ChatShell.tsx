@@ -10,9 +10,6 @@ import { useChat } from "./ChatProvider";
 import { GameServersPanel } from "./_GameServers/GameServersPanel";
 import { type PanelKey } from "./_Panels/panels";
 
-import { EventsPage } from "@/app/(protected)/events/_Components/EventsPage";
-import { PremiumPage } from "@/app/(protected)/premium/_Components/PremiumPage";
-
 /**
  * Persistent chat frame: the left sidebar (nav + conversation list + profile)
  * stays mounted while the routed panel — Main or a conversation — renders on the
@@ -49,18 +46,6 @@ export function ChatShell({ children }: { children: ReactNode }) {
 
         {activePanel === "game-servers" && (
           <GameServersPanel onClose={() => setActivePanel(null)} />
-        )}
-
-        {activePanel === "events" && (
-          <div className="absolute inset-0 z-20 flex flex-col">
-            <EventsPage onClose={() => setActivePanel(null)} />
-          </div>
-        )}
-
-        {activePanel === "premium" && (
-          <div className="absolute inset-0 z-20 flex flex-col">
-            <PremiumPage onClose={() => setActivePanel(null)} />
-          </div>
         )}
       </div>
     </div>

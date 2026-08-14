@@ -202,20 +202,20 @@ export function RegisterForm() {
             </Button>
 
             <SocialLogin />
+
+            <p className="w-full text-center text-small text-default-500">
+              Already have an account?{" "}
+              <Link
+                as={NextLink}
+                className="text-brand"
+                href={ROUTES.LOGIN}
+                size="sm"
+              >
+                Sign in
+              </Link>
+            </p>
           </Form>
         </div>
-
-        <p className="mt-5 w-full text-center text-small text-default-500">
-          Already have an account?{" "}
-          <Link
-            as={NextLink}
-            className="text-brand"
-            href={ROUTES.LOGIN}
-            size="sm"
-          >
-            Sign in
-          </Link>
-        </p>
       </div>
     </div>
   );

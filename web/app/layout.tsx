@@ -9,7 +9,7 @@ import { fontSans } from "@/config/fonts";
 
 export const metadata: Metadata = {
   title: {
-    default: siteConfig.name,
+    default: `${siteConfig.name} - ${siteConfig.description}`,
     template: `%s - ${siteConfig.name}`,
   },
   description: siteConfig.description,

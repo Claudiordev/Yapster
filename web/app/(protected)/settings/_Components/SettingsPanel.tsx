@@ -5,6 +5,9 @@ import { Select, SelectItem } from "@heroui/select";
 
 import { MicTest } from "./MicTest";
 
+import { Icon } from "@/components/icon";
+import { siteConfig } from "@/config/site";
+
 interface AudioDevice {
   id: string;
   label: string;
@@ -171,6 +174,19 @@ export function SettingsPanel() {
           connection. Showing the system default only.
         </p>
       )}
+
+      <div className="h-px bg-divider" />
+
+      <a
+        aria-label="GitHub"
+        className="flex w-fit items-center gap-2 text-tiny text-default-400 transition-colors hover:text-foreground"
+        href={siteConfig.links.github}
+        rel="noopener noreferrer"
+        target="_blank"
+      >
+        <Icon name="github" size={16} />
+        View on GitHub
+      </a>
     </div>
   );
 }
