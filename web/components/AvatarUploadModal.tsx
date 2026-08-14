@@ -85,7 +85,12 @@ export function AvatarUploadModal({ isOpen, onClose }: AvatarUploadModalProps) {
         <ModalHeader>Upload avatar</ModalHeader>
         <ModalBody>
           <div className="flex flex-col items-center gap-4 py-2">
-            <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full bg-content2 ring-2 ring-brand/20">
+            <button
+              aria-label="Choose image"
+              className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full bg-content2 ring-2 ring-brand/20 transition-opacity hover:opacity-80"
+              type="button"
+              onClick={() => inputRef.current?.click()}
+            >
               {preview ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -98,7 +103,7 @@ export function AvatarUploadModal({ isOpen, onClose }: AvatarUploadModalProps) {
                   <Icon name="plus" size={28} />
                 </span>
               )}
-            </div>
+            </button>
 
             <Button
               size="sm"
