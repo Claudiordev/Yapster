@@ -1,6 +1,7 @@
 package com.claudiordese.chat.application.port.socket;
 
-import com.claudiordese.chat.application.domain.event.ServerEvent;
+import com.claudiordese.chat.application.domain.chat.types.UserStatusType;
+import com.claudiordese.chat.application.domain.event.server.ServerEvent;
 
 /**
  * Layer of operations for sockets
@@ -15,4 +16,9 @@ public interface EventGateway {
      * @param event ServerEvent, e.g. MESSAGE
      */
     void send(String userId, ServerEvent event);
+
+
+    boolean setStatus(String userId, UserStatusType status);
+
+    UserStatusType statusOf(String userId);
 }

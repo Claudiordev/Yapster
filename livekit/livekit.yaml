@@ -9,6 +9,13 @@ rtc:
   port_range_start: 50000
   port_range_end: 50060
   use_external_ip: false
+  # Without this, LiveKit auto-detects its own container-internal IP (the
+  # Docker bridge address) and puts THAT in its ICE candidates — signaling
+  # (plain WS on 7880) still connects fine through the published port, but
+  # the actual WebRTC media/DTLS handshake times out because the browser can
+  # never dial the container's internal IP. Pin it to the address the
+  # browser actually uses to reach this host instead.
+  node_ip: 127.0.0.1
 
 # API key -> secret. The secret is the HS256 signing key the voice service uses
 # to mint join tokens; it must match LIVEKIT_API_SECRET passed to that service.

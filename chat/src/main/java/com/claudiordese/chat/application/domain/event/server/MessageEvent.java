@@ -1,4 +1,4 @@
-package com.claudiordese.chat.application.domain.event;
+package com.claudiordese.chat.application.domain.event.server;
 
 import com.claudiordese.chat.application.domain.event.types.EventType;
 import com.fasterxml.jackson.annotation.JsonProperty;
