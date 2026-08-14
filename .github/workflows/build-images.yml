@@ -40,6 +40,11 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          # matrix.service below needs a JSON array; paths-filter's default
+          # list-format is csv, which produces a bare unquoted string like
+          # `session` for a single match -- not valid JSON, so fromJSON()
+          # fails on it downstream.
+          list-format: json
           filters: |
             session:
               - 'session/**'
