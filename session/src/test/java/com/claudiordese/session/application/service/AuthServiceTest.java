@@ -4,7 +4,9 @@ import com.claudiordese.exceptions.EmailMismatchException;
 import com.claudiordese.exceptions.EmailTakenException;
 import com.claudiordese.exceptions.InvalidAuthorizationException;
 import com.claudiordese.exceptions.NotFound;
+import com.claudiordese.exceptions.TokenRevoked;
 import com.claudiordese.exceptions.UsernameTaken;
+import com.claudiordese.session.application.domain.RefreshToken;
 import com.claudiordese.security.config.JwtSecurityProperties;
 import com.claudiordese.session.application.port.PasswordHasher;
 import com.claudiordese.session.application.port.RefreshTokenStore;
@@ -21,6 +23,8 @@ import com.claudiordese.session.support.PlainTextPasswordHasher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -30,6 +34,7 @@ class AuthServiceTest {
     private RefreshTokenStore refreshTokens;
     private PasswordHasher hasher;
     private TokenIssuer tokens;
+    private JwtSecurityProperties props;
     private AuthService authService;
 
     @BeforeEach
@@ -39,7 +44,7 @@ class AuthServiceTest {
         hasher = new PlainTextPasswordHasher();
         tokens = new FakeTokenIssuer();
 
-        JwtSecurityProperties props = new JwtSecurityProperties();
+        props = new JwtSecurityProperties();
         props.setAccessExpirationMs(900_000L);       // 15 min
         props.setRefreshExpirationMs(2_592_000_000L); // 30 days
 
@@ -182,6 +187,29 @@ class AuthServiceTest {
         // Act + Assert
         assertThatThrownBy(() -> authService.refreshAccessToken("never-issued"))
                 .isInstanceOf(NotFound.class);
+    }
+
+    @Test
+    void refreshAccessToken_throwsTokenRevoked_whenConcurrentRefreshWonTheRotation() {
+        // Arrange — a store where the token is found but consuming it reports the row
+        // was already gone, i.e. a concurrent refresh rotated it first (the race that
+        // used to blow up as a 500 optimistic-locking failure).
+        users.create("alice", "alice@example.com", hasher.hash("secret123"));
+
+        InMemoryRefreshTokenStore racing = new InMemoryRefreshTokenStore() {
+            @Override
+            public boolean consume(RefreshToken token) {
+                return false; // another request already consumed it
+            }
+        };
+        RefreshToken issued = racing.issueFor("alice", Duration.ofHours(1));
+        AuthService racingService = new AuthService(users, racing, hasher, tokens, props);
+
+        // Act + Assert — the loser is rejected instead of minting a second token pair
+        assertThatThrownBy(() -> racingService.refreshAccessToken(issued.value()))
+                .isInstanceOf(TokenRevoked.class);
+        // and no new refresh token was issued (only the original remains)
+        assertThat(racing.size()).isEqualTo(1);
     }
 
     // ─── logout ─────────────────────────────────────────────────────────

@@ -89,7 +89,13 @@ public class AuthService {
         User user = users.findByUsername(existing.username())
                 .orElseThrow(() -> new NotFound("not_found", "User not found for this token"));
 
-        refreshTokens.delete(existing);
+        // Rotate atomically. The delete either removes the row (this request owns the
+        // rotation) or finds it already gone because a concurrent refresh consumed it
+        // first. In the latter case we must NOT mint a second token pair from the same
+        // refresh token, so we consume before issuing anything.
+        if (!refreshTokens.consume(existing)) {
+            throw new TokenRevoked("token_reused", "Refresh token has already been used");
+        }
 
         IssuedToken access = tokens.issue(user, accessTtl());
         RefreshToken rotated = refreshTokens.issueFor(user.username(), refreshTtl());

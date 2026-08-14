@@ -46,7 +46,12 @@ public class JpaRefreshTokenStore implements RefreshTokenStore {
 
     @Override
     public void delete(RefreshToken token) {
-        repo.deleteById(token.id());
+        repo.deleteRowById(token.id());
+    }
+
+    @Override
+    public boolean consume(RefreshToken token) {
+        return repo.deleteRowById(token.id()) > 0;
     }
 
     static RefreshToken toDomain(RefreshTokenEntity entity) {

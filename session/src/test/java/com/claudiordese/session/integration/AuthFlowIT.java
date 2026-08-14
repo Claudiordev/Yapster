@@ -14,12 +14,19 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -41,12 +48,23 @@ class AuthFlowIT {
             .withUsername("test")
             .withPassword("test");
 
+    // The service caches user lookups in Redis (see CacheConfig), so the full
+    // context needs a reachable Redis — GET /user resolves the principal through
+    // the @Cacheable by-id lookup.
+    @Container
+    static final GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine")
+            .withExposedPorts(6379);
+
     @DynamicPropertySource
     static void overrideProps(DynamicPropertyRegistry registry) {
         // Point the app at the Testcontainer Postgres
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
+
+        // Point the app at the Testcontainer Redis
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
 
         // Let Hibernate build the schema for the test DB
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
@@ -98,13 +116,13 @@ class AuthFlowIT {
         assertThat(loginResp.getStatusCode()).isEqualTo(HttpStatus.OK);
 
         JsonNode tokens = loginResp.getBody();
-        String accessToken  = tokens.get("accessToken").asText();
-        String refreshToken = tokens.get("refreshToken").asText();
+        String accessToken  = tokens.get("access_token").asText();
+        String refreshToken = tokens.get("refresh_token").asText();
 
         assertThat(accessToken).isNotBlank().startsWith("eyJ");            // real JWT
         assertThat(refreshToken).isNotBlank();
-        assertThat(tokens.get("tokenType").asText()).isEqualTo("Bearer");
-        assertThat(tokens.get("expiresIn").asLong()).isPositive();
+        assertThat(tokens.get("token_type").asText()).isEqualTo("Bearer");
+        assertThat(tokens.get("expires_in").asLong()).isPositive();
 
         // ─── 3. Use access token to call a protected endpoint ───────────
         HttpHeaders authHeaders = new HttpHeaders();
@@ -126,7 +144,7 @@ class AuthFlowIT {
                 url("/api/v1/auth/refresh"), refreshBody, JsonNode.class);
 
         assertThat(refreshResp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        String rotatedRefresh = refreshResp.getBody().get("refreshToken").asText();
+        String rotatedRefresh = refreshResp.getBody().get("refresh_token").asText();
         assertThat(rotatedRefresh).isNotBlank().isNotEqualTo(refreshToken);
 
         // ─── 5. Logout (revoke the rotated refresh token) ───────────────
@@ -163,6 +181,48 @@ class AuthFlowIT {
         // Assert
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(resp.getBody().get("title").asText()).isEqualTo("username_taken");
+    }
+
+    @Test
+    void concurrentRefresh_withSameToken_neverReturns500_andRotatesExactlyOnce() throws Exception {
+        // Arrange — register + login to obtain a refresh token
+        String username = "race_" + UUID.randomUUID().toString().substring(0, 8);
+        String email    = username + "@example.com";
+        String password = "secret12345";
+
+        http.postForEntity(url("/api/v1/auth/register"), Map.of(
+                "username", username, "email", email,
+                "confirmEmail", email, "password", password), JsonNode.class);
+
+        ResponseEntity<JsonNode> loginResp = http.postForEntity(
+                url("/api/v1/auth"), Map.of("username", username, "password", password), JsonNode.class);
+        String refreshToken = loginResp.getBody().get("refresh_token").asText();
+
+        // Act — fire two refreshes for the SAME token, released simultaneously
+        int threads = 2;
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            Callable<HttpStatus> call = () -> {
+                start.await();
+                return (HttpStatus) http.postForEntity(
+                        url("/api/v1/auth/refresh"),
+                        Map.of("refreshToken", refreshToken),
+                        JsonNode.class).getStatusCode();
+            };
+            Future<HttpStatus> a = pool.submit(call);
+            Future<HttpStatus> b = pool.submit(call);
+            start.countDown();
+
+            List<HttpStatus> statuses = List.of(a.get(), b.get());
+
+            // Assert — the race no longer produces a 500; exactly one rotation succeeds
+            assertThat(statuses).noneMatch(HttpStatus::is5xxServerError);
+            assertThat(statuses.stream().filter(HttpStatus::is2xxSuccessful).count()).isEqualTo(1);
+            assertThat(statuses.stream().filter(HttpStatus::is4xxClientError).count()).isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     @Test

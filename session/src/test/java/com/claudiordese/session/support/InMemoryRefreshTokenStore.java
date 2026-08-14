@@ -42,6 +42,11 @@ public class InMemoryRefreshTokenStore implements RefreshTokenStore {
         byId.remove(token.id());
     }
 
+    @Override
+    public boolean consume(RefreshToken token) {
+        return byId.remove(token.id()) != null;
+    }
+
     public int size() {
         return byId.size();
     }
