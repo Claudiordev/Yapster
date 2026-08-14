@@ -13,8 +13,10 @@ import { useRouter } from "next/navigation";
 import { ROUTES } from "@/lib/constants";
 
 interface Account {
+  userId: string | null;
   username: string | null;
   balance: number | null;
+  state: string | null;
   avatarUrl: string | null;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -23,6 +25,7 @@ interface Account {
 const AccountContext = createContext<Account | null>(null);
 
 interface AccountProviderProps {
+  initialUserId: string | null;
   initialUsername: string | null;
   initialBalance: number | null;
   initialAvatarUrl: string | null;
@@ -37,15 +40,18 @@ interface AccountProviderProps {
  * that change it (e.g. balance after sending a paid message).
  */
 export function AccountProvider({
+  initialUserId,
   initialUsername,
   initialBalance,
   initialAvatarUrl,
   children,
 }: AccountProviderProps) {
   const router = useRouter();
+  const [userId, setUserId] = useState<string | null>(initialUserId);
   const [username, setUsername] = useState<string | null>(initialUsername);
   const [balance, setBalance] = useState<number | null>(initialBalance);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initialAvatarUrl);
+  const [state] = useState<string | null>("Online");
 
   const refresh = useCallback(async () => {
     try {
@@ -54,6 +60,7 @@ export function AccountProvider({
       if (!res.ok) return;
       const data = await res.json();
 
+      if (data?.id) setUserId(data.id);
       if (data?.username) setUsername(data.username);
       if (typeof data?.balance === "number") setBalance(data.balance);
       setAvatarUrl(data?.avatarUrl ?? null);
@@ -79,7 +86,7 @@ export function AccountProvider({
 
   return (
     <AccountContext.Provider
-      value={{ username, balance, avatarUrl, logout, refresh }}
+      value={{ userId, username, balance, state, avatarUrl, logout, refresh }}
     >
       {children}
     </AccountContext.Provider>
