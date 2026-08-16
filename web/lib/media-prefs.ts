@@ -1,0 +1,105 @@
+"use client";
+
+/**
+ * Mic processing preferences, shared between the Settings panel (which writes
+ * them) and the call (which reads them when publishing the microphone).
+ *
+ * These map to the browser's own getUserMedia constraints — the processing is
+ * done by the browser/OS on capture, before anything is encoded or sent, so
+ * turning one off genuinely disables it rather than just relabelling it.
+ *
+ * Stored in localStorage alongside the audio device choices. Both default ON:
+ * that's what you want on a laptop with open speakers, but musicians and
+ * anyone on a good headset usually want them off, since they colour the
+ * signal and can clip quiet passages.
+ */
+export const NOISE_SUPPRESSION_KEY = "audio-noise-suppression";
+export const ECHO_CANCELLATION_KEY = "audio-echo-cancellation";
+
+export interface AudioProcessingPrefs {
+  noiseSuppression: boolean;
+  echoCancellation: boolean;
+}
+
+/** Absent key = on; only an explicit "false" turns a filter off. */
+function readFlag(key: string): boolean {
+  if (typeof window === "undefined") return true;
+
+  return window.localStorage.getItem(key) !== "false";
+}
+
+export function readAudioProcessingPrefs(): AudioProcessingPrefs {
+  return {
+    noiseSuppression: readFlag(NOISE_SUPPRESSION_KEY),
+    echoCancellation: readFlag(ECHO_CANCELLATION_KEY),
+  };
+}
+
+export function writeAudioProcessingPref(key: string, enabled: boolean): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, String(enabled));
+}
+
+// ── Video (screen share) ───────────────────────────────────────────────────
+
+export const VIDEO_RESOLUTION_KEY = "video-resolution";
+export const VIDEO_FRAME_RATE_KEY = "video-frame-rate";
+
+export type VideoResolution = "720p" | "1080p" | "1440p";
+export type VideoFrameRate = 30 | 60;
+
+/**
+ * Capture size and target bitrate per resolution.
+ *
+ * The bitrates are the "quality" half of the setting: resolution alone only
+ * decides how many pixels are captured, and without raising the ceiling the
+ * encoder just spends the same bits on more of them, which looks *worse* (soft,
+ * blocky on motion). These are geared to screen content — mostly static, but
+ * needing crisp text — and are roughly double what you'd use for camera video
+ * at the same size. 60fps carries about 1.5x the bitrate of 30fps, since twice
+ * the frames at an unchanged budget would halve the quality of each.
+ */
+export const VIDEO_RESOLUTIONS: Record<VideoResolution, { width: number; height: number; bitrate30: number; bitrate60: number }> = {
+  "720p": { width: 1280, height: 720, bitrate30: 2_500_000, bitrate60: 3_500_000 },
+  "1080p": { width: 1920, height: 1080, bitrate30: 5_000_000, bitrate60: 7_500_000 },
+  "1440p": { width: 2560, height: 1440, bitrate30: 9_000_000, bitrate60: 13_000_000 },
+};
+
+export interface VideoPrefs {
+  resolution: VideoResolution;
+  frameRate: VideoFrameRate;
+}
+
+// Default to the top of the range -- screen share reads best sharp and
+// smooth, and setScreenShareEncoding already tells the encoder to spend
+// whatever budget it's given on resolution first (see useCall). Anyone on a
+// constrained link can still turn it down in Settings.
+export const DEFAULT_VIDEO_PREFS: VideoPrefs = {
+  resolution: "1080p",
+  frameRate: 60,
+};
+
+export function readVideoPrefs(): VideoPrefs {
+  if (typeof window === "undefined") return DEFAULT_VIDEO_PREFS;
+
+  const resolution = window.localStorage.getItem(VIDEO_RESOLUTION_KEY);
+  const frameRate = Number(window.localStorage.getItem(VIDEO_FRAME_RATE_KEY));
+
+  return {
+    resolution: resolution && resolution in VIDEO_RESOLUTIONS ?
+        (resolution as VideoResolution)
+        : DEFAULT_VIDEO_PREFS.resolution,
+    frameRate: frameRate === 60 ? 60 : DEFAULT_VIDEO_PREFS.frameRate,
+  };
+}
+
+/** Capture constraints + publish bitrate for the current video preferences. */
+export function videoCaptureSettings(prefs: VideoPrefs = readVideoPrefs()) {
+  const { width, height, bitrate30, bitrate60 } = VIDEO_RESOLUTIONS[prefs.resolution];
+
+  return {
+    resolution: { width, height, frameRate: prefs.frameRate },
+    maxBitrate: prefs.frameRate === 60 ? bitrate60 : bitrate30,
+    maxFramerate: prefs.frameRate,
+  };
+}
