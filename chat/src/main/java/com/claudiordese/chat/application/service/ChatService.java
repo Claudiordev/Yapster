@@ -5,6 +5,8 @@ import com.claudiordese.chat.application.domain.chat.ConversationSummary;
 import com.claudiordese.chat.application.domain.chat.Message;
 import com.claudiordese.chat.application.domain.chat.types.ConversationType;
 import com.claudiordese.chat.application.domain.chat.types.UserStatusType;
+import com.claudiordese.chat.application.domain.event.server.CallEndedEvent;
+import com.claudiordese.chat.application.domain.event.server.CallStartedEvent;
 import com.claudiordese.chat.application.domain.event.server.MessageEvent;
 import com.claudiordese.chat.application.domain.event.server.TypingEvent;
 import com.claudiordese.chat.application.domain.event.server.UserStatusEvent;
@@ -180,6 +182,34 @@ public class ChatService {
         }
     }
 
+    public void sendCallStarted(UUID conversationId, UUID senderId) {
+        List<UUID> members = conversations.membersOf(conversationId);
+
+        if (!members.contains(senderId)) {
+            throw new InterdictedException("not_a_member", "Not a member of this conversation");
+        }
+
+        CallStartedEvent event = new CallStartedEvent(conversationId.toString(), senderId.toString());
+
+        for (UUID m : members) {
+            if (!m.equals(senderId)) events.send(m.toString(), event);
+        }
+    }
+
+    public void sendCallEnded(UUID conversationId, UUID senderId) {
+        List<UUID> members = conversations.membersOf(conversationId);
+
+        if (!members.contains(senderId)) {
+            throw new InterdictedException("not_a_member", "Not a member of this conversation");
+        }
+
+        CallEndedEvent event = new CallEndedEvent(conversationId.toString(), senderId.toString());
+
+        for (UUID m : members) {
+            if (!m.equals(senderId)) events.send(m.toString(), event);
+        }
+    }
+
     public void sendUserStatus(UUID senderId, UserStatusType userStatusType) {
         if(userStatusType != UserStatusType.OFFLINE && !events.setStatus(senderId.toString(), userStatusType)) return;
 
@@ -203,6 +233,14 @@ public class ChatService {
         }
 
         return messages.history(conv,beforeSeq,limit);
+    }
+
+    /**
+     * Used by other services (e.g. voice, to authorize joining a call room
+     * named after the conversation) that only need a yes/no membership check.
+     */
+    public boolean isMember(UUID conversationId, UUID userId) {
+        return conversations.isMember(conversationId, userId);
     }
 
     public List<ConversationSummary> listConversationSummaries(UUID loggedUser) {

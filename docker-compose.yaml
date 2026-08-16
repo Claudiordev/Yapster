@@ -76,10 +76,17 @@ services:
     image: livekit/livekit-server:latest
     container_name: livekit
     command: --config /etc/livekit.yaml
+    environment:
+      # The address LiveKit advertises in its ICE candidates — must be one the
+      # BROWSER can dial. Default suits a browser on this same host; when you
+      # open the app from a LAN IP (or a second device), set PUBLIC_HOST to
+      # this host's LAN IP or the media handshake will fail even though
+      # signaling connects. See livekit/livekit.yaml.
+      - NODE_IP=${PUBLIC_HOST:-127.0.0.1}
     ports:
-      - "7880:7880"                     # signaling (HTTP/WebSocket)
-      - "7881:7881"                     # WebRTC over TCP (fallback)
-      - "50000-50060:50000-50060/udp"   # WebRTC media (RTP/ICE)
+      - "7880:7880"       # signaling (HTTP/WebSocket)
+      - "7881:7881"       # WebRTC over TCP (fallback)
+      - "7882:7882/udp"   # WebRTC media (RTP/ICE)
     volumes:
       - "./livekit/livekit.yaml:/etc/livekit.yaml"
   voice:
@@ -90,8 +97,12 @@ services:
     ports:
       - "8085:8085"
     environment:
-      # url is what the browser dials; key/secret must match livekit/livekit.yaml
-      - LIVEKIT_URL=ws://localhost:7880
+      # Handed to the browser as the address to dial, so it must be reachable
+      # from wherever the app is opened — NOT a container-internal name, and
+      # not localhost once anything but this host is browsing. Same
+      # PUBLIC_HOST as LiveKit's NODE_IP so the two can't drift apart.
+      # key/secret must match livekit/livekit.yaml
+      - LIVEKIT_URL=ws://${PUBLIC_HOST:-localhost}:7880
       - LIVEKIT_API_KEY=devkey
       - LIVEKIT_API_SECRET=devsecretdevsecretdevsecret12345
     depends_on:

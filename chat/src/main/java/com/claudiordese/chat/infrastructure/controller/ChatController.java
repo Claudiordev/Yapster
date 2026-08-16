@@ -10,6 +10,7 @@ import com.claudiordese.chat.infrastructure.controller.responses.ConversationRes
 import com.claudiordese.chat.infrastructure.controller.responses.ConversationSummaryResponse;
 import com.claudiordese.chat.infrastructure.controller.responses.MemberView;
 import com.claudiordese.chat.infrastructure.controller.responses.MessageResponse;
+import com.claudiordese.exceptions.InterdictedException;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -113,6 +114,19 @@ public class ChatController {
         chatService.markRead(conversationId,
                 loggedUser(auth),
                 markReadRequest.seq());
+    }
+
+    /**
+     * Yes/no membership check consumed by other services (voice, to
+     * authorize joining a call room named after the conversation) -- not
+     * meant for the browser.
+     */
+    @GetMapping("/{conversationId}/membership")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void checkMembership(@PathVariable UUID conversationId, Authentication auth) {
+        if (!chatService.isMember(conversationId, loggedUser(auth))) {
+            throw new InterdictedException("not_a_member", "Not a member of this conversation");
+        }
     }
 
 

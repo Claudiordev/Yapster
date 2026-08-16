@@ -1,6 +1,8 @@
 package com.claudiordese.chat.infrastructure.socket;
 
 import com.claudiordese.chat.application.domain.chat.types.UserStatusType;
+import com.claudiordese.chat.application.domain.event.client.CallEndedEvent;
+import com.claudiordese.chat.application.domain.event.client.CallStartedEvent;
 import com.claudiordese.chat.application.domain.event.client.TypingEvent;
 import com.claudiordese.chat.application.domain.event.server.UserStatusEvent;
 import com.claudiordese.chat.application.domain.event.types.EventType;
@@ -71,6 +73,16 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 case USER_STATUS_EVENT -> {
                     UserStatusEvent userStatusEvent = json.treeToValue(payload, UserStatusEvent.class);
                     chatService.sendUserStatus(UUID.fromString(userId),userStatusEvent.getUserStatusType());
+                }
+                case CALL_STARTED -> {
+                    CallStartedEvent callStartedEvent = json.treeToValue(payload, CallStartedEvent.class);
+                    chatService.sendCallStarted(UUID.fromString(callStartedEvent.getConversationId()),
+                            UUID.fromString(userId));
+                }
+                case CALL_ENDED -> {
+                    CallEndedEvent callEndedEvent = json.treeToValue(payload, CallEndedEvent.class);
+                    chatService.sendCallEnded(UUID.fromString(callEndedEvent.getConversationId()),
+                            UUID.fromString(userId));
                 }
                 default -> log.warn("unknown client event: {}", type);
             }
