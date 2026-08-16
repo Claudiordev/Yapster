@@ -40,6 +40,13 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
         </dependency>
+        <dependency>
+            <!-- Resolves the load-balanced http://CHAT/... URI used by the
+                 @HttpExchange client below (backed by RestClient, servlet-native,
+                 already on the classpath via spring-boot-starter-web, no webflux needed). -->
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

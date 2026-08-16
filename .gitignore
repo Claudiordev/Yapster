@@ -44,6 +44,11 @@ build/
 ### Next.js ###
 .next/
 
+### docker-compose variable overrides — machine-specific (e.g. LIVEKIT_NODE_IP
+### is whatever LAN IP *this* host is reached on). Anchored to the repo root so
+### the committed web/.env.development / web/.env.production still apply. ###
+/.env
+
 ### Ignored modules (leading slash = repo root ONLY; a bare `service/` also matches
 ### nested packages like voice/.../application/service/ and hides real code) ###
 /library/
