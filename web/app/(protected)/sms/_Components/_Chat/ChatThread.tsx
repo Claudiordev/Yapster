@@ -35,6 +35,10 @@ interface ChatThreadProps {
   onAddMember?: () => void;
   /** Shows the "Manage group" action in the header when set (creator only). */
   onManageGroup?: () => void;
+  /** Starts a voice call in this conversation. */
+  onStartCall?: () => void;
+  /** True while a call panel is already open for this conversation. */
+  inCall?: boolean;
 }
 
 // Consecutive messages from the same sender within this window are grouped
@@ -74,6 +78,8 @@ export function ChatThread({
   onType,
   onAddMember,
   onManageGroup,
+  onStartCall,
+  inCall,
 }: ChatThreadProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // Scroll height captured right before a load-more, so we can keep the
@@ -128,6 +134,19 @@ export function ChatThread({
         />
         <h2 className="font-semibold truncate text-foreground">{title}</h2>
         <div className="ml-auto flex items-center gap-1">
+          {onStartCall && (
+            <Button
+              isIconOnly
+              aria-label={inCall ? "Call in progress" : "Start call"}
+              className={inCall ? "text-brand" : "text-default-400 hover:text-foreground"}
+              isDisabled={inCall}
+              size="sm"
+              variant="light"
+              onPress={onStartCall}
+            >
+              <Icon name="phone" size={18} />
+            </Button>
+          )}
           {onAddMember && (
             <Button
               isIconOnly

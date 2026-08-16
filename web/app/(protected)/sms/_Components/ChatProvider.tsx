@@ -4,15 +4,20 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
+  useState,
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
 
 import { useConversations } from "./_Chat/useConversations";
+import { IncomingCallModal } from "./_Call/IncomingCallModal";
 
 import { useAccount } from "@/lib/use-account";
-import type { Conversation } from "@/lib/chat";
+import { conversationName, type Conversation } from "@/lib/chat";
+import { useRealtime } from "@/lib/useRealtime";
 import type { PlatformUser } from "@/app/api/users/search/route";
 
 interface ChatContextValue {
@@ -28,6 +33,13 @@ interface ChatContextValue {
   removeMember: (conversationId: string, userId: string) => Promise<boolean>;
   /** Creator-only: deletes a group entirely and navigates back to /sms. */
   deleteGroup: (conversationId: string) => Promise<boolean>;
+  /**
+   * Conversation whose call this user is currently in, if any. Set by
+   * ConversationView so the incoming-call prompt can skip anyone already
+   * sitting in that call (they'd otherwise be asked to join a call they're
+   * already on every time another member joins).
+   */
+  setActiveCall: (conversationId: string | null) => void;
   account: {
     userId: string | null;
     username: string | null;
@@ -44,6 +56,7 @@ const ChatContext = createContext<ChatContextValue | null>(null);
  */
 export function ChatProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const { subscribe } = useRealtime();
   const { userId, username, avatarUrl } = useAccount();
   const {
     conversations,
@@ -54,6 +67,55 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     removeConversation,
     markRead,
   } = useConversations(userId);
+
+  /** Conversation id of the call being offered to us right now, if any. */
+  const [incomingCallId, setIncomingCallId] = useState<string | null>(null);
+  const [activeCallId, setActiveCallId] = useState<string | null>(null);
+
+  // Read inside the CALL_STARTED subscription without making it tear down and
+  // resubscribe every time a call starts or ends.
+  const activeCallIdRef = useRef(activeCallId);
+
+  useEffect(() => {
+    activeCallIdRef.current = activeCallId;
+  }, [activeCallId]);
+
+  const setActiveCall = useCallback((conversationId: string | null) => {
+    setActiveCallId(conversationId);
+    // Joining a call answers its own prompt.
+    if (conversationId) {
+      setIncomingCallId((prev) => (prev === conversationId ? null : prev));
+    }
+  }, []);
+
+  // Incoming call: prompt every other member of the conversation. Note this
+  // deliberately does NOT skip people already viewing that thread -- they're
+  // reading messages, not in the call, and would otherwise get no indication
+  // at all that a call had started.
+  useEffect(() => {
+    const offStarted = subscribe("CALL_STARTED", (event) => {
+      if (event.senderId === userId) return;
+      // Already sitting in this call -- every later joiner emits CALL_STARTED
+      // too, and we don't want to prompt someone to join what they're on.
+      if (activeCallIdRef.current === event.conversationId) return;
+
+      setIncomingCallId(event.conversationId);
+    });
+
+    const offEnded = subscribe("CALL_ENDED", (event) => {
+      // The caller hung up before we answered -- drop the prompt.
+      setIncomingCallId((prev) => (prev === event.conversationId ? null : prev));
+    });
+
+    return () => {
+      offStarted();
+      offEnded();
+    };
+  }, [subscribe, userId]);
+
+  const incomingConversation = incomingCallId
+    ? conversations.find((c) => c.id === incomingCallId)
+    : undefined;
 
   const startConversation = useCallback(
     async (user: PlatformUser) => {
@@ -190,6 +252,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       addMember,
       removeMember,
       deleteGroup,
+      setActiveCall,
       account: { userId, username, avatarUrl },
     }),
     [
@@ -201,13 +264,35 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       addMember,
       removeMember,
       deleteGroup,
+      setActiveCall,
       userId,
       username,
       avatarUrl,
     ],
   );
 
-  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
+  return (
+    <ChatContext.Provider value={value}>
+      {children}
+
+      <IncomingCallModal
+        avatarUrl={incomingConversation?.members[0]?.avatarUrl}
+        isOpen={incomingCallId !== null}
+        title={
+          incomingConversation
+            ? conversationName(incomingConversation)
+            : "Incoming call"
+        }
+        onAccept={() => {
+          // ?call=1 tells ConversationView to open straight into the call
+          // rather than just the thread.
+          router.push(`/sms/${incomingCallId}?call=1`);
+          setIncomingCallId(null);
+        }}
+        onDecline={() => setIncomingCallId(null)}
+      />
+    </ChatContext.Provider>
+  );
 }
 
 export function useChat(): ChatContextValue {

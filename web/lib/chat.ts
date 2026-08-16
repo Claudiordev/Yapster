@@ -60,7 +60,12 @@ export interface ChatMessageDto {
 // Mirror the chat service's socket event model: EventType (enum), ServerEvent
 // (sealed interface), MessageEvent. Discriminated on `type`.
 
-export type EventType = "MESSAGE" | "TYPING" | "USER_STATUS_EVENT";
+export type EventType =
+  | "MESSAGE"
+  | "TYPING"
+  | "USER_STATUS_EVENT"
+  | "CALL_STARTED"
+  | "CALL_ENDED";
 
 /** Pushed when a new message lands — matches the backend MessageEvent. */
 export interface MessageEvent {
@@ -94,8 +99,34 @@ export interface UserStatusServerEvent {
   userStatusType: string; // UPPERCASE enum name: ONLINE | BUSY | IDLE | OFFLINE
 }
 
+/**
+ * Pushed when someone starts (or joins an already-active) voice call —
+ * matches the backend server CallStartedEvent. Sent to every other member
+ * of the conversation, not just whoever's currently viewing it.
+ */
+export interface CallStartedEvent {
+  type: "CALL_STARTED";
+  conversationId: string;
+  senderId: string;
+}
+
+/**
+ * Pushed when someone leaves a voice call — matches the backend server
+ * CallEndedEvent.
+ */
+export interface CallEndedEvent {
+  type: "CALL_ENDED";
+  conversationId: string;
+  senderId: string;
+}
+
 /** Any event the server can push over the socket. */
-export type ServerEvent = MessageEvent | TypeEvent | UserStatusServerEvent;
+export type ServerEvent =
+  | MessageEvent
+  | TypeEvent
+  | UserStatusServerEvent
+  | CallStartedEvent
+  | CallEndedEvent;
 
 /**
  * Anything the client may send UP the socket — mirrors the backend's
@@ -119,4 +150,20 @@ export interface UserStatusCommand {
   userStatusType: SelectableStatus;
 }
 
-export type ClientEvent = TypingCommand | UserStatusCommand;
+/** Sent when the local user starts (or joins) a voice call in a conversation. */
+export interface CallStartedCommand {
+  type: "CALL_STARTED";
+  conversationId: string;
+}
+
+/** Sent when the local user leaves a voice call. */
+export interface CallEndedCommand {
+  type: "CALL_ENDED";
+  conversationId: string;
+}
+
+export type ClientEvent =
+  | TypingCommand
+  | UserStatusCommand
+  | CallStartedCommand
+  | CallEndedCommand;

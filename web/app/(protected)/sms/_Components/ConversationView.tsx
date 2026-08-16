@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { AddMemberModal } from "./_Chat/AddMemberModal";
 import { ChatThread, type MessageSender } from "./_Chat/ChatThread";
 import { ManageGroupModal } from "./_Chat/ManageGroupModal";
+import { CallPanel } from "./_Call/CallPanel";
 import { useChat } from "./ChatProvider";
 import { useMessages } from "./_Message/useMessages";
 import { useTyping } from "./_Message/useTyping";
@@ -13,10 +15,55 @@ import { conversationName, isGroupCreator } from "@/lib/chat";
 
 /** The thread for a single conversation, rendered at /sms/[conversationId]. */
 export function ConversationView({ conversationId }: { conversationId: string }) {
-  const { conversations, markRead, account, addMember, removeMember, deleteGroup } =
-    useChat();
+  const {
+    conversations,
+    markRead,
+    account,
+    addMember,
+    removeMember,
+    deleteGroup,
+    setActiveCall,
+  } = useChat();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [callOpen, setCallOpen] = useState(false);
+
+  // Which conversation `callOpen` was last decided for. Needed because this
+  // component is REUSED across /sms/[conversationId] changes (React keeps the
+  // instance; only the prop changes), so a useState initializer would only
+  // ever run for whichever conversation happened to be open first.
+  const callDecidedFor = useRef<string | null>(null);
+
+  // ?call=1 is set by the incoming-call prompt's Join button and means "open
+  // straight into the call, not just the thread".
+  useEffect(() => {
+    const wantsCall = searchParams.get("call") === "1";
+
+    if (callDecidedFor.current !== conversationId) {
+      // Switched conversation: take the call state from the URL, which also
+      // closes a call panel left open on the conversation we came from.
+      callDecidedFor.current = conversationId;
+      setCallOpen(wantsCall);
+    } else if (wantsCall) {
+      // Same conversation, Join pressed while already viewing it.
+      setCallOpen(true);
+    }
+
+    // Strip the param so a refresh (or going back) doesn't silently re-join.
+    // Note this re-runs the effect with the param gone -- which is why neither
+    // branch above may set callOpen back to false.
+    if (wantsCall) router.replace(`/sms/${conversationId}`, { scroll: false });
+  }, [conversationId, searchParams, router]);
+
+  // Tell the provider which call we're in, so it doesn't prompt us to join a
+  // call we're already on when another member joins. Clears on close/unmount.
+  useEffect(() => {
+    setActiveCall(callOpen ? conversationId : null);
+
+    return () => setActiveCall(null);
+  }, [callOpen, conversationId, setActiveCall]);
 
   const {
     messages,
@@ -73,8 +120,17 @@ export function ConversationView({ conversationId }: { conversationId: string })
 
   return (
     <>
+      {callOpen && (
+        <CallPanel
+          conversationId={conversationId}
+          senders={senders}
+          onClose={() => setCallOpen(false)}
+        />
+      )}
+
       <ChatThread
         hasMore={hasMore}
+        inCall={callOpen}
         isLoading={isLoading}
         isLoadingMore={isLoadingMore}
         isSending={isSending}
@@ -84,6 +140,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
         onAddMember={isGroup ? () => setAddMemberOpen(true) : undefined}
         onLoadMore={loadMore}
         onManageGroup={amCreator ? () => setManageOpen(true) : undefined}
+        onStartCall={() => setCallOpen(true)}
         typingNames={typingNames}
         onSend={sendMessage}
         onType={notifyTyping}
