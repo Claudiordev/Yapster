@@ -271,4 +271,12 @@ public class ChatService {
     private static String dmKey(UUID a, UUID b) {
         return a.compareTo(b) < 0 ? a + ":" + b : b + ":" + a;
     }
+
+    public int getOnlineUsers() {
+        return events.onlineUsers();
+    }
+
+    public int getOnlineDevices() {
+        return events.onlineDevices();
+    }
 }

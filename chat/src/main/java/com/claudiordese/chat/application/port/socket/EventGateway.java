@@ -21,4 +21,8 @@ public interface EventGateway {
     boolean setStatus(String userId, UserStatusType status);
 
     UserStatusType statusOf(String userId);
+
+    int onlineUsers();
+
+    int onlineDevices();
 }
