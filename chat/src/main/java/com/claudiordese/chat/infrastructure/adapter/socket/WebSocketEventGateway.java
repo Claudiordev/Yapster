@@ -64,6 +64,22 @@ public class WebSocketEventGateway implements EventGateway {
         return isOnline(userId) ? sessionsStatus.getOrDefault(userId, UserStatusType.ONLINE) : UserStatusType.OFFLINE;
     }
 
+    /**
+     * @return Number of online users
+     */
+    @Override
+    public int onlineUsers() {
+        return sessions.size();
+    }
+
+    /**
+     * @return Number of online devices (one user, multiple devices)
+     */
+    @Override
+    public int onlineDevices() {
+        return sessions.values().stream().mapToInt(Set::size).sum();
+    }
+
     @Override
     public boolean setStatus(String userId, UserStatusType status) {
         if (!isOnline(userId)) return false;
