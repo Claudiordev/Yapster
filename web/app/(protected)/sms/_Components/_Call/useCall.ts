@@ -22,6 +22,7 @@ import {
   ADAPTIVE_RESOLUTIONS,
   type AdaptiveResolutionTier,
   readAudioProcessingPrefs,
+  readScreenShareAudioPref,
   readVideoPrefs,
   videoCaptureSettings,
 } from "@/lib/media-prefs";
@@ -684,6 +685,12 @@ export function useCall(conversationId: string | null): UseCallState {
     setScreenShares((prev) => prev.filter((s) => s.identity !== identity));
   }, []);
 
+  const screenAudioEnabledRef = useRef(true);
+
+  useEffect(() => {
+    screenAudioEnabledRef.current = readScreenShareAudioPref();
+  }, []);
+
   // Periodic console logging of actual (not requested) screen-share quality,
   // keyed so both a local send stream and any number of remote receive
   // streams can run side by side without clobbering each other's bitrate math.
@@ -927,7 +934,11 @@ export function useCall(conversationId: string | null): UseCallState {
   }, []);
 
   const setConfiguredScreenShareEnabled = useCallback(
-    async (room: Room, enabled: boolean) => {
+    async (
+      room: Room,
+      enabled: boolean,
+      includeAudio = screenAudioEnabledRef.current,
+    ) => {
       const { resolution, maxBitrate, maxFramerate } = videoCaptureSettings();
 
       requestedScreenShareSettingsRef.current = enabled
@@ -941,7 +952,16 @@ export function useCall(conversationId: string | null): UseCallState {
 
       await room.localParticipant.setScreenShareEnabled(
         enabled,
-        { resolution, contentHint: "motion" },
+        {
+          resolution,
+          contentHint: "motion",
+          // Ask getDisplayMedia for the selected source's audio too.
+          // Chrome still requires the user to enable "Share tab audio" in
+          // its picker; unsupported browsers simply return video only.
+          audio: includeAudio ? { restrictOwnAudio: { ideal: true } } : false,
+          systemAudio: includeAudio ? "include" : "exclude",
+          suppressLocalAudioPlayback: false,
+        },
         {
           screenShareEncoding: { maxBitrate, maxFramerate, priority: "high" },
           videoCodec: "h264",
@@ -1463,7 +1483,12 @@ export function useCall(conversationId: string | null): UseCallState {
     const next = !screenSharing;
 
     try {
-      await setConfiguredScreenShareEnabled(room, next);
+      const includeAudio = next
+        ? readScreenShareAudioPref()
+        : screenAudioEnabledRef.current;
+
+      screenAudioEnabledRef.current = includeAudio;
+      await setConfiguredScreenShareEnabled(room, next, includeAudio);
       setScreenSharing(next);
     } catch {
       // Screen picker was cancelled, or unsupported in this browser -- no-op.

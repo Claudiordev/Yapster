@@ -45,6 +45,14 @@ function resolveWsBase(): string | null {
 
   const proto = window.location.protocol === "https:" ? "wss" : "ws";
 
+  // Next's development server does not proxy WebSocket upgrades. The REST BFF
+  // can reach the router server-side, but the browser must dial its published
+  // port directly. Keep the page hostname so localhost and LAN clients both
+  // reach the same machine instead of hard-coding localhost.
+  if (process.env.NODE_ENV === "development") {
+    return `${proto}://${window.location.hostname}:8080/ws`;
+  }
+
   return `${proto}://${window.location.host}/ws`;
 }
 
