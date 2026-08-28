@@ -175,5 +175,15 @@ class ChatServiceTest {
         public UserStatusType statusOf(String userId) {
             return UserStatusType.OFFLINE;
         }
+
+        @Override
+        public int onlineUsers() {
+            return 0;
+        }
+
+        @Override
+        public int onlineDevices() {
+            return 0;
+        }
     }
 }
