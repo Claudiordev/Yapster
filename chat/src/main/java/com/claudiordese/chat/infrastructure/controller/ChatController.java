@@ -6,14 +6,17 @@ import com.claudiordese.chat.infrastructure.controller.request.CreateGroupReques
 import com.claudiordese.chat.infrastructure.controller.request.MarkReadRequest;
 import com.claudiordese.chat.infrastructure.controller.request.SendMessageRequest;
 import com.claudiordese.chat.infrastructure.controller.request.StartDmRequest;
-import com.claudiordese.chat.infrastructure.controller.responses.ConversationResponse;
-import com.claudiordese.chat.infrastructure.controller.responses.ConversationSummaryResponse;
-import com.claudiordese.chat.infrastructure.controller.responses.MemberView;
-import com.claudiordese.chat.infrastructure.controller.responses.MessageResponse;
+import com.claudiordese.chat.infrastructure.controller.responses.*;
 import com.claudiordese.exceptions.InterdictedException;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -127,6 +130,19 @@ public class ChatController {
         if (!chatService.isMember(conversationId, loggedUser(auth))) {
             throw new InterdictedException("not_a_member", "Not a member of this conversation");
         }
+    }
+
+
+    @GetMapping("/monitor")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Look up chat services monitor data")
+    @ApiResponse(responseCode = "200", description = "Return monitor data")
+    @ApiResponse(responseCode = "401", description = "Not authenticated.", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(responseCode = "403", description = "Not authorized.", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    public MonitorResponse getMonitor() {
+        return MonitorResponse.of(
+                chatService.getOnlineUsers(),
+                chatService.getOnlineDevices());
     }
 
 
