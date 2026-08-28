@@ -46,6 +46,20 @@ services:
     container_name: session
     ports:
       - "8081:8081"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:-http://discovery:8761/eureka/}
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL:-jdbc:postgresql://session_postgres:5432/mydatabase}
+      - SPRING_DATA_REDIS_HOST=${SPRING_DATA_REDIS_HOST:-redis}
+      - SPRING_DATA_REDIS_PORT=${SPRING_DATA_REDIS_PORT:-6379}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
+      - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL:-http://localhost:9000}
+      - MANAGEMENT_OTLP_TRACING_ENDPOINT=${MANAGEMENT_OTLP_TRACING_ENDPOINT:-http://jaeger:4318/v1/traces}
+      - RATE_LIMITING_LOGIN_MAX_ATTEMPTS=${RATE_LIMITING_LOGIN_MAX_ATTEMPTS:-10}
+      - RATE_LIMITING_LOGIN_WINDOW=${RATE_LIMITING_LOGIN_WINDOW:-15m}
+      - RATE_LIMITING_REGISTER_MAX_ATTEMPTS=${RATE_LIMITING_REGISTER_MAX_ATTEMPTS:-5}
+      - RATE_LIMITING_REGISTER_WINDOW=${RATE_LIMITING_REGISTER_WINDOW:-1h}
+      - RATE_LIMITING_FILE_UPLOAD_MAX_ATTEMPTS=${RATE_LIMITING_FILE_UPLOAD_MAX_ATTEMPTS:-10}
+      - RATE_LIMITING_FILE_UPLOAD_WINDOW=${RATE_LIMITING_FILE_UPLOAD_WINDOW:-1h}
     depends_on:
       - session_postgres
       - minio
@@ -120,9 +134,14 @@ services:
       # and reaches Postgres by service name (fixes lb://CHAT -> 10.255.255.254).
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka/
       - SPRING_DATASOURCE_URL=jdbc:postgresql://chat_postgres:5432/chat
+      - SPRING_DATA_REDIS_HOST=${SPRING_DATA_REDIS_HOST:-redis}
+      - SPRING_DATA_REDIS_PORT=${SPRING_DATA_REDIS_PORT:-6379}
+      - RATE_LIMITING_MESSAGE_MAX_ATTEMPTS=${RATE_LIMITING_MESSAGE_MAX_ATTEMPTS:-20}
+      - RATE_LIMITING_MESSAGE_WINDOW=${RATE_LIMITING_MESSAGE_WINDOW:-10s}
       - MANAGEMENT_OTLP_TRACING_ENDPOINT=http://jaeger:4318/v1/traces
     depends_on:
       - chat_postgres
+      - redis
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger

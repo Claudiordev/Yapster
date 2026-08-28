@@ -1,5 +1,6 @@
 package com.claudiordese.chat.application.service;
 
+import com.claudiordese.chat.application.config.MessageRateLimitPolicy;
 import com.claudiordese.chat.application.domain.chat.Conversation;
 import com.claudiordese.chat.application.domain.chat.ConversationSummary;
 import com.claudiordese.chat.application.domain.chat.Message;
@@ -13,10 +14,12 @@ import com.claudiordese.chat.application.domain.event.server.UserStatusEvent;
 import com.claudiordese.chat.application.port.socket.EventGateway;
 import com.claudiordese.chat.application.port.persistence.ConversationStore;
 import com.claudiordese.chat.application.port.persistence.MessageStore;
+import com.claudiordese.chat.application.port.ratelimit.RateLimitGuard;
 import com.claudiordese.exceptions.BadRequestException;
 import com.claudiordese.exceptions.ConflictException;
 import com.claudiordese.exceptions.InterdictedException;
 import com.claudiordese.exceptions.NotFound;
+import com.claudiordese.exceptions.TooManyRequestsException;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +41,8 @@ public class ChatService {
     private final MessageStore messages;
     private final ConversationStore conversations;
     private final EventGateway events;
+    private final RateLimitGuard rateLimitGuard;
+    private final MessageRateLimitPolicy messageRateLimitPolicy;
 
     @Transactional
     public Conversation startDm(UUID a, UUID b) {
@@ -149,6 +154,15 @@ public class ChatService {
 
     @Transactional
     public Message sendMessage(UUID conversationId, UUID senderId, String body) {
+        if (!rateLimitGuard.tryConsume(
+                "message:" + senderId + ":" + conversationId,
+                messageRateLimitPolicy.maxAttempts(),
+                messageRateLimitPolicy.window())) {
+            throw new TooManyRequestsException(
+                    "message_rate_limit_exceeded",
+                    "Too many messages. Please try again later");
+        }
+
         List<UUID> members = conversations.membersOf(conversationId);
 
         if (!members.contains(senderId)) {
