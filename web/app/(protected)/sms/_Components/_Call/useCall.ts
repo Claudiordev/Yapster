@@ -168,6 +168,14 @@ const ADAPTIVE_STEP_UP_BASE_COOLDOWN_MS = 5_000;
 const ADAPTIVE_STEP_UP_MAX_COOLDOWN_MS = 30_000; // doubles each step-up, caps here
 const ADAPTIVE_BANDWIDTH_BITRATE_STEP_FACTOR = 0.6; // first move on a bandwidth limit: cut bitrate, not resolution
 
+// High-quality-first by default. WebRTC reports a transient "bandwidth"
+// limitation while its congestion controller is still probing at startup. An
+// always-on application-level ladder mistakes that normal ramp-up for a bad
+// connection, lowers the sender ceiling, and can then take 1-2 minutes to
+// climb back through its cooldowns. Keep the engine available for a future
+// explicit user preference, but let LiveKit/libwebrtc own adaptation for now.
+const ADAPTIVE_SCREEN_SHARE_QUALITY_ENABLED = false;
+
 type AdaptiveQualityLimitation =
   | "cpu"
   | "bandwidth"
@@ -272,7 +280,7 @@ async function applyAdaptiveScreenShareTier(
 async function restoreConfiguredScreenShare(
   track: LocalVideoTrack,
 ): Promise<void> {
-  const { resolution, maxBitrate, maxFramerate } = videoCaptureSettings();
+  const { resolution, maxFramerate } = videoCaptureSettings();
 
   await track.mediaStreamTrack.applyConstraints({
     width: { ideal: resolution.width, max: resolution.width },
@@ -284,10 +292,18 @@ async function restoreConfiguredScreenShare(
     await track.setDegradationPreference("maintain-framerate");
   }
 
+  await enforceConfiguredScreenShareSender(track);
+}
+
+/** Reassert the high-quality publish settings after LiveKit creates/replaces a sender. */
+async function enforceConfiguredScreenShareSender(
+  track: LocalVideoTrack,
+): Promise<void> {
+  const { maxBitrate, maxFramerate } = videoCaptureSettings();
+
   const sender = track.sender;
 
-  if (!sender)
-    throw new Error("Screen-share sender is unavailable after reconnect");
+  if (!sender) throw new Error("Screen-share sender is unavailable");
 
   const parameters = sender.getParameters();
   const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
@@ -298,6 +314,8 @@ async function restoreConfiguredScreenShare(
       ...encoding,
       maxBitrate,
       maxFramerate,
+      priority: "high" as const,
+      networkPriority: "high" as const,
     };
 
     // Omitting the field from a spread is not enough: the old encoding may
@@ -755,10 +773,20 @@ export function useCall(conversationId: string | null): UseCallState {
       // itself was built from.
       const configuredPrefs = readVideoPrefs();
 
-      adaptiveScreenShareRef.current = freshAdaptiveState(
-        configuredPrefs.resolution as AdaptiveResolutionTier,
-        configuredPrefs.frameRate,
-      );
+      adaptiveScreenShareRef.current = ADAPTIVE_SCREEN_SHARE_QUALITY_ENABLED
+        ? freshAdaptiveState(
+            configuredPrefs.resolution as AdaptiveResolutionTier,
+            configuredPrefs.frameRate,
+          )
+        : null;
+
+      // LiveKit already applies these at publish time. Reassert them on the
+      // concrete sender as well so renegotiation or browser defaults cannot
+      // leave a lower ceiling/priority behind.
+      void enforceConfiguredScreenShareSender(track).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.warn("[screen-share] could not enforce sender settings", error);
+      });
 
       screenShareStatsTimersRef.current.set(
         key,
@@ -958,7 +986,16 @@ export function useCall(conversationId: string | null): UseCallState {
           // Ask getDisplayMedia for the selected source's audio too.
           // Chrome still requires the user to enable "Share tab audio" in
           // its picker; unsupported browsers simply return video only.
-          audio: includeAudio ? { restrictOwnAudio: { ideal: true } } : false,
+          audio: includeAudio
+            ? {
+                restrictOwnAudio: { ideal: true },
+                channelCount: { ideal: 2 },
+                sampleRate: { ideal: 48_000 },
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+              }
+            : false,
           systemAudio: includeAudio ? "include" : "exclude",
           suppressLocalAudioPlayback: false,
         },
@@ -968,6 +1005,13 @@ export function useCall(conversationId: string | null): UseCallState {
           backupCodec: false,
           simulcast: false,
           degradationPreference: "maintain-framerate",
+          // These fields only affect the audio track returned by the same
+          // screen-capture request. Keep shared media stereo and continuous;
+          // microphone publishing uses a separate path and is unchanged.
+          audioPreset: { maxBitrate: 510_000, priority: "high" },
+          forceStereo: true,
+          dtx: false,
+          red: true,
         },
       );
     },

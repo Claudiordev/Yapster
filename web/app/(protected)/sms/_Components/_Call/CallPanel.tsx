@@ -66,6 +66,9 @@ export function CallPanel({
   const [isResizing, setIsResizing] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
+  const resizeStartRef = useRef<{ clientY: number; height: number } | null>(
+    null,
+  );
 
   const localIdentity = participants.find((p) => p.isLocal)?.identity;
   const watched = screenShares.find((s) => s.identity === watching) ?? null;
@@ -104,14 +107,17 @@ export function CallPanel({
 
   function resizeFromPointer(clientY: number) {
     const container = panelRef.current?.parentElement;
+    const resizeStart = resizeStartRef.current;
 
-    if (!container) return;
+    if (!container || !resizeStart) return;
 
     const bounds = container.getBoundingClientRect();
 
     if (bounds.height === 0) return;
 
-    const nextHeight = ((clientY - bounds.top) / bounds.height) * 100;
+    const nextHeight =
+      resizeStart.height +
+      ((clientY - resizeStart.clientY) / bounds.height) * 100;
 
     setCallHeightPercent(Math.round(clampCallHeight(nextHeight)));
   }
@@ -119,8 +125,11 @@ export function CallPanel({
   function handleResizePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     event.currentTarget.setPointerCapture(event.pointerId);
     isResizingRef.current = true;
+    resizeStartRef.current = {
+      clientY: event.clientY,
+      height: callHeightPercent,
+    };
     setIsResizing(true);
-    resizeFromPointer(event.clientY);
   }
 
   function handleResizePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
@@ -135,6 +144,7 @@ export function CallPanel({
     }
 
     isResizingRef.current = false;
+    resizeStartRef.current = null;
     setIsResizing(false);
   }
 
@@ -168,8 +178,8 @@ export function CallPanel({
       className="flex flex-shrink-0 flex-col bg-gradient-to-b from-content2 to-content1"
       style={{ height: `${callHeightPercent}%` }}
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-5 pt-6">
-        <div className="flex items-center justify-between">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4 pt-4">
+        <div className="flex flex-shrink-0 items-center justify-between">
           <span className="text-tiny font-medium uppercase tracking-widest text-brand">
             {connecting
               ? "Connecting…"
@@ -184,62 +194,66 @@ export function CallPanel({
           </Button>
         </div>
 
-        {/* Watching one screen full-size takes over; otherwise every sharer gets
-            a tile you can open. */}
-        {watched ? (
-          <ScreenShareStage
-            key={watched.identity}
-            name={sharerName(watched.identity)}
-            share={watched}
-            onClose={() => setWatching(null)}
-          />
-        ) : (
-          screenShares.length > 0 && (
-            <div className="flex flex-wrap justify-center gap-3">
-              {screenShares.map((share) => (
-                <ScreenShareTile
-                  key={share.identity}
-                  name={sharerName(share.identity)}
-                  share={share}
-                  onWatch={() => setWatching(share.identity)}
-                />
-              ))}
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+          {/* The watched stage consumes the available middle space so resizing
+              the divider resizes the preview instead of clipping it. */}
+          {watched ? (
+            <div className="min-h-0 flex-1">
+              <ScreenShareStage
+                key={watched.identity}
+                name={sharerName(watched.identity)}
+                share={watched}
+                onClose={() => setWatching(null)}
+              />
             </div>
-          )
-        )}
-
-        <div className="flex flex-wrap items-center justify-center gap-4">
-          {participants.map((p) => {
-            const sender = senders[p.identity];
-            const name = p.isLocal ? "You" : (sender?.name ?? "Unknown");
-
-            return (
-              <div
-                key={p.identity}
-                className="flex flex-col items-center gap-1.5"
-              >
-                <div
-                  className={`rounded-full p-1 ${
-                    p.isSpeaking ? "ring-2 ring-danger" : ""
-                  }`}
-                >
-                  <Avatar
-                    className="bg-brand text-white"
-                    name={name.charAt(0).toUpperCase()}
-                    size="lg"
-                    src={sender?.avatarUrl ?? undefined}
+          ) : (
+            screenShares.length > 0 && (
+              <div className="flex flex-wrap justify-center gap-3">
+                {screenShares.map((share) => (
+                  <ScreenShareTile
+                    key={share.identity}
+                    name={sharerName(share.identity)}
+                    share={share}
+                    onWatch={() => setWatching(share.identity)}
                   />
-                </div>
-                <span className="flex items-center gap-1 text-tiny text-default-500">
-                  {p.isMuted && <Icon name="mic-off" size={12} />}
-                  {name}
-                </span>
+                ))}
               </div>
-            );
-          })}
+            )
+          )}
+
+          <div className="flex flex-shrink-0 flex-wrap items-center justify-center gap-4">
+            {participants.map((p) => {
+              const sender = senders[p.identity];
+              const name = p.isLocal ? "You" : (sender?.name ?? "Unknown");
+
+              return (
+                <div
+                  key={p.identity}
+                  className="flex flex-col items-center gap-1.5"
+                >
+                  <div
+                    className={`rounded-full p-1 ${
+                      p.isSpeaking ? "ring-2 ring-danger" : ""
+                    }`}
+                  >
+                    <Avatar
+                      className="bg-brand text-white"
+                      name={name.charAt(0).toUpperCase()}
+                      size="lg"
+                      src={sender?.avatarUrl ?? undefined}
+                    />
+                  </div>
+                  <span className="flex items-center gap-1 text-tiny text-default-500">
+                    {p.isMuted && <Icon name="mic-off" size={12} />}
+                    {name}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex flex-shrink-0 items-center justify-center gap-3">
           <Button
             isIconOnly
             aria-label={muted ? "Unmute" : "Mute"}
