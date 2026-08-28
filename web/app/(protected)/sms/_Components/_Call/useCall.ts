@@ -14,9 +14,17 @@ import {
   Track,
 } from "livekit-client";
 
+import { addToast } from "@heroui/toast";
 import { useSound } from "react-sounds";
 
-import { readAudioProcessingPrefs, videoCaptureSettings } from "@/lib/media-prefs";
+import {
+  ADAPTIVE_RESOLUTION_LADDER,
+  ADAPTIVE_RESOLUTIONS,
+  type AdaptiveResolutionTier,
+  readAudioProcessingPrefs,
+  readVideoPrefs,
+  videoCaptureSettings,
+} from "@/lib/media-prefs";
 import { useRealtime } from "@/lib/useRealtime";
 
 export interface CallParticipant {
@@ -29,6 +37,38 @@ export interface CallParticipant {
 export interface ScreenShare {
   track: LocalTrack | RemoteTrack;
   identity: string;
+}
+
+/**
+ * The slice of a raw WebRTC stats report the screen-share logging reads.
+ * Hand-rolled because lib.dom's RTCOutboundRtpStreamStats predates the fields
+ * that actually explain a starved encoder (qualityLimitationReason,
+ * encoderImplementation) and has no remote-inbound entry at all.
+ */
+interface ScreenShareSendStats {
+  type: string;
+  timestamp: number;
+  // outbound-rtp
+  bytesSent?: number;
+  frameWidth?: number;
+  frameHeight?: number;
+  framesPerSecond?: number;
+  targetBitrate?: number;
+  qualityLimitationReason?: string;
+  encoderImplementation?: string;
+  powerEfficientEncoder?: boolean;
+  // Cumulative across the whole stream -- averaged over the interval below.
+  qpSum?: number;
+  framesEncoded?: number;
+  // remote-inbound-rtp
+  packetsLost?: number;
+  roundTripTime?: number;
+  // candidate-pair
+  availableOutgoingBitrate?: number;
+  localCandidateId?: string;
+  // local-candidate
+  protocol?: string;
+  candidateType?: string;
 }
 
 /**
@@ -103,6 +143,289 @@ function clearMediaSession() {
 
   navigator.mediaSession.metadata = null;
   navigator.mediaSession.playbackState = "none";
+}
+
+// ── Adaptive screen-share quality ───────────────────────────────────────────
+//
+// The static ceiling set at share-start (see toggleScreenShare) is a MAX, not
+// a floor -- on a congested link, "detail"/maintain-resolution used to hold
+// the encoder there and let bandwidth estimation crush the bitrate at full
+// res instead (see the comment on contentHint above). Now that we run
+// "motion"/maintain-framerate, nothing stops that same collapse on its own --
+// this closed loop is what's supposed to catch it: watch the same stats
+// startSenderStatsLogging already polls, and when the link clearly can't
+// sustain the current tier, step resolution/bitrate down to one it can, then
+// step back up once things look clear again. Modeled on fluxerapp/fluxer's
+// AdaptiveScreenShareEngine, trimmed down: one resolution ladder (no separate
+// frame-rate ladder -- 30/60 is the whole choice here) and no per-mode
+// (gaming vs. screenshare) branching.
+const ADAPTIVE_POLL_INTERVAL_MS = 3000; // matches startSenderStatsLogging's own interval
+const ADAPTIVE_STEP_DOWN_STREAK = 4; // ~4 bad polls before acting -- ignore one-off blips
+const ADAPTIVE_STEP_UP_STREAK = 3; // ~3 clean polls before trying to recover
+const ADAPTIVE_STEP_DOWN_COOLDOWN_MS = 10_000;
+const ADAPTIVE_STEP_UP_BASE_COOLDOWN_MS = 5_000;
+const ADAPTIVE_STEP_UP_MAX_COOLDOWN_MS = 30_000; // doubles each step-up, caps here
+const ADAPTIVE_BANDWIDTH_BITRATE_STEP_FACTOR = 0.6; // first move on a bandwidth limit: cut bitrate, not resolution
+
+type AdaptiveQualityLimitation = "cpu" | "bandwidth" | "other" | "none" | "unknown";
+
+function isAdaptiveStepDownReason(reason: AdaptiveQualityLimitation): boolean {
+  return reason === "cpu" || reason === "bandwidth";
+}
+
+interface AdaptiveScreenShareState {
+  configuredTier: AdaptiveResolutionTier;
+  configuredFrameRate: 30 | 60;
+  effectiveTierIndex: number;
+  bandwidthBitrateStepActive: boolean;
+  badStreak: number;
+  goodStreak: number;
+  lastStepDownAt: number;
+  lastStepUpAt: number;
+  stepUpCooldownMs: number;
+  isAdapted: boolean;
+  adjusting: boolean;
+}
+
+function freshAdaptiveState(configuredTier: AdaptiveResolutionTier, configuredFrameRate: 30 | 60): AdaptiveScreenShareState {
+  return {
+    configuredTier,
+    configuredFrameRate,
+    effectiveTierIndex: ADAPTIVE_RESOLUTION_LADDER.indexOf(configuredTier),
+    bandwidthBitrateStepActive: false,
+    badStreak: 0,
+    goodStreak: 0,
+    lastStepDownAt: 0,
+    lastStepUpAt: 0,
+    stepUpCooldownMs: ADAPTIVE_STEP_UP_BASE_COOLDOWN_MS,
+    isAdapted: false,
+    adjusting: false,
+  };
+}
+
+/** Apply a resolution/frame-rate/bitrate tier to a live screen-share sender, without republishing the track. */
+async function applyAdaptiveScreenShareTier(
+  track: LocalVideoTrack,
+  tier: AdaptiveResolutionTier,
+  frameRate: 30 | 60,
+  maxBitrate: number,
+): Promise<void> {
+  const sender = track.sender;
+
+  if (!sender) return;
+
+  const { width, height } = ADAPTIVE_RESOLUTIONS[tier];
+  const captured = track.mediaStreamTrack.getSettings();
+  // Screen-capture tracks generally can't be re-captured at a new resolution
+  // on demand (unlike a camera) -- scaleResolutionDownBy asks the ENCODER to
+  // downsample from whatever was actually captured, which every browser here
+  // supports without renegotiating anything.
+  const scaleResolutionDownBy =
+    captured.width && captured.height && captured.width > 0 && captured.height > 0
+      ? Math.max(1, captured.width / width, captured.height / height)
+      : undefined;
+
+  try {
+    await track.mediaStreamTrack.applyConstraints({ frameRate: { ideal: frameRate, max: frameRate } });
+  } catch {
+    // Best-effort -- scaleResolutionDownBy + maxFramerate below still apply.
+  }
+  if (typeof track.setDegradationPreference === "function") {
+    await track.setDegradationPreference("maintain-framerate");
+  }
+
+  const parameters = sender.getParameters();
+  const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
+
+  parameters.degradationPreference = "maintain-framerate";
+  parameters.encodings = encodings.map((encoding) => ({
+    ...encoding,
+    ...(scaleResolutionDownBy !== undefined ? { scaleResolutionDownBy } : {}),
+    maxBitrate,
+    maxFramerate: frameRate,
+  }));
+  await sender.setParameters(parameters);
+}
+
+function currentAdaptiveBitrate(state: AdaptiveScreenShareState): number {
+  const tier = ADAPTIVE_RESOLUTION_LADDER[state.effectiveTierIndex];
+  const { bitrate30, bitrate60 } = ADAPTIVE_RESOLUTIONS[tier];
+
+  return state.configuredFrameRate === 60 ? bitrate60 : bitrate30;
+}
+
+function bitrateForTier(tier: AdaptiveResolutionTier, frameRate: 30 | 60): number {
+  const { bitrate30, bitrate60 } = ADAPTIVE_RESOLUTIONS[tier];
+
+  return frameRate === 60 ? bitrate60 : bitrate30;
+}
+
+async function stepAdaptiveScreenShareDown(
+  track: LocalVideoTrack,
+  state: AdaptiveScreenShareState,
+  reason: AdaptiveQualityLimitation,
+): Promise<void> {
+  const currentTier = ADAPTIVE_RESOLUTION_LADDER[state.effectiveTierIndex];
+
+  // Bandwidth (not CPU) limits get one lighter move first: cut the bitrate at
+  // the same resolution before giving up pixels. A CPU limit wouldn't be
+  // helped by a lower bitrate -- the encoder is the bottleneck, not the
+  // network -- so that case skips straight to a lower tier.
+  if (reason === "bandwidth" && !state.bandwidthBitrateStepActive) {
+    const reducedBitrate = Math.max(
+      100_000,
+      Math.round(currentAdaptiveBitrate(state) * ADAPTIVE_BANDWIDTH_BITRATE_STEP_FACTOR),
+    );
+
+    try {
+      await applyAdaptiveScreenShareTier(track, currentTier, state.configuredFrameRate, reducedBitrate);
+      state.bandwidthBitrateStepActive = true;
+      state.isAdapted = true;
+      state.badStreak = 0;
+      state.goodStreak = 0;
+      state.lastStepDownAt = Date.now();
+      addToast({
+        color: "warning",
+        title: "Screen share quality lowered",
+        description: "Bandwidth limited — reduced bitrate.",
+      });
+    } catch {
+      // Transient failure (e.g. track ended mid-poll) -- next bad streak retries.
+    }
+    return;
+  }
+
+  const nextIndex = state.effectiveTierIndex + 1;
+
+  if (nextIndex >= ADAPTIVE_RESOLUTION_LADDER.length) {
+    state.badStreak = 0; // already at the floor tier, nothing lower to try
+
+    return;
+  }
+
+  const nextTier = ADAPTIVE_RESOLUTION_LADDER[nextIndex];
+  const nextBitrate = bitrateForTier(nextTier, state.configuredFrameRate);
+
+  try {
+    await applyAdaptiveScreenShareTier(track, nextTier, state.configuredFrameRate, nextBitrate);
+    state.effectiveTierIndex = nextIndex;
+    state.bandwidthBitrateStepActive = false;
+    state.isAdapted = true;
+    state.badStreak = 0;
+    state.goodStreak = 0;
+    state.lastStepDownAt = Date.now();
+    // Back off further each time we step down again shortly after stepping
+    // up -- otherwise a marginal link flaps between two tiers every ~15s.
+    state.stepUpCooldownMs = Math.min(state.stepUpCooldownMs * 2, ADAPTIVE_STEP_UP_MAX_COOLDOWN_MS);
+    addToast({
+      color: "warning",
+      title: "Screen share quality lowered",
+      description: `Switched to ${nextTier} — ${reason === "cpu" ? "CPU limited" : "bandwidth limited"}.`,
+    });
+  } catch {
+    // Transient failure -- next bad streak retries.
+  }
+}
+
+async function stepAdaptiveScreenShareUp(track: LocalVideoTrack, state: AdaptiveScreenShareState): Promise<void> {
+  const configuredIndex = ADAPTIVE_RESOLUTION_LADDER.indexOf(state.configuredTier);
+
+  // A bitrate-only cut recovers before a resolution step -- undo the cheaper
+  // move first, same order stepAdaptiveScreenShareDown applied it in.
+  if (state.bandwidthBitrateStepActive) {
+    const currentTier = ADAPTIVE_RESOLUTION_LADDER[state.effectiveTierIndex];
+    const restoredBitrate = bitrateForTier(currentTier, state.configuredFrameRate);
+
+    try {
+      await applyAdaptiveScreenShareTier(track, currentTier, state.configuredFrameRate, restoredBitrate);
+      state.bandwidthBitrateStepActive = false;
+      state.goodStreak = 0;
+      state.lastStepUpAt = Date.now();
+      if (state.effectiveTierIndex === configuredIndex) {
+        state.isAdapted = false;
+        state.stepUpCooldownMs = ADAPTIVE_STEP_UP_BASE_COOLDOWN_MS;
+      }
+    } catch {
+      // Transient failure -- next good streak retries.
+    }
+    return;
+  }
+
+  if (state.effectiveTierIndex <= configuredIndex) {
+    // Already back at (or above, shouldn't happen) the configured ceiling.
+    state.isAdapted = false;
+    state.goodStreak = 0;
+    state.stepUpCooldownMs = ADAPTIVE_STEP_UP_BASE_COOLDOWN_MS;
+
+    return;
+  }
+
+  const nextIndex = state.effectiveTierIndex - 1;
+  const nextTier = ADAPTIVE_RESOLUTION_LADDER[nextIndex];
+  const nextBitrate = bitrateForTier(nextTier, state.configuredFrameRate);
+
+  try {
+    await applyAdaptiveScreenShareTier(track, nextTier, state.configuredFrameRate, nextBitrate);
+    state.effectiveTierIndex = nextIndex;
+    state.goodStreak = 0;
+    state.lastStepUpAt = Date.now();
+    if (nextIndex === configuredIndex) {
+      state.isAdapted = false;
+      state.stepUpCooldownMs = ADAPTIVE_STEP_UP_BASE_COOLDOWN_MS;
+    }
+    addToast({
+      color: "success",
+      title: "Screen share quality restored",
+      description: `Raised to ${nextTier}.`,
+    });
+  } catch {
+    // Transient failure -- next good streak retries.
+  }
+}
+
+async function runAdaptiveScreenShareStep(
+  track: LocalVideoTrack,
+  state: AdaptiveScreenShareState,
+  reason: AdaptiveQualityLimitation,
+): Promise<void> {
+  if (state.adjusting) return;
+
+  const now = Date.now();
+
+  if (isAdaptiveStepDownReason(reason)) {
+    state.badStreak++;
+    state.goodStreak = 0;
+  } else if (reason === "none") {
+    state.badStreak = 0;
+    if (state.isAdapted) state.goodStreak++;
+  } else {
+    // "other"/"unknown" -- not a clear signal either way, don't act on it.
+    state.badStreak = 0;
+    state.goodStreak = 0;
+  }
+
+  if (state.badStreak >= ADAPTIVE_STEP_DOWN_STREAK && now - state.lastStepDownAt >= ADAPTIVE_STEP_DOWN_COOLDOWN_MS) {
+    state.adjusting = true;
+    try {
+      await stepAdaptiveScreenShareDown(track, state, reason);
+    } finally {
+      state.adjusting = false;
+    }
+    return;
+  }
+  if (
+    state.isAdapted &&
+    state.goodStreak >= ADAPTIVE_STEP_UP_STREAK &&
+    now - state.lastStepUpAt >= state.stepUpCooldownMs &&
+    now - state.lastStepDownAt >= ADAPTIVE_STEP_DOWN_COOLDOWN_MS
+  ) {
+    state.adjusting = true;
+    try {
+      await stepAdaptiveScreenShareUp(track, state);
+    } finally {
+      state.adjusting = false;
+    }
+  }
 }
 
 interface UseCallState {
@@ -259,7 +582,9 @@ export function useCall(conversationId: string | null): UseCallState {
   // keyed so both a local send stream and any number of remote receive
   // streams can run side by side without clobbering each other's bitrate math.
   const screenShareStatsTimersRef = useRef(new Map<string, ReturnType<typeof setInterval>>());
-  const prevScreenShareBytesRef = useRef(new Map<string, { bytes: number; at: number }>());
+  const prevScreenShareBytesRef = useRef(
+    new Map<string, { bytes: number; at: number; qpSum?: number; framesEncoded?: number }>(),
+  );
   // What we actually asked the capture for, stashed right before
   // setScreenShareEnabled so the LocalTrackPublished handler -- which only
   // gets the resulting track, not what toggleScreenShare requested -- can log
@@ -271,6 +596,12 @@ export function useCall(conversationId: string | null): UseCallState {
     maxBitrate: number;
   } | null>(null);
 
+  // Only one local screen-share sender exists at a time, so a single slot
+  // (not keyed like the stats maps above) is enough. Null = not adapting,
+  // either because no share is live or adaptiveScreenShareEngine hasn't
+  // started for the current one yet.
+  const adaptiveScreenShareRef = useRef<AdaptiveScreenShareState | null>(null);
+
   const stopScreenShareStatsLogging = useCallback((key: string) => {
     const timer = screenShareStatsTimersRef.current.get(key);
 
@@ -279,6 +610,7 @@ export function useCall(conversationId: string | null): UseCallState {
       screenShareStatsTimersRef.current.delete(key);
     }
     prevScreenShareBytesRef.current.delete(key);
+    if (key.startsWith("send:")) adaptiveScreenShareRef.current = null;
   }, []);
 
   const startSenderStatsLogging = useCallback((track: LocalVideoTrack) => {
@@ -297,31 +629,120 @@ export function useCall(conversationId: string | null): UseCallState {
       actual: `${actual.width}x${actual.height}@${actual.frameRate}fps`,
     });
 
+    // "motion"/maintain-framerate (see toggleScreenShare) needs something
+    // watching for the collapse that combination is prone to on a congested
+    // link -- this is that watcher, seeded from the same prefs the capture
+    // itself was built from.
+    const configuredPrefs = readVideoPrefs();
+
+    adaptiveScreenShareRef.current = freshAdaptiveState(
+      configuredPrefs.resolution as AdaptiveResolutionTier,
+      configuredPrefs.frameRate,
+    );
+
     screenShareStatsTimersRef.current.set(
       key,
       setInterval(async () => {
-        const [stats] = await track.getSenderStats();
+        // The raw report rather than track.getSenderStats(): a share that's
+        // sending far less than its ceiling has three quite different causes
+        // -- a CPU-bound encoder, a collapsed bandwidth estimate, or plain
+        // packet loss -- and only the full report carries the numbers that
+        // tell them apart. getSenderStats() drops all three.
+        const report = await track.sender?.getStats();
 
-        if (!stats) return;
+        if (!report) return;
 
-        const now = stats.timestamp;
+        let outbound: ScreenShareSendStats | undefined;
+        let remoteInbound: ScreenShareSendStats | undefined;
+        let candidatePair: ScreenShareSendStats | undefined;
+
+        report.forEach((entry: ScreenShareSendStats) => {
+          // Highest-resolution outbound-rtp wins, matching what a viewer sees.
+          if (
+            entry.type === "outbound-rtp" &&
+            (!outbound || (entry.frameWidth ?? 0) > (outbound.frameWidth ?? 0))
+          ) {
+            outbound = entry;
+          }
+          if (entry.type === "remote-inbound-rtp") remoteInbound = entry;
+          // availableOutgoingBitrate is only populated on the selected pair.
+          if (entry.type === "candidate-pair" && entry.availableOutgoingBitrate !== undefined) {
+            candidatePair = entry;
+          }
+        });
+
+        if (!outbound) return;
+
+        // Which candidate actually won ICE. Media on TCP is the single most
+        // common reason a link that can clearly carry the bitrate refuses to:
+        // congestion control reads TCP's head-of-line stalls as congestion and
+        // parks the estimate low, so the encoder never gets to spend the
+        // ceiling no matter how large it is.
+        const localCandidate = candidatePair?.localCandidateId
+          ? (report.get(candidatePair.localCandidateId) as ScreenShareSendStats | undefined)
+          : undefined;
+
+        const now = outbound.timestamp;
         const prev = prevScreenShareBytesRef.current.get(key);
         const bitrateKbps =
-          prev && stats.bytesSent !== undefined && now > prev.at
-            ? Math.round(((stats.bytesSent - prev.bytes) * 8) / (now - prev.at))
+          prev && outbound.bytesSent !== undefined && now > prev.at
+            ? Math.round(((outbound.bytesSent - prev.bytes) * 8) / (now - prev.at))
             : undefined;
 
-        prevScreenShareBytesRef.current.set(key, { bytes: stats.bytesSent ?? 0, at: now });
+        // Quantiser averaged over this interval, not the stream's lifetime.
+        // This is the number that means "quality": for H.264 roughly <30 is
+        // clean, >40 is visibly blocky. High QP at full resolution and frame
+        // rate is precisely what a starved bit supply looks like.
+        const framesDelta = (outbound.framesEncoded ?? 0) - (prev?.framesEncoded ?? 0);
+        const avgQp =
+          prev && framesDelta > 0 && outbound.qpSum !== undefined && prev.qpSum !== undefined
+            ? Math.round((outbound.qpSum - prev.qpSum) / framesDelta)
+            : undefined;
+
+        prevScreenShareBytesRef.current.set(key, {
+          bytes: outbound.bytesSent ?? 0,
+          at: now,
+          qpSum: outbound.qpSum,
+          framesEncoded: outbound.framesEncoded,
+        });
 
         // eslint-disable-next-line no-console
         console.info("[screen-share] sending", {
-          resolution: `${stats.frameWidth ?? "?"}x${stats.frameHeight ?? "?"}`,
-          fps: stats.framesPerSecond,
-          targetKbps: stats.targetBitrate ? Math.round(stats.targetBitrate / 1000) : undefined,
+          resolution: `${outbound.frameWidth ?? "?"}x${outbound.frameHeight ?? "?"}`,
+          fps: outbound.framesPerSecond,
+          targetKbps: outbound.targetBitrate ? Math.round(outbound.targetBitrate / 1000) : undefined,
           actualKbps: bitrateKbps,
-          qualityLimitationReason: stats.qualityLimitationReason,
+          // What congestion control currently thinks the link will carry. If
+          // THIS is small, the ceiling and the encoder are innocent -- the
+          // estimate collapsed and the network path is the thing to look at.
+          estimateKbps: candidatePair?.availableOutgoingBitrate
+            ? Math.round(candidatePair.availableOutgoingBitrate / 1000)
+            : undefined,
+          avgQp,
+          qualityLimitationReason: outbound.qualityLimitationReason,
+          transport: localCandidate
+            ? `${localCandidate.protocol ?? "?"}/${localCandidate.candidateType ?? "?"}`
+            : undefined,
+          // "cpu" here (or a software encoder name) means H.264 didn't get a
+          // hardware encode path and we're back to burning one core per frame.
+          encoder: outbound.encoderImplementation,
+          powerEfficient: outbound.powerEfficientEncoder,
+          packetsLost: remoteInbound?.packetsLost,
+          rttMs: remoteInbound?.roundTripTime
+            ? Math.round(remoteInbound.roundTripTime * 1000)
+            : undefined,
         });
-      }, 3000),
+
+        const adaptiveState = adaptiveScreenShareRef.current;
+
+        if (adaptiveState) {
+          void runAdaptiveScreenShareStep(
+            track,
+            adaptiveState,
+            outbound.qualityLimitationReason as AdaptiveQualityLimitation,
+          );
+        }
+      }, ADAPTIVE_POLL_INTERVAL_MS),
     );
   }, [stopScreenShareStatsLogging]);
 
@@ -368,6 +789,7 @@ export function useCall(conversationId: string | null): UseCallState {
     screenShareStatsTimersRef.current.forEach((timer) => clearInterval(timer));
     screenShareStatsTimersRef.current.clear();
     prevScreenShareBytesRef.current.clear();
+    adaptiveScreenShareRef.current = null;
   }, []);
 
   const teardownAudio = useCallback(() => {
@@ -803,9 +1225,19 @@ export function useCall(conversationId: string | null): UseCallState {
       await room.localParticipant.setScreenShareEnabled(
         next,
         // Capture side: how many pixels/frames we grab off the screen.
-        // contentHint "motion" -- we want the encoder spending its cycles on
-        // keeping every frame arriving on time (a "live" feel) rather than
-        // squeezing extra sharpness out of each one at the cost of frame rate.
+        //
+        // contentHint "motion" (matching degradationPreference
+        // maintain-framerate below) treats the capture as camera-like video,
+        // prioritizing smooth frame delivery over sharpness. NOTE: an earlier
+        // version of this code used "detail" + maintain-resolution instead,
+        // specifically because "motion" was found to downscale hard and get
+        // stuck at a few tens of kbps the moment the bandwidth estimate
+        // wobbled -- a tiny, static image needs almost no bits, and the
+        // estimator only grows when the encoder actually sends enough to
+        // probe the link. That regression is a real risk with this pairing
+        // unless something is actively watching quality and stepping the
+        // resolution back down when the link can't sustain it (see the
+        // adaptive screen-share engine above).
         { resolution, contentHint: "motion" },
         {
           // MUST be screenShareEncoding, not videoEncoding -- LiveKit reads
@@ -817,16 +1249,28 @@ export function useCall(conversationId: string | null): UseCallState {
           // work is what was capping us at ~10-40fps regardless of how fast
           // the machine otherwise is (confirmed via webrtc-internals:
           // encoderImplementation=libvpx, powerEfficientEncoder=false).
-          // H.264 has a real hardware encode path on most platforms; falling
-          // back to VP8 automatically for browsers that can't do H.264.
+          // H.264 has a real hardware encode path on most platforms.
           videoCodec: "h264",
-          backupCodec: true,
+          // No VP8 backup track. It reads like free compatibility, but it
+          // undoes the codec choice above two different ways: LiveKit's
+          // default backup policy is *regression*, i.e. the server may tell us
+          // to drop H.264 and send only the backup -- software VP8 again --
+          // and under the other policy we encode both at once, which at 1440p60
+          // pins the CPU and collapses the picture instead. It also silently
+          // forces dynacast on (see LocalParticipant.publishTrack), which with
+          // simulcast off leaves the server managing a layer set we don't
+          // publish. Every browser LiveKit supports decodes H.264.
+          backupCodec: false,
           // Simulcast splits maxBitrate across several encoded layers instead
           // of giving it all to one -- with it on, the single stream we
           // actually watch gets a fraction of the budget we configured.
           simulcast: false,
-          // Give up resolution before frame rate under pressure -- a
-          // downscaled-but-live 60fps share beats a full-res slideshow.
+          // maintain-framerate (paired with contentHint "motion" above):
+          // prioritizes smooth, unbroken motion over sharpness when something
+          // has to give. LiveKit's own default for screen content is actually
+          // maintain-resolution (hold sharpness, drop frames) -- see the note
+          // above on contentHint for why that combination was used here
+          // before and the risk of reverting it.
           degradationPreference: "maintain-framerate",
         },
       );
