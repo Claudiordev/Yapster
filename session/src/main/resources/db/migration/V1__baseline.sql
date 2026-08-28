@@ -1,8 +1,53 @@
-create table public.refresh_token (revoked boolean not null, expiry_date timestamp(6) with time zone, id uuid not null, token varchar(255), username varchar(255), primary key (id));
-create table public.roles (id bigint not null, user_id uuid not null, role varchar(255), primary key (id), constraint roles_idx_1 unique (user_id, role));
-create table public.servers (created_at timestamp(6) with time zone not null, id uuid not null, owner_id uuid not null, name varchar(255) not null, primary key (id));
-create table public.users (balance numeric(12,2) default 0 not null, enabled boolean default true, id uuid not null, avatar_url varchar(255), email varchar(255) not null unique, password varchar(255) not null, username varchar(255) not null unique, primary key (id));
-create sequence roles_seq start with 1 increment by 50;
-create table server_members (server_id uuid not null, user_id uuid not null, primary key (server_id, user_id));
-alter table if exists public.roles add constraint FK97mxvrajhkq19dmvboprimeg1 foreign key (user_id) references public.users;
-alter table if exists server_members add constraint FKqu0vrc783yq288y2r92gjurw2 foreign key (server_id) references public.servers;
+CREATE TABLE public.refresh_token (
+    revoked     BOOLEAN NOT NULL,
+    expiry_date TIMESTAMP(6) WITH TIME ZONE,
+    id          UUID NOT NULL,
+    token       VARCHAR(255),
+    username    VARCHAR(255),
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE public.roles (
+    id      BIGINT NOT NULL,
+    user_id UUID NOT NULL,
+    role    VARCHAR(255),
+    PRIMARY KEY (id),
+    CONSTRAINT roles_idx_1 UNIQUE (user_id, role)
+);
+
+CREATE TABLE public.servers (
+    created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    id         UUID NOT NULL,
+    owner_id   UUID NOT NULL,
+    name       VARCHAR(255) NOT NULL,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE public.users (
+    balance    NUMERIC(12, 2) DEFAULT 0 NOT NULL,
+    enabled    BOOLEAN DEFAULT TRUE,
+    id         UUID NOT NULL,
+    avatar_url VARCHAR(255),
+    email      VARCHAR(255) NOT NULL UNIQUE,
+    password   VARCHAR(255) NOT NULL,
+    username   VARCHAR(255) NOT NULL UNIQUE,
+    PRIMARY KEY (id)
+);
+
+CREATE SEQUENCE roles_seq
+    START WITH 1
+    INCREMENT BY 50;
+
+CREATE TABLE server_members (
+    server_id UUID NOT NULL,
+    user_id   UUID NOT NULL,
+    PRIMARY KEY (server_id, user_id)
+);
+
+ALTER TABLE IF EXISTS public.roles
+    ADD CONSTRAINT FK97mxvrajhkq19dmvboprimeg1
+        FOREIGN KEY (user_id) REFERENCES public.users;
+
+ALTER TABLE IF EXISTS server_members
+    ADD CONSTRAINT FKqu0vrc783yq288y2r92gjurw2
+        FOREIGN KEY (server_id) REFERENCES public.servers;
