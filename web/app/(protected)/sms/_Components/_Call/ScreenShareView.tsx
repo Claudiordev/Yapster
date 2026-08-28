@@ -40,7 +40,11 @@ interface ScreenShareStageProps {
 }
 
 /** The expanded view of one shared screen. */
-export function ScreenShareStage({ share, name, onClose }: ScreenShareStageProps) {
+export function ScreenShareStage({
+  share,
+  name,
+  onClose,
+}: ScreenShareStageProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -107,14 +111,14 @@ export function ScreenShareStage({ share, name, onClose }: ScreenShareStageProps
   return (
     <div
       ref={stageRef}
-      className="relative w-full overflow-hidden rounded-medium bg-black"
+      className="relative h-full min-h-0 w-full overflow-hidden rounded-medium bg-black"
     >
       {/* Video-only track — any shared audio arrives as its own audio track
           and is already played by the call's audio handling. */}
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
         ref={videoRef}
-        className={isFullscreen ? "h-full w-full object-contain" : "max-h-[60vh] w-full object-contain"}
+        className="block h-full min-h-0 w-full object-contain"
       />
 
       <div className="absolute left-3 top-3 rounded-full bg-black/60 px-3 py-1 text-tiny text-white">

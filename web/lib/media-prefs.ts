@@ -126,13 +126,11 @@ export interface VideoPrefs {
   frameRate: VideoFrameRate;
 }
 
-// Default to the top of the range -- screen share reads best sharp and
-// smooth, and setScreenShareEncoding already tells the encoder to spend
-// whatever budget it's given on resolution first (see useCall). Anyone on a
-// constrained link can still turn it down in Settings.
+// Default to sharp 1080p at the broadly supported 30 fps. Users sharing
+// high-motion content can still select 60 fps in Settings.
 export const DEFAULT_VIDEO_PREFS: VideoPrefs = {
   resolution: "1080p",
-  frameRate: 60,
+  frameRate: 30,
 };
 
 /** Absent key = enabled, so existing users share audio by default. */
