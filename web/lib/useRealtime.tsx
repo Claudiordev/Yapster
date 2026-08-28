@@ -33,10 +33,9 @@ const RealtimeContext = createContext<Realtime | null>(null);
 /**
  * The WebSocket base the browser dials. An explicit NEXT_PUBLIC_CHAT_WS_URL
  * wins (e.g. a dedicated WS host in production); otherwise it's derived from the
- * page's own origin, so the socket always targets the SAME host you loaded the
- * app from — localhost stays localhost, a LAN IP stays that LAN IP. The gateway
- * proxies /ws on port 8080. This avoids a hardcoded IP that only works from one
- * place (the classic "works on the LAN but not locally" trap).
+ * page's own origin, so the socket always targets the SAME host and port used
+ * to load the app. In production that is wss://www.guildvo.com/ws on port 443;
+ * the edge proxy routes /ws to chat internally.
  */
 function resolveWsBase(): string | null {
   const override = process.env.NEXT_PUBLIC_CHAT_WS_URL;
@@ -46,7 +45,7 @@ function resolveWsBase(): string | null {
 
   const proto = window.location.protocol === "https:" ? "wss" : "ws";
 
-  return `${proto}://${window.location.hostname}:8080/ws`;
+  return `${proto}://${window.location.host}/ws`;
 }
 
 /**
@@ -119,7 +118,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const send = useCallback((event: ClientEvent) => {
     const socket = socketRef.current;
 
-    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(event));
+    if (socket?.readyState === WebSocket.OPEN)
+      socket.send(JSON.stringify(event));
   }, []);
 
   return (
