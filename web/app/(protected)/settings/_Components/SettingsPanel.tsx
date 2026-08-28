@@ -13,6 +13,7 @@ import {
   ECHO_CANCELLATION_KEY,
   NOISE_SUPPRESSION_KEY,
   readAudioProcessingPrefs,
+  readScreenShareAudioPref,
   readVideoPrefs,
   VIDEO_FRAME_RATE_KEY,
   VIDEO_RESOLUTION_KEY,
@@ -20,6 +21,7 @@ import {
   type VideoFrameRate,
   type VideoResolution,
   writeAudioProcessingPref,
+  writeScreenShareAudioPref,
 } from "@/lib/media-prefs";
 
 interface AudioDevice {
@@ -74,6 +76,7 @@ export function SettingsPanel() {
   const [videoFrameRate, setVideoFrameRate] = useState<VideoFrameRate>(
     DEFAULT_VIDEO_PREFS.frameRate,
   );
+  const [screenShareAudio, setScreenShareAudio] = useState(true);
 
   useEffect(() => {
     setInput(localStorage.getItem(INPUT_KEY) ?? "default");
@@ -90,6 +93,7 @@ export function SettingsPanel() {
 
     setVideoResolution(videoPrefs.resolution);
     setVideoFrameRate(videoPrefs.frameRate);
+    setScreenShareAudio(readScreenShareAudioPref());
 
     const md =
       typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
@@ -142,7 +146,10 @@ export function SettingsPanel() {
   }
 
   const inputOptions = [{ id: "default", label: "System default" }, ...inputs];
-  const outputOptions = [{ id: "default", label: "System default" }, ...outputs];
+  const outputOptions = [
+    { id: "default", label: "System default" },
+    ...outputs,
+  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -255,11 +262,13 @@ export function SettingsPanel() {
               localStorage.setItem(VIDEO_RESOLUTION_KEY, value);
             }}
           >
-            {(Object.keys(VIDEO_RESOLUTIONS) as VideoResolution[]).map((key) => (
-              <SelectItem key={key}>
-                {`${key} (${VIDEO_RESOLUTIONS[key].width}×${VIDEO_RESOLUTIONS[key].height})`}
-              </SelectItem>
-            ))}
+            {(Object.keys(VIDEO_RESOLUTIONS) as VideoResolution[]).map(
+              (key) => (
+                <SelectItem key={key}>
+                  {`${key} (${VIDEO_RESOLUTIONS[key].width}×${VIDEO_RESOLUTIONS[key].height})`}
+                </SelectItem>
+              ),
+            )}
           </Select>
         </div>
 
@@ -281,6 +290,22 @@ export function SettingsPanel() {
           </Select>
         </div>
       </div>
+
+      <Switch
+        isSelected={screenShareAudio}
+        size="sm"
+        onValueChange={(enabled) => {
+          setScreenShareAudio(enabled);
+          writeScreenShareAudioPref(enabled);
+        }}
+      >
+        <div className="flex flex-col">
+          <span className="text-small">Share screen audio</span>
+          <span className="text-tiny text-default-400">
+            Requests audio when you start sharing. Enabled by default.
+          </span>
+        </div>
+      </Switch>
 
       <p className="text-tiny text-default-400">
         Sends up to{" "}

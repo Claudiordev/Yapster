@@ -44,6 +44,7 @@ export function writeAudioProcessingPref(key: string, enabled: boolean): void {
 
 export const VIDEO_RESOLUTION_KEY = "video-resolution";
 export const VIDEO_FRAME_RATE_KEY = "video-frame-rate";
+export const SCREEN_SHARE_AUDIO_KEY = "screen-share-audio";
 
 export type VideoResolution = "720p" | "1080p" | "1440p";
 export type VideoFrameRate = 30 | 60;
@@ -133,6 +134,16 @@ export const DEFAULT_VIDEO_PREFS: VideoPrefs = {
   resolution: "1080p",
   frameRate: 60,
 };
+
+/** Absent key = enabled, so existing users share audio by default. */
+export function readScreenShareAudioPref(): boolean {
+  return readFlag(SCREEN_SHARE_AUDIO_KEY);
+}
+
+export function writeScreenShareAudioPref(enabled: boolean): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(SCREEN_SHARE_AUDIO_KEY, String(enabled));
+}
 
 export function readVideoPrefs(): VideoPrefs {
   if (typeof window === "undefined") return DEFAULT_VIDEO_PREFS;
