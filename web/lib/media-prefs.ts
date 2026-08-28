@@ -65,6 +65,33 @@ export const VIDEO_RESOLUTIONS: Record<VideoResolution, { width: number; height:
   "1440p": { width: 2560, height: 1440, bitrate30: 9_000_000, bitrate60: 13_000_000 },
 };
 
+// ── Adaptive screen-share quality ───────────────────────────────────────────
+//
+// Extra tiers below the user-selectable ones, used only by the runtime
+// step-down engine in useCall.ts when the link can't sustain the configured
+// resolution -- never offered in Settings. The configured resolution above is
+// the ceiling this steps down from and back up to.
+
+export type AdaptiveResolutionTier = "1440p" | "1080p" | "720p" | "480p" | "240p";
+
+/** Highest quality first -- index order is the step-down direction. */
+export const ADAPTIVE_RESOLUTION_LADDER: readonly AdaptiveResolutionTier[] = [
+  "1440p",
+  "1080p",
+  "720p",
+  "480p",
+  "240p",
+];
+
+export const ADAPTIVE_RESOLUTIONS: Record<
+  AdaptiveResolutionTier,
+  { width: number; height: number; bitrate30: number; bitrate60: number }
+> = {
+  ...VIDEO_RESOLUTIONS,
+  "480p": { width: 854, height: 480, bitrate30: 1_200_000, bitrate60: 1_800_000 },
+  "240p": { width: 426, height: 240, bitrate30: 400_000, bitrate60: 600_000 },
+};
+
 export interface VideoPrefs {
   resolution: VideoResolution;
   frameRate: VideoFrameRate;

@@ -64,8 +64,25 @@ export function ScreenShareStage({ share, name, onClose }: ScreenShareStageProps
   // browser's own exit control leave document.fullscreenElement empty without
   // going through toggleFullscreen.
   useEffect(() => {
-    const onChange = () =>
-      setIsFullscreen(document.fullscreenElement === stageRef.current);
+    const onChange = () => {
+      const stage = stageRef.current;
+      const active = document.fullscreenElement === stage;
+
+      setIsFullscreen(active);
+
+      // Remote audio (including a screen share's system audio) plays through
+      // hidden <audio> elements appended to document.body (see useCall's
+      // TrackSubscribed handler). Once the stage goes fullscreen those
+      // elements are no longer inside the fullscreen subtree, and browsers
+      // suppress playback for media outside it -- so the shared audio goes
+      // silent for whoever expanded the screen share. Move them along.
+      const audioEls = document.querySelectorAll("audio[data-livekit-track]");
+
+      audioEls.forEach((el) => {
+        if (active && stage) stage.appendChild(el);
+        else document.body.appendChild(el);
+      });
+    };
 
     document.addEventListener("fullscreenchange", onChange);
 
