@@ -59,10 +59,28 @@ export type VideoFrameRate = 30 | 60;
  * at the same size. 60fps carries about 1.5x the bitrate of 30fps, since twice
  * the frames at an unchanged budget would halve the quality of each.
  */
-export const VIDEO_RESOLUTIONS: Record<VideoResolution, { width: number; height: number; bitrate30: number; bitrate60: number }> = {
-  "720p": { width: 1280, height: 720, bitrate30: 2_500_000, bitrate60: 3_500_000 },
-  "1080p": { width: 1920, height: 1080, bitrate30: 5_000_000, bitrate60: 7_500_000 },
-  "1440p": { width: 2560, height: 1440, bitrate30: 9_000_000, bitrate60: 13_000_000 },
+export const VIDEO_RESOLUTIONS: Record<
+  VideoResolution,
+  { width: number; height: number; bitrate30: number; bitrate60: number }
+> = {
+  "720p": {
+    width: 1280,
+    height: 720,
+    bitrate30: 2_500_000,
+    bitrate60: 3_500_000,
+  },
+  "1080p": {
+    width: 1920,
+    height: 1080,
+    bitrate30: 5_000_000,
+    bitrate60: 7_500_000,
+  },
+  "1440p": {
+    width: 2560,
+    height: 1440,
+    bitrate30: 9_000_000,
+    bitrate60: 13_000_000,
+  },
 };
 
 // ── Adaptive screen-share quality ───────────────────────────────────────────
@@ -72,7 +90,12 @@ export const VIDEO_RESOLUTIONS: Record<VideoResolution, { width: number; height:
 // resolution -- never offered in Settings. The configured resolution above is
 // the ceiling this steps down from and back up to.
 
-export type AdaptiveResolutionTier = "1440p" | "1080p" | "720p" | "480p" | "240p";
+export type AdaptiveResolutionTier =
+  | "1440p"
+  | "1080p"
+  | "720p"
+  | "480p"
+  | "240p";
 
 /** Highest quality first -- index order is the step-down direction. */
 export const ADAPTIVE_RESOLUTION_LADDER: readonly AdaptiveResolutionTier[] = [
@@ -88,7 +111,12 @@ export const ADAPTIVE_RESOLUTIONS: Record<
   { width: number; height: number; bitrate30: number; bitrate60: number }
 > = {
   ...VIDEO_RESOLUTIONS,
-  "480p": { width: 854, height: 480, bitrate30: 1_200_000, bitrate60: 1_800_000 },
+  "480p": {
+    width: 854,
+    height: 480,
+    bitrate30: 1_200_000,
+    bitrate60: 1_800_000,
+  },
   "240p": { width: 426, height: 240, bitrate30: 400_000, bitrate60: 600_000 },
 };
 
@@ -113,16 +141,21 @@ export function readVideoPrefs(): VideoPrefs {
   const frameRate = Number(window.localStorage.getItem(VIDEO_FRAME_RATE_KEY));
 
   return {
-    resolution: resolution && resolution in VIDEO_RESOLUTIONS ?
-        (resolution as VideoResolution)
+    resolution:
+      resolution && resolution in VIDEO_RESOLUTIONS
+        ? (resolution as VideoResolution)
         : DEFAULT_VIDEO_PREFS.resolution,
-    frameRate: frameRate === 60 ? 60 : DEFAULT_VIDEO_PREFS.frameRate,
+    frameRate:
+      frameRate === 30 || frameRate === 60
+        ? frameRate
+        : DEFAULT_VIDEO_PREFS.frameRate,
   };
 }
 
 /** Capture constraints + publish bitrate for the current video preferences. */
 export function videoCaptureSettings(prefs: VideoPrefs = readVideoPrefs()) {
-  const { width, height, bitrate30, bitrate60 } = VIDEO_RESOLUTIONS[prefs.resolution];
+  const { width, height, bitrate30, bitrate60 } =
+    VIDEO_RESOLUTIONS[prefs.resolution];
 
   return {
     resolution: { width, height, frameRate: prefs.frameRate },
