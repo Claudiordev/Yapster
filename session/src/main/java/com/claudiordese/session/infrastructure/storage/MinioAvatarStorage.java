@@ -57,7 +57,7 @@ public class MinioAvatarStorage implements AvatarStorage {
         // Turns a multi-MB PNG into a small, sharp, consistently-square avatar so
         // icons load fast and render crisply. (contentType is validated upstream;
         // the stored object is always the normalised JPEG.)
-        AvatarImageProcessor.ProcessedImage image = imageProcessor.process(content);
+        AvatarImageProcessor.ProcessedImage image = imageProcessor.process(content, contentType);
 
         // Unique key per upload → the URL changes each time, so browsers never
         // show a stale cached avatar. (Old objects orphan — a cleanup job later.)
