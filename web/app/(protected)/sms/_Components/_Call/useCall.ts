@@ -1070,11 +1070,12 @@ export function useCall(conversationId: string | null): UseCallState {
         {
           resolution,
           contentHint: "motion",
-          // Use the browser's standard display-audio request, as Fluxer does.
-          // Microphone-style constraints here can make Chromium return video
-          // without a display-audio track on otherwise supported sources.
-          // Chrome still requires the user to select "Share tab audio".
-          audio: includeAudio,
+          // Ask Chromium for the selected source's audio. Chrome still
+          // requires the user to select "Share tab audio" in its picker.
+          // `restrictOwnAudio` is the capture hint used by the known-working
+          // screen-share implementation and prevents the tab from receiving
+          // an unintended copy of the local call audio.
+          audio: includeAudio ? { restrictOwnAudio: { ideal: true } } : false,
           systemAudio: includeAudio ? "include" : "exclude",
           suppressLocalAudioPlayback: false,
         },
@@ -1084,13 +1085,6 @@ export function useCall(conversationId: string | null): UseCallState {
           backupCodec: false,
           simulcast: false,
           degradationPreference: "maintain-framerate",
-          // These fields only affect the audio track returned by the same
-          // screen-capture request. Keep shared media stereo and continuous;
-          // microphone publishing uses a separate path and is unchanged.
-          audioPreset: { maxBitrate: 510_000, priority: "high" },
-          forceStereo: true,
-          dtx: false,
-          red: true,
         },
       );
     },
