@@ -282,7 +282,7 @@ export function CallPanel({
             />
           ))}
 
-          <div className="flex flex-shrink-0 flex-wrap items-center justify-center gap-4">
+          <div className="flex min-h-[72px] min-w-0 flex-1 flex-wrap items-center justify-center gap-4">
             {participants.map((p) => {
               const sender = senders[p.identity];
               const name = p.isLocal ? "You" : (sender?.name ?? "Unknown");
