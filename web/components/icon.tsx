@@ -18,6 +18,12 @@ export type IconName =
   | "check"
   | "search"
   | "game"
+  | "users"
+  | "mic"
+  | "mic-off"
+  | "screen-share"
+  | "maximize"
+  | "minimize"
   | "close";
 
 interface IconProps {

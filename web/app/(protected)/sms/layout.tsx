@@ -1,11 +1,10 @@
-export default function SmsLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+import { ChatProvider } from "./_Components/ChatProvider";
+import { ChatShell } from "./_Components/ChatShell";
+
+export default function SmsLayout({ children }: { children: React.ReactNode }) {
   return (
-    <section className="flex flex-col flex-grow min-h-0 text-foreground">
-      {children}
-    </section>
+    <ChatProvider>
+      <ChatShell>{children}</ChatShell>
+    </ChatProvider>
   );
 }

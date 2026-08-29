@@ -46,9 +46,22 @@ services:
     container_name: session
     ports:
       - "8081:8081"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:-http://discovery:8761/eureka/}
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL:-jdbc:postgresql://session_postgres:5432/mydatabase}
+      - SPRING_DATA_REDIS_HOST=${SPRING_DATA_REDIS_HOST:-redis}
+      - SPRING_DATA_REDIS_PORT=${SPRING_DATA_REDIS_PORT:-6379}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
+      - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL:-http://localhost:9000}
+      - MANAGEMENT_OTLP_TRACING_ENDPOINT=${MANAGEMENT_OTLP_TRACING_ENDPOINT:-http://jaeger:4318/v1/traces}
+      - RATE_LIMITING_LOGIN_MAX_ATTEMPTS=${RATE_LIMITING_LOGIN_MAX_ATTEMPTS:-10}
+      - RATE_LIMITING_LOGIN_WINDOW=${RATE_LIMITING_LOGIN_WINDOW:-15m}
+      - RATE_LIMITING_REGISTER_MAX_ATTEMPTS=${RATE_LIMITING_REGISTER_MAX_ATTEMPTS:-5}
+      - RATE_LIMITING_REGISTER_WINDOW=${RATE_LIMITING_REGISTER_WINDOW:-1h}
+      - RATE_LIMITING_FILE_UPLOAD_MAX_ATTEMPTS=${RATE_LIMITING_FILE_UPLOAD_MAX_ATTEMPTS:-10}
+      - RATE_LIMITING_FILE_UPLOAD_WINDOW=${RATE_LIMITING_FILE_UPLOAD_WINDOW:-1h}
     depends_on:
       - session_postgres
-      - discovery
       - minio
       - redis
   router:
@@ -73,15 +86,21 @@ services:
       - COMMS_PROVIDER=${COMMS_PROVIDER:-twilio}
     depends_on:
       - comms_postgres
-      - discovery
   livekit:
     image: livekit/livekit-server:latest
     container_name: livekit
     command: --config /etc/livekit.yaml
+    environment:
+      # The address LiveKit advertises in its ICE candidates — must be one the
+      # BROWSER can dial. Default suits a browser on this same host; when you
+      # open the app from a LAN IP (or a second device), set PUBLIC_HOST to
+      # this host's LAN IP or the media handshake will fail even though
+      # signaling connects. See livekit/livekit.yaml.
+      - NODE_IP=${PUBLIC_HOST:-127.0.0.1}
     ports:
-      - "7880:7880"                     # signaling (HTTP/WebSocket)
-      - "7881:7881"                     # WebRTC over TCP (fallback)
-      - "50000-50060:50000-50060/udp"   # WebRTC media (RTP/ICE)
+      - "7880:7880"       # signaling (HTTP/WebSocket)
+      - "7881:7881"       # WebRTC over TCP (fallback)
+      - "7882:7882/udp"   # WebRTC media (RTP/ICE)
     volumes:
       - "./livekit/livekit.yaml:/etc/livekit.yaml"
   voice:
@@ -92,12 +111,15 @@ services:
     ports:
       - "8085:8085"
     environment:
-      # url is what the browser dials; key/secret must match livekit/livekit.yaml
-      - LIVEKIT_URL=ws://localhost:7880
+      # Handed to the browser as the address to dial, so it must be reachable
+      # from wherever the app is opened — NOT a container-internal name, and
+      # not localhost once anything but this host is browsing. Same
+      # PUBLIC_HOST as LiveKit's NODE_IP so the two can't drift apart.
+      # key/secret must match livekit/livekit.yaml
+      - LIVEKIT_URL=ws://${PUBLIC_HOST:-localhost}:7880
       - LIVEKIT_API_KEY=devkey
       - LIVEKIT_API_SECRET=devsecretdevsecretdevsecret12345
     depends_on:
-      - discovery
       - livekit
   chat:
     build:
@@ -112,10 +134,14 @@ services:
       # and reaches Postgres by service name (fixes lb://CHAT -> 10.255.255.254).
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka/
       - SPRING_DATASOURCE_URL=jdbc:postgresql://chat_postgres:5432/chat
+      - SPRING_DATA_REDIS_HOST=${SPRING_DATA_REDIS_HOST:-redis}
+      - SPRING_DATA_REDIS_PORT=${SPRING_DATA_REDIS_PORT:-6379}
+      - RATE_LIMITING_MESSAGE_MAX_ATTEMPTS=${RATE_LIMITING_MESSAGE_MAX_ATTEMPTS:-20}
+      - RATE_LIMITING_MESSAGE_WINDOW=${RATE_LIMITING_MESSAGE_WINDOW:-10s}
       - MANAGEMENT_OTLP_TRACING_ENDPOINT=http://jaeger:4318/v1/traces
     depends_on:
-      - discovery
       - chat_postgres
+      - redis
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger

@@ -17,9 +17,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Cross-user lookups — public profile info only. Self-service operations on
@@ -45,5 +47,14 @@ public class UsersController {
         return userService.searchUsers(
                 AuthenticationUtils.currentUserId(authentication),
                 request.getQuery(), request.getPage(), request.getSize());
+    }
+
+    @GetMapping
+    @Operation(summary = "Look up users by id (batch)")
+    @ApiResponse(responseCode = "200", description = "Matching users returned; unknown ids omitted.")
+    @ApiResponse(responseCode = "401", description = "Not authenticated.", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    public List<UserSummaryDto> byIds(@RequestParam(required = false) List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        return userService.getUsersByIds(ids);
     }
 }

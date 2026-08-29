@@ -3,6 +3,7 @@
 import { Button } from "@heroui/button";
 
 import { Icon } from "@/components/icon";
+import { FEATURE_OAUTH2_LOGIN } from "@/lib/constants";
 
 const PROVIDERS = [
   {
@@ -32,6 +33,8 @@ const PROVIDERS = [
 ];
 
 export function SocialLogin() {
+  if (!FEATURE_OAUTH2_LOGIN) return null;
+
   return (
     <>
       <div className="flex w-full items-center gap-3">

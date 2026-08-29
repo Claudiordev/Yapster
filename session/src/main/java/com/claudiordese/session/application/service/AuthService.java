@@ -6,11 +6,15 @@ import com.claudiordese.exceptions.InvalidAuthorizationException;
 import com.claudiordese.exceptions.NotFound;
 import com.claudiordese.exceptions.TokenExpired;
 import com.claudiordese.exceptions.TokenRevoked;
+import com.claudiordese.exceptions.TooManyRequestsException;
 import com.claudiordese.exceptions.UsernameTaken;
 import com.claudiordese.security.config.JwtSecurityProperties;
 import com.claudiordese.session.application.service.commands.LoginCommand;
 import com.claudiordese.session.application.service.commands.RegisterCommand;
+import com.claudiordese.session.application.config.LoginRateLimitPolicy;
+import com.claudiordese.session.application.config.RegisterRateLimitPolicy;
 import com.claudiordese.session.application.port.PasswordHasher;
+import com.claudiordese.session.application.port.RateLimitGuard;
 import com.claudiordese.session.application.port.RefreshTokenStore;
 import com.claudiordese.session.application.port.TokenIssuer;
 import com.claudiordese.session.application.port.UserStore;
@@ -24,6 +28,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 
 @Service
 public class AuthService {
@@ -33,20 +38,39 @@ public class AuthService {
     private final PasswordHasher hasher;
     private final TokenIssuer tokens;
     private final JwtSecurityProperties props;
+    private final RateLimitGuard rateLimitGuard;
+    private final LoginRateLimitPolicy loginRateLimitPolicy;
+    private final RegisterRateLimitPolicy registerRateLimitPolicy;
 
     public AuthService(UserStore users,
                        RefreshTokenStore refreshTokens,
                        PasswordHasher hasher,
                        TokenIssuer tokens,
-                       JwtSecurityProperties props) {
+                       JwtSecurityProperties props,
+                       RateLimitGuard rateLimitGuard,
+                       LoginRateLimitPolicy loginRateLimitPolicy,
+                       RegisterRateLimitPolicy registerRateLimitPolicy) {
         this.users = users;
         this.refreshTokens = refreshTokens;
         this.hasher = hasher;
         this.tokens = tokens;
         this.props = props;
+        this.rateLimitGuard = rateLimitGuard;
+        this.loginRateLimitPolicy = loginRateLimitPolicy;
+        this.registerRateLimitPolicy = registerRateLimitPolicy;
     }
 
     public LoginResult login(LoginCommand command) {
+        String rateLimitKey = "login:" + command.username().strip().toLowerCase(Locale.ROOT);
+        if (!rateLimitGuard.tryConsume(
+                rateLimitKey,
+                loginRateLimitPolicy.maxAttempts(),
+                loginRateLimitPolicy.window())) {
+            throw new TooManyRequestsException(
+                    "login_rate_limit_exceeded",
+                    "Too many login attempts. Please try again later");
+        }
+
         User user = users.findByUsername(command.username())
                 .filter(u -> hasher.matches(command.password(), u.passwordHash()))
                 .orElseThrow(() -> new InvalidAuthorizationException(
@@ -59,6 +83,15 @@ public class AuthService {
 
     @Transactional
     public RegisterResult registerUser(RegisterCommand command) {
+        if (!rateLimitGuard.tryConsume(
+                "register:" + command.clientIp(),
+                registerRateLimitPolicy.maxAttempts(),
+                registerRateLimitPolicy.window())) {
+            throw new TooManyRequestsException(
+                    "register_rate_limit_exceeded",
+                    "Too many registration attempts. Please try again later");
+        }
+
         if (!command.emailsMatching()) {
             throw new EmailMismatchException("email_mismatch", "Email and confirm email do not match");
         }

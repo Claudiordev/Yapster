@@ -1,5 +1,5 @@
-import { SmsPanel } from "@/app/(protected)/sms/_Components/sms-panel";
+import { MainPage } from "./_Components/MainPage";
 
-export default function SmsPage() {
-  return <SmsPanel />;
+export default function SmsMainPage() {
+  return <MainPage />;
 }

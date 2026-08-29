@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -48,13 +49,16 @@ public class AuthController {
     @Operation(summary = "Register a new user")
     @ApiResponse(responseCode = "201", description = "User created with success")
     @ApiResponse(responseCode = "409", description = "Username or email conflict")
-    public ResponseEntity<RegisterResponse> registerUser(@Valid @RequestBody RegisterRequest registerRequest) {
+    public ResponseEntity<RegisterResponse> registerUser(
+            @Valid @RequestBody RegisterRequest registerRequest,
+            HttpServletRequest request) {
         RegisterResult registerResult = authService.registerUser(
                 new RegisterCommand(
                         registerRequest.username(),
                         registerRequest.email(),
                         registerRequest.confirmEmail(),
-                        registerRequest.password()
+                        registerRequest.password(),
+                        clientIp(request)
                 )
         );
         URI location = URI.create("/api/v1/user/" + registerResult.id());
@@ -80,5 +84,13 @@ public class AuthController {
     public ResponseEntity<Void> logout(@Valid @RequestBody RefreshTokenRequest request) {
         authService.logout(request.refreshToken());
         return ResponseEntity.ok().build();
+    }
+
+    private static String clientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor == null || forwardedFor.isBlank()) {
+            return request.getRemoteAddr();
+        }
+        return forwardedFor.split(",", 2)[0].strip();
     }
 }

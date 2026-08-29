@@ -2,10 +2,13 @@ package com.claudiordese.session.application.service;
 
 import com.claudiordese.exceptions.InvalidAuthorizationException;
 import com.claudiordese.exceptions.NotFound;
+import com.claudiordese.exceptions.TooManyRequestsException;
 import com.claudiordese.exceptions.UsernameTaken;
+import com.claudiordese.session.application.config.FileUploadRateLimitPolicy;
 import com.claudiordese.session.application.domain.User;
 import com.claudiordese.session.application.port.AvatarStorage;
 import com.claudiordese.session.application.port.PasswordHasher;
+import com.claudiordese.session.application.port.RateLimitGuard;
 import com.claudiordese.session.application.port.UserStore;
 import com.claudiordese.session.application.service.commands.UpdateAvatarCommand;
 import com.claudiordese.session.application.service.commands.UpdatePasswordCommand;
@@ -26,11 +29,24 @@ public class UserService {
     private final UserStore users;
     private final PasswordHasher hasher;
     private final AvatarStorage avatarStorage;
+    private final RateLimitGuard rateLimitGuard;
+    private final FileUploadRateLimitPolicy fileUploadRateLimitPolicy;
 
     public UserDto getUserById(UUID id) {
         User user = users.findById(id)
                 .orElseThrow(() -> new NotFound("not_found", "User not found"));
         return new UserDto(user.id(), user.username(), user.avatarUrl().orElse(null));
+    }
+
+    /**
+     * Batch profile lookup by id — used to resolve conversation members to
+     * display names/avatars. Unknown ids are simply absent from the result.
+     */
+    public List<UserSummaryDto> getUsersByIds(List<UUID> ids) {
+        return users.findByIds(ids).stream()
+                .map(user -> new UserSummaryDto(
+                        user.id(), user.username(), user.avatarUrl().orElse(null)))
+                .toList();
     }
 
     /**
@@ -46,6 +62,15 @@ public class UserService {
 
     @Transactional
     public void updateAvatar(UpdateAvatarCommand command) {
+        if (!rateLimitGuard.tryConsume(
+                "file-upload:" + command.userId(),
+                fileUploadRateLimitPolicy.maxAttempts(),
+                fileUploadRateLimitPolicy.window())) {
+            throw new TooManyRequestsException(
+                    "file_upload_rate_limit_exceeded",
+                    "Too many file uploads. Please try again later");
+        }
+
         User user = users.findById(command.userId())
                 .orElseThrow(() -> new NotFound("not_found", "User not found"));
 

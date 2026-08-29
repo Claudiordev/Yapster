@@ -3,11 +3,75 @@ import { API_BASE_URL } from "./constants";
 export class ApiError extends Error {
   constructor(
     public status: number,
-    message: string
+    message: string,
+    public responseBody = "",
+    public contentType: string | null = null,
+    public responseHeaders = new Headers(),
+    public statusText = "",
   ) {
     super(message);
     this.name = "ApiError";
   }
+}
+
+function authHeaders(token?: string, json = false): Record<string, string> {
+  const headers: Record<string, string> = {};
+
+  if (json) headers["Content-Type"] = "application/json";
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  return headers;
+}
+
+/**
+ * Shared response handling for every verb:
+ *  - 204 / empty body → null
+ *  - otherwise → parsed JSON
+ *  - non-2xx → log it and throw ApiError, so the BFF (withAuth) can map it to
+ *    the right HTTP status for the browser.
+ */
+async function handleResponse<TRes>(response: Response): Promise<TRes> {
+  if (!response.ok) {
+    let message = response.statusText;
+    const text = await response.text();
+
+    if (text) {
+      try {
+        const body = JSON.parse(text);
+
+        message = body.detail || body.message || body.error || message;
+      } catch {
+        message = text;
+      }
+    }
+
+    console.error(`API ${response.status} ${response.url} — ${message}`);
+    throw new ApiError(
+      response.status,
+      message,
+      text,
+      response.headers.get("content-type"),
+      response.headers,
+      response.statusText,
+    );
+  }
+
+  if (response.status === 204) return null as TRes;
+
+  const text = await response.text();
+
+  return (text ? JSON.parse(text) : null) as TRes;
+}
+
+export async function apiGet<TRes>(
+  path: string,
+  token?: string,
+): Promise<TRes> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: authHeaders(token),
+  });
+
+  return handleResponse<TRes>(response);
 }
 
 export async function apiPost<TReq, TRes>(
@@ -15,42 +79,13 @@ export async function apiPost<TReq, TRes>(
   body: TReq,
   token?: string,
 ): Promise<TRes> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
-    headers,
+    headers: authHeaders(token, true),
     body: JSON.stringify(body),
   });
 
-  if (!response.ok) {
-    let message = response.statusText;
-
-    try {
-      const body = await response.json();
-
-      message = body.detail || body.message || message;
-    } catch {
-      const text = await response.text();
-
-      if (text) message = text;
-    }
-    throw new ApiError(response.status, message);
-  }
-
-  if (response.status === 204) {
-    return undefined as TRes;
-  }
-
-  const text = await response.text();
-
-  return (text ? JSON.parse(text) : undefined) as TRes;
+  return handleResponse<TRes>(response);
 }
 
 export async function apiPut<TReq, TRes>(
@@ -58,76 +93,23 @@ export async function apiPut<TReq, TRes>(
   body: TReq,
   token?: string,
 ): Promise<TRes> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "PUT",
-    headers,
+    headers: authHeaders(token, true),
     body: JSON.stringify(body),
   });
 
-  if (!response.ok) {
-    let message = response.statusText;
-
-    try {
-      const body = await response.json();
-
-      message = body.detail || body.message || message;
-    } catch {
-      const text = await response.text();
-
-      if (text) message = text;
-    }
-    throw new ApiError(response.status, message);
-  }
-
-  if (response.status === 204) {
-    return undefined as TRes;
-  }
-
-  const text = await response.text();
-
-  return (text ? JSON.parse(text) : undefined) as TRes;
+  return handleResponse<TRes>(response);
 }
 
-export async function apiGet<TRes>(
+export async function apiDelete<TRes>(
   path: string,
   token?: string,
 ): Promise<TRes> {
-  const headers: Record<string, string> = {};
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
 
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(`${API_BASE_URL}${path}`, { headers });
-
-  if (!response.ok) {
-    let message = response.statusText;
-
-    try {
-      const body = await response.json();
-
-      message = body.detail || body.message || message;
-    } catch {
-      const text = await response.text();
-
-      if (text) message = text;
-    }
-    throw new ApiError(response.status, message);
-  }
-
-  if (response.status === 204) {
-    return undefined as TRes;
-  }
-
-  const text = await response.text();
-
-  return (text ? JSON.parse(text) : undefined) as TRes;
+  return handleResponse<TRes>(response);
 }

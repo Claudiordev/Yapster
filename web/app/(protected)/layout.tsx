@@ -1,5 +1,6 @@
 import { getAccount } from "@/lib/get-account";
 import { AccountProvider } from "@/lib/use-account";
+import { RealtimeProvider } from "@/lib/useRealtime";
 
 export default async function ProtectedLayout({
   children,
@@ -18,9 +19,10 @@ export default async function ProtectedLayout({
         <AccountProvider
           initialAvatarUrl={account?.avatarUrl ?? null}
           initialBalance={account?.balance ?? 0}
+          initialUserId={account?.userId ?? null}
           initialUsername={account?.username ?? ""}
         >
-          {children}
+          <RealtimeProvider>{children}</RealtimeProvider>
         </AccountProvider>
       </div>
     </div>

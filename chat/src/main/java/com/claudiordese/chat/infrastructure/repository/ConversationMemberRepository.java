@@ -13,4 +13,5 @@ public interface ConversationMemberRepository extends JpaRepository<Conversation
     List<ConversationMemberEntity> findByUserId(UUID userId);
     boolean existsByConversationIdAndUserId(UUID conversationId, UUID userId);
     Optional<ConversationMemberEntity> findByConversationIdAndUserId(UUID conversationId, UUID userId);
+    void deleteByConversationIdAndUserId(UUID conversationId, UUID userId);
 }

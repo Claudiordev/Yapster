@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { apiGet, apiPut, ApiError } from "@/lib/api-client";
-import { getAuthToken } from "@/lib/auth";
+import { apiGet, apiPut } from "@/lib/api-client";
+import { withAuth } from "@/lib/bff";
 
 interface TradingSettings {
   priceThreshold: number;
@@ -10,66 +10,19 @@ interface TradingSettings {
   takeProfitPercent: number;
 }
 
-export async function GET() {
-  try {
-    const token = await getAuthToken();
+export const GET = withAuth(async (_request, token) => {
+  const data = await apiGet<TradingSettings>("/trading/settings", token);
 
-    if (!token) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 },
-      );
-    }
+  return NextResponse.json(data);
+});
 
-    const data = await apiGet<TradingSettings>("/trading/settings", token);
+export const PUT = withAuth(async (request, token) => {
+  const body = await request.json();
+  const data = await apiPut<typeof body, TradingSettings>(
+    "/trading/settings",
+    body,
+    token,
+  );
 
-    return NextResponse.json(data);
-  } catch (error) {
-    if (error instanceof ApiError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.status },
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
-  }
-}
-
-export async function PUT(request: Request) {
-  try {
-    const token = await getAuthToken();
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 },
-      );
-    }
-
-    const body = await request.json();
-
-    const data = await apiPut<typeof body, TradingSettings>(
-      "/trading/settings",
-      body,
-      token,
-    );
-
-    return NextResponse.json(data);
-  } catch (error) {
-    if (error instanceof ApiError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.status },
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
-  }
-}
+  return NextResponse.json(data);
+});

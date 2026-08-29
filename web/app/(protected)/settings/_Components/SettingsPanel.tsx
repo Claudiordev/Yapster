@@ -2,8 +2,28 @@
 
 import { useEffect, useState } from "react";
 import { Select, SelectItem } from "@heroui/select";
+import { Switch } from "@heroui/switch";
 
 import { MicTest } from "./MicTest";
+
+import { Icon } from "@/components/icon";
+import { siteConfig } from "@/config/site";
+import {
+  DEFAULT_VIDEO_PREFS,
+  DEFAULT_SCREEN_SHARE_AUDIO,
+  ECHO_CANCELLATION_KEY,
+  NOISE_SUPPRESSION_KEY,
+  readAudioProcessingPrefs,
+  readVideoPrefs,
+  readScreenShareAudioPref,
+  VIDEO_FRAME_RATE_KEY,
+  VIDEO_RESOLUTION_KEY,
+  VIDEO_RESOLUTIONS,
+  type VideoFrameRate,
+  type VideoResolution,
+  writeAudioProcessingPref,
+  writeScreenShareAudioPref,
+} from "@/lib/media-prefs";
 
 interface AudioDevice {
   id: string;
@@ -49,6 +69,17 @@ export function SettingsPanel() {
   const [inputVolume, setInputVolume] = useState(100);
   const [outputVolume, setOutputVolume] = useState(100);
   const [available, setAvailable] = useState(true);
+  const [noiseSuppression, setNoiseSuppression] = useState(true);
+  const [echoCancellation, setEchoCancellation] = useState(true);
+  const [videoResolution, setVideoResolution] = useState<VideoResolution>(
+    DEFAULT_VIDEO_PREFS.resolution,
+  );
+  const [videoFrameRate, setVideoFrameRate] = useState<VideoFrameRate>(
+    DEFAULT_VIDEO_PREFS.frameRate,
+  );
+  const [screenShareAudio, setScreenShareAudio] = useState(
+    DEFAULT_SCREEN_SHARE_AUDIO,
+  );
 
   useEffect(() => {
     setInput(localStorage.getItem(INPUT_KEY) ?? "default");
@@ -56,6 +87,16 @@ export function SettingsPanel() {
     setInputVolume(Number(localStorage.getItem(INPUT_VOL_KEY) ?? 100));
     setOutputVolume(Number(localStorage.getItem(OUTPUT_VOL_KEY) ?? 100));
 
+    const audioPrefs = readAudioProcessingPrefs();
+
+    setNoiseSuppression(audioPrefs.noiseSuppression);
+    setEchoCancellation(audioPrefs.echoCancellation);
+
+    const videoPrefs = readVideoPrefs();
+
+    setVideoResolution(videoPrefs.resolution);
+    setVideoFrameRate(videoPrefs.frameRate);
+    setScreenShareAudio(readScreenShareAudioPref());
     const md =
       typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
 
@@ -107,7 +148,10 @@ export function SettingsPanel() {
   }
 
   const inputOptions = [{ id: "default", label: "System default" }, ...inputs];
-  const outputOptions = [{ id: "default", label: "System default" }, ...outputs];
+  const outputOptions = [
+    { id: "default", label: "System default" },
+    ...outputs,
+  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -161,6 +205,122 @@ export function SettingsPanel() {
         </div>
       </div>
 
+      {/* Mic processing. Applied by the browser on capture, so these take
+          effect the next time you join a call, not mid-call. */}
+      <div className="flex flex-col gap-3">
+        <Switch
+          isSelected={noiseSuppression}
+          size="sm"
+          onValueChange={(enabled) => {
+            setNoiseSuppression(enabled);
+            writeAudioProcessingPref(NOISE_SUPPRESSION_KEY, enabled);
+          }}
+        >
+          <div className="flex flex-col">
+            <span className="text-small">Noise suppression</span>
+            <span className="text-tiny text-default-400">
+              Filters steady background noise.
+            </span>
+          </div>
+        </Switch>
+
+        <Switch
+          isSelected={echoCancellation}
+          size="sm"
+          onValueChange={(enabled) => {
+            setEchoCancellation(enabled);
+            writeAudioProcessingPref(ECHO_CANCELLATION_KEY, enabled);
+          }}
+        >
+          <div className="flex flex-col">
+            <span className="text-small">Echo cancellation</span>
+            <span className="text-tiny text-default-400">
+              Stops others hearing themselves back.
+            </span>
+          </div>
+        </Switch>
+      </div>
+
+      <div className="h-px bg-divider" />
+
+      <div>
+        <h2 className="text-medium font-semibold text-foreground">Video</h2>
+        <p className="text-sm text-default-500">
+          Quality used when you share your screen.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-6 sm:flex-row">
+        <div className="w-full sm:w-1/2">
+          <Select
+            label="Resolution"
+            labelPlacement="outside"
+            selectedKeys={[videoResolution]}
+            variant="bordered"
+            onSelectionChange={(keys) => {
+              const value =
+                (Array.from(keys)[0] as VideoResolution) ??
+                DEFAULT_VIDEO_PREFS.resolution;
+
+              setVideoResolution(value);
+              localStorage.setItem(VIDEO_RESOLUTION_KEY, value);
+            }}
+          >
+            {(Object.keys(VIDEO_RESOLUTIONS) as VideoResolution[]).map(
+              (key) => (
+                <SelectItem key={key}>
+                  {`${key} (${VIDEO_RESOLUTIONS[key].width}×${VIDEO_RESOLUTIONS[key].height})`}
+                </SelectItem>
+              ),
+            )}
+          </Select>
+        </div>
+
+        <div className="w-full sm:w-1/2">
+          <Select
+            label="Frame rate"
+            labelPlacement="outside"
+            selectedKeys={[String(videoFrameRate)]}
+            variant="bordered"
+            onSelectionChange={(keys) => {
+              const value = Number(Array.from(keys)[0]) === 60 ? 60 : 30;
+
+              setVideoFrameRate(value);
+              localStorage.setItem(VIDEO_FRAME_RATE_KEY, String(value));
+            }}
+          >
+            <SelectItem key="30">30 fps</SelectItem>
+            <SelectItem key="60">60 fps</SelectItem>
+          </Select>
+        </div>
+      </div>
+
+      <Switch
+        isSelected={screenShareAudio}
+        size="sm"
+        onValueChange={(enabled) => {
+          setScreenShareAudio(enabled);
+          writeScreenShareAudioPref(enabled);
+        }}
+      >
+        <div className="flex flex-col">
+          <span className="text-small">Share screen audio</span>
+          <span className="text-tiny text-default-400">
+            Requests audio when you start sharing. Enabled by default.
+          </span>
+        </div>
+      </Switch>
+
+      <p className="text-tiny text-default-400">
+        Sends up to{" "}
+        {(
+          (videoFrameRate === 60
+            ? VIDEO_RESOLUTIONS[videoResolution].bitrate60
+            : VIDEO_RESOLUTIONS[videoResolution].bitrate30) / 1_000_000
+        ).toFixed(1)}{" "}
+        Mbps. Higher settings look sharper but need more upload bandwidth.
+      </p>
+
       <div className="h-px bg-divider" />
 
       <MicTest deviceId={input} />
@@ -171,6 +331,19 @@ export function SettingsPanel() {
           connection. Showing the system default only.
         </p>
       )}
+
+      <div className="h-px bg-divider" />
+
+      <a
+        aria-label="GitHub"
+        className="flex w-fit items-center gap-2 text-tiny text-default-400 transition-colors hover:text-foreground"
+        href={siteConfig.links.github}
+        rel="noopener noreferrer"
+        target="_blank"
+      >
+        <Icon name="github" size={16} />
+        View on GitHub
+      </a>
     </div>
   );
 }

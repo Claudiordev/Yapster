@@ -5,6 +5,7 @@ import type { ThemeProviderProps } from "next-themes";
 import * as React from "react";
 import { HeroUIProvider } from "@heroui/system";
 import { ToastProvider } from "@heroui/toast";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 
@@ -23,10 +24,21 @@ declare module "@react-types/shared" {
 
 export function Providers({ children, themeProps }: ProvidersProps) {
   const router = useRouter();
+  // One client per browser session. staleTime keeps rapid conversation
+  // switches from refetching; the socket keeps the open thread live.
+  const [queryClient] = React.useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: { staleTime: 30_000, refetchOnWindowFocus: false },
+        },
+      }),
+  );
 
   return (
-    <HeroUIProvider navigate={router.push}>
-      <ToastProvider
+    <QueryClientProvider client={queryClient}>
+      <HeroUIProvider navigate={router.push}>
+        <ToastProvider
         placement="top-right"
         toastProps={{
           variant: "flat",
@@ -39,7 +51,8 @@ export function Providers({ children, themeProps }: ProvidersProps) {
           },
         }}
       />
-      <NextThemesProvider {...themeProps}>{children}</NextThemesProvider>
-    </HeroUIProvider>
+        <NextThemesProvider {...themeProps}>{children}</NextThemesProvider>
+      </HeroUIProvider>
+    </QueryClientProvider>
   );
 }

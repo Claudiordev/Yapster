@@ -5,10 +5,14 @@ import com.claudiordese.exceptions.EmailTakenException;
 import com.claudiordese.exceptions.InvalidAuthorizationException;
 import com.claudiordese.exceptions.NotFound;
 import com.claudiordese.exceptions.TokenRevoked;
+import com.claudiordese.exceptions.TooManyRequestsException;
 import com.claudiordese.exceptions.UsernameTaken;
 import com.claudiordese.session.application.domain.RefreshToken;
 import com.claudiordese.security.config.JwtSecurityProperties;
+import com.claudiordese.session.application.config.LoginRateLimitPolicy;
+import com.claudiordese.session.application.config.RegisterRateLimitPolicy;
 import com.claudiordese.session.application.port.PasswordHasher;
+import com.claudiordese.session.application.port.RateLimitGuard;
 import com.claudiordese.session.application.port.RefreshTokenStore;
 import com.claudiordese.session.application.port.TokenIssuer;
 import com.claudiordese.session.application.port.UserStore;
@@ -18,6 +22,7 @@ import com.claudiordese.session.application.service.result.LoginResult;
 import com.claudiordese.session.application.service.result.RegisterResult;
 import com.claudiordese.session.support.FakeTokenIssuer;
 import com.claudiordese.session.support.InMemoryRefreshTokenStore;
+import com.claudiordese.session.support.InMemoryRateLimitGuard;
 import com.claudiordese.session.support.InMemoryUserStore;
 import com.claudiordese.session.support.PlainTextPasswordHasher;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +39,9 @@ class AuthServiceTest {
     private RefreshTokenStore refreshTokens;
     private PasswordHasher hasher;
     private TokenIssuer tokens;
+    private RateLimitGuard rateLimitGuard;
+    private LoginRateLimitPolicy loginRateLimitPolicy;
+    private RegisterRateLimitPolicy registerRateLimitPolicy;
     private JwtSecurityProperties props;
     private AuthService authService;
 
@@ -43,12 +51,17 @@ class AuthServiceTest {
         refreshTokens = new InMemoryRefreshTokenStore();
         hasher = new PlainTextPasswordHasher();
         tokens = new FakeTokenIssuer();
+        rateLimitGuard = new InMemoryRateLimitGuard();
+        loginRateLimitPolicy = new LoginRateLimitPolicy(10, Duration.ofMinutes(15));
+        registerRateLimitPolicy = new RegisterRateLimitPolicy(5, Duration.ofHours(1));
 
         props = new JwtSecurityProperties();
         props.setAccessExpirationMs(900_000L);       // 15 min
         props.setRefreshExpirationMs(2_592_000_000L); // 30 days
 
-        authService = new AuthService(users, refreshTokens, hasher, tokens, props);
+        authService = new AuthService(
+                users, refreshTokens, hasher, tokens, props, rateLimitGuard,
+                loginRateLimitPolicy, registerRateLimitPolicy);
     }
 
     // ─── login ──────────────────────────────────────────────────────────
@@ -90,6 +103,33 @@ class AuthServiceTest {
                 .hasMessage("Invalid username or password");
     }
 
+    @Test
+    void login_throwsTooManyRequests_afterTenAttemptsForUsername() {
+        // Arrange
+        for (int attempt = 0; attempt < 10; attempt++) {
+            assertThatThrownBy(() -> authService.login(new LoginCommand("alice", "wrong")))
+                    .isInstanceOf(InvalidAuthorizationException.class);
+        }
+
+        // Act + Assert
+        assertThatThrownBy(() -> authService.login(new LoginCommand("alice", "wrong")))
+                .isInstanceOf(TooManyRequestsException.class)
+                .hasMessage("Too many login attempts. Please try again later");
+    }
+
+    @Test
+    void login_usesNormalizedUsernameForRateLimitKey() {
+        // Arrange
+        for (int attempt = 0; attempt < 10; attempt++) {
+            assertThatThrownBy(() -> authService.login(new LoginCommand("Alice", "wrong")))
+                    .isInstanceOf(InvalidAuthorizationException.class);
+        }
+
+        // Act + Assert
+        assertThatThrownBy(() -> authService.login(new LoginCommand("  ALICE  ", "wrong")))
+                .isInstanceOf(TooManyRequestsException.class);
+    }
+
     // ─── register ───────────────────────────────────────────────────────
 
     @Test
@@ -99,7 +139,8 @@ class AuthServiceTest {
                 "alice",
                 "alice@example.com",
                 "alice@example.com",
-                "secret123");
+                "secret123",
+                "127.0.0.1");
 
         // Act
         RegisterResult result = authService.registerUser(cmd);
@@ -121,7 +162,8 @@ class AuthServiceTest {
                 "alice",
                 "alice@example.com",
                 "different@example.com",
-                "secret123");
+                "secret123",
+                "127.0.0.1");
 
         // Act + Assert
         assertThatThrownBy(() -> authService.registerUser(cmd))
@@ -138,7 +180,8 @@ class AuthServiceTest {
                 "alice",
                 "second@example.com",
                 "second@example.com",
-                "anotherpass");
+                "anotherpass",
+                "127.0.0.1");
 
         // Act + Assert
         assertThatThrownBy(() -> authService.registerUser(cmd))
@@ -154,11 +197,42 @@ class AuthServiceTest {
                 "second",
                 "shared@example.com",
                 "shared@example.com",
-                "anotherpass");
+                "anotherpass",
+                "127.0.0.1");
 
         // Act + Assert
         assertThatThrownBy(() -> authService.registerUser(cmd))
                 .isInstanceOf(EmailTakenException.class);
+    }
+
+    @Test
+    void registerUser_throwsTooManyRequests_afterFiveAttemptsFromIp() {
+        // Arrange
+        RegisterCommand invalid = new RegisterCommand(
+                "alice",
+                "alice@example.com",
+                "different@example.com",
+                "secret123",
+                "203.0.113.10");
+
+        for (int attempt = 0; attempt < 5; attempt++) {
+            assertThatThrownBy(() -> authService.registerUser(invalid))
+                    .isInstanceOf(EmailMismatchException.class);
+        }
+
+        // Act + Assert
+        assertThatThrownBy(() -> authService.registerUser(invalid))
+                .isInstanceOf(TooManyRequestsException.class)
+                .hasMessage("Too many registration attempts. Please try again later");
+
+        RegisterCommand anotherIp = new RegisterCommand(
+                "alice",
+                "alice@example.com",
+                "different@example.com",
+                "secret123",
+                "203.0.113.11");
+        assertThatThrownBy(() -> authService.registerUser(anotherIp))
+                .isInstanceOf(EmailMismatchException.class);
     }
 
     // ─── refresh ────────────────────────────────────────────────────────
@@ -203,7 +277,9 @@ class AuthServiceTest {
             }
         };
         RefreshToken issued = racing.issueFor("alice", Duration.ofHours(1));
-        AuthService racingService = new AuthService(users, racing, hasher, tokens, props);
+        AuthService racingService = new AuthService(
+                users, racing, hasher, tokens, props, rateLimitGuard,
+                loginRateLimitPolicy, registerRateLimitPolicy);
 
         // Act + Assert — the loser is rejected instead of minting a second token pair
         assertThatThrownBy(() -> racingService.refreshAccessToken(issued.value()))

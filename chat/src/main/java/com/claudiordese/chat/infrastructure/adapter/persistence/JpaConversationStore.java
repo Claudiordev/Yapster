@@ -64,6 +64,16 @@ public class JpaConversationStore implements ConversationStore {
     }
 
     @Override
+    public void removeMember(UUID conversationId, UUID userId) {
+        members.deleteByConversationIdAndUserId(conversationId, userId);
+    }
+
+    @Override
+    public void delete(UUID conversationId) {
+        conversations.deleteById(conversationId);
+    }
+
+    @Override
     public long lastReadSeq(UUID conversationId, UUID userId) {
         return members.findByConversationIdAndUserId(conversationId, userId)
                 .map(ConversationMemberEntity::getLastReadSeq).orElse(0L);

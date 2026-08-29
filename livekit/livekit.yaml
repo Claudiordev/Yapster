@@ -1,14 +1,30 @@
 # LiveKit server config for local development.
-# Signaling on 7880 (HTTP/WebSocket); WebRTC media over UDP 50000-50060 with a
-# TCP fallback on 7881. use_external_ip is false because clients reach the server
+# Signaling on 7880 (HTTP/WebSocket); WebRTC media over UDP 7882 with a TCP
+# fallback on 7881. use_external_ip is false because clients reach the server
 # over localhost in this setup.
 port: 7880
 
 rtc:
   tcp_port: 7881
-  port_range_start: 50000
-  port_range_end: 50060
+  # A single UDP port, not a range. Docker maps each port in a range with its
+  # own userland proxy process, so a 60-port range is slow to publish and
+  # unreliable — ICE candidates for it often aren't actually reachable, the
+  # handshake fails ("could not establish pc connection") and media limps along
+  # on the 7881 TCP fallback instead. One port is LiveKit's own recommendation
+  # for containerised deployments and is all an SFU needs (it multiplexes every
+  # participant over it).
+  udp_port: 7882
   use_external_ip: false
+  # node_ip is NOT set here — it comes from the NODE_IP env var in
+  # docker-compose.yaml, because the right value depends on how you reach the
+  # app and can't be committed.
+  #
+  # It's the address LiveKit puts in its ICE candidates, so it has to be an
+  # address the BROWSER can dial. Left to auto-detect, a container picks its
+  # own Docker bridge IP (172.x), which no browser can reach — signaling still
+  # connects over the published 7880, but the media/DTLS handshake then dies.
+  # 127.0.0.1 only works when the browser is on the Docker host itself; open
+  # the app from a LAN IP or another device and you need the host's LAN IP.
 
 # API key -> secret. The secret is the HS256 signing key the voice service uses
 # to mint join tokens; it must match LIVEKIT_API_SECRET passed to that service.

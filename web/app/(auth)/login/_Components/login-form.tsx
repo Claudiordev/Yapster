@@ -136,20 +136,20 @@ export function LoginForm() {
           </Button>
 
           <SocialLogin />
+
+          <p className="w-full text-center text-small text-default-500">
+            Need an account?{" "}
+            <Link
+              as={NextLink}
+              className="text-brand"
+              href={ROUTES.REGISTER}
+              size="sm"
+            >
+              Create one
+            </Link>
+          </p>
         </Form>
       </div>
-
-      <p className="mt-5 w-full text-center text-small text-default-500">
-        Need an account?{" "}
-        <Link
-          as={NextLink}
-          className="text-brand"
-          href={ROUTES.REGISTER}
-          size="sm"
-        >
-          Create one
-        </Link>
-      </p>
       </div>
       </div>
     </>

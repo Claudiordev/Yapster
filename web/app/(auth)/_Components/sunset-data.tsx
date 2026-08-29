@@ -2,7 +2,15 @@ import { ReactNode } from "react";
 
 export type CloudShape = "a" | "b" | "c";
 
-// Three silhouette cloud shapes with their own proportions.
+// Three silhouette cloud shapes with their own proportions. Each is a single
+// closed <path>: a chain of elliptical arcs bulging up over the top bumps,
+// full-height rounded corners (radius = wall height, so the corner lands
+// exactly on the shoulder line with no flat vertical run), and a shallow
+// belly arc instead of a flat bottom edge — a fully rounded silhouette, no
+// straight edges anywhere. Every top arc spans exactly its own diameter
+// (endpoints 2*rx apart at the same y), so "large-arc-flag=0 sweep-flag=1"
+// always resolves to the unambiguous upper half — no ellipse/ellipse
+// intersection math needed to keep the outline a single continuous shape.
 export const SHAPES: Record<
   CloudShape,
   { vw: number; vh: number; body: ReactNode }
@@ -12,26 +20,15 @@ export const SHAPES: Record<
     vw: 230,
     vh: 90,
     body: (
-      <>
-        <ellipse cx="50" cy="60" rx="30" ry="24" />
-        <ellipse cx="96" cy="42" rx="40" ry="36" />
-        <ellipse cx="146" cy="48" rx="36" ry="32" />
-        <ellipse cx="190" cy="62" rx="28" ry="23" />
-        <rect height="26" rx="13" width="192" x="22" y="58" />
-      </>
+      <path d="M46,84 A24,24 0 0 1 22,60 A34,29 0 0 1 90,60 A35,30 0 0 1 160,60 A24,20 0 0 1 208,60 A24,24 0 0 1 184,84 A69,14 0 0 1 46,84 Z" />
     ),
   },
-  // compact, taller puff
+  // longer, taller puff
   b: {
-    vw: 170,
+    vw: 210,
     vh: 104,
     body: (
-      <>
-        <ellipse cx="58" cy="58" rx="34" ry="30" />
-        <ellipse cx="104" cy="46" rx="40" ry="38" />
-        <ellipse cx="132" cy="66" rx="28" ry="26" />
-        <rect height="30" rx="15" width="116" x="28" y="62" />
-      </>
+      <path d="M58,92 A30,30 0 0 1 28,62 A28,18 0 0 1 85,62 A35,22 0 0 1 155,62 A15,9 0 0 1 185,62 A30,30 0 0 1 155,92 A48,12 0 0 1 58,92 Z" />
     ),
   },
   // long, flat, many small bumps
@@ -39,15 +36,7 @@ export const SHAPES: Record<
     vw: 320,
     vh: 82,
     body: (
-      <>
-        <ellipse cx="44" cy="54" rx="28" ry="22" />
-        <ellipse cx="92" cy="44" rx="34" ry="30" />
-        <ellipse cx="146" cy="40" rx="36" ry="32" />
-        <ellipse cx="200" cy="46" rx="32" ry="28" />
-        <ellipse cx="250" cy="52" rx="30" ry="24" />
-        <ellipse cx="288" cy="58" rx="22" ry="20" />
-        <rect height="24" rx="12" width="280" x="22" y="54" />
-      </>
+      <path d="M46,78 A24,24 0 0 1 22,54 A28,22 0 0 1 78,54 A34,28 0 0 1 146,54 A33,27 0 0 1 212,54 A27,22 0 0 1 266,54 A18,15 0 0 1 302,54 A24,24 0 0 1 278,78 A116,14 0 0 1 46,78 Z" />
     ),
   },
 };
