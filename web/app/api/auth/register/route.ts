@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { apiPost, ApiError } from "@/lib/api-client";
-import type {
-  RegisterRequest,
-  SessionRegisterResponse,
-} from "@/lib/auth";
+import type { RegisterRequest, SessionRegisterResponse } from "@/lib/auth";
+import { apiErrorResponse, problemResponse } from "@/lib/problem-response";
 
 export async function POST(request: Request) {
   try {
@@ -18,15 +16,9 @@ export async function POST(request: Request) {
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     if (error instanceof ApiError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.status },
-      );
+      return apiErrorResponse(request, error);
     }
 
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return problemResponse(request, 500, "Internal server error");
   }
 }

@@ -4,6 +4,10 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public responseBody = "",
+    public contentType: string | null = null,
+    public responseHeaders = new Headers(),
+    public statusText = "",
   ) {
     super(message);
     this.name = "ApiError";
@@ -29,19 +33,27 @@ function authHeaders(token?: string, json = false): Record<string, string> {
 async function handleResponse<TRes>(response: Response): Promise<TRes> {
   if (!response.ok) {
     let message = response.statusText;
+    const text = await response.text();
 
-    try {
-      const body = await response.json();
+    if (text) {
+      try {
+        const body = JSON.parse(text);
 
-      message = body.detail || body.message || message;
-    } catch {
-      const text = await response.text();
-
-      if (text) message = text;
+        message = body.detail || body.message || body.error || message;
+      } catch {
+        message = text;
+      }
     }
 
     console.error(`API ${response.status} ${response.url} — ${message}`);
-    throw new ApiError(response.status, message);
+    throw new ApiError(
+      response.status,
+      message,
+      text,
+      response.headers.get("content-type"),
+      response.headers,
+      response.statusText,
+    );
   }
 
   if (response.status === 204) return null as TRes;
@@ -51,7 +63,10 @@ async function handleResponse<TRes>(response: Response): Promise<TRes> {
   return (text ? JSON.parse(text) : null) as TRes;
 }
 
-export async function apiGet<TRes>(path: string, token?: string): Promise<TRes> {
+export async function apiGet<TRes>(
+  path: string,
+  token?: string,
+): Promise<TRes> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: authHeaders(token),
   });
@@ -87,7 +102,10 @@ export async function apiPut<TReq, TRes>(
   return handleResponse<TRes>(response);
 }
 
-export async function apiDelete<TRes>(path: string, token?: string): Promise<TRes> {
+export async function apiDelete<TRes>(
+  path: string,
+  token?: string,
+): Promise<TRes> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "DELETE",
     headers: authHeaders(token),

@@ -13,7 +13,6 @@ import {
   ECHO_CANCELLATION_KEY,
   NOISE_SUPPRESSION_KEY,
   readAudioProcessingPrefs,
-  readScreenShareAudioPref,
   readVideoPrefs,
   VIDEO_FRAME_RATE_KEY,
   VIDEO_RESOLUTION_KEY,
@@ -21,7 +20,6 @@ import {
   type VideoFrameRate,
   type VideoResolution,
   writeAudioProcessingPref,
-  writeScreenShareAudioPref,
 } from "@/lib/media-prefs";
 
 interface AudioDevice {
@@ -76,7 +74,6 @@ export function SettingsPanel() {
   const [videoFrameRate, setVideoFrameRate] = useState<VideoFrameRate>(
     DEFAULT_VIDEO_PREFS.frameRate,
   );
-  const [screenShareAudio, setScreenShareAudio] = useState(true);
 
   useEffect(() => {
     setInput(localStorage.getItem(INPUT_KEY) ?? "default");
@@ -93,8 +90,6 @@ export function SettingsPanel() {
 
     setVideoResolution(videoPrefs.resolution);
     setVideoFrameRate(videoPrefs.frameRate);
-    setScreenShareAudio(readScreenShareAudioPref());
-
     const md =
       typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
 
@@ -256,7 +251,9 @@ export function SettingsPanel() {
             selectedKeys={[videoResolution]}
             variant="bordered"
             onSelectionChange={(keys) => {
-              const value = (Array.from(keys)[0] as VideoResolution) ?? "1080p";
+              const value =
+                (Array.from(keys)[0] as VideoResolution) ??
+                DEFAULT_VIDEO_PREFS.resolution;
 
               setVideoResolution(value);
               localStorage.setItem(VIDEO_RESOLUTION_KEY, value);
@@ -290,22 +287,6 @@ export function SettingsPanel() {
           </Select>
         </div>
       </div>
-
-      <Switch
-        isSelected={screenShareAudio}
-        size="sm"
-        onValueChange={(enabled) => {
-          setScreenShareAudio(enabled);
-          writeScreenShareAudioPref(enabled);
-        }}
-      >
-        <div className="flex flex-col">
-          <span className="text-small">Share screen audio</span>
-          <span className="text-tiny text-default-400">
-            Requests audio when you start sharing. Enabled by default.
-          </span>
-        </div>
-      </Switch>
 
       <p className="text-tiny text-default-400">
         Sends up to{" "}

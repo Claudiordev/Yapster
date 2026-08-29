@@ -9,12 +9,23 @@ import {
 } from "react";
 import { Avatar } from "@heroui/avatar";
 import { Button } from "@heroui/button";
+import { Switch } from "@heroui/switch";
 
 import { formatElapsed } from "./call-utils";
-import { ScreenShareStage, ScreenShareTile } from "./ScreenShareView";
+import {
+  ScreenShareAudio,
+  ScreenShareStage,
+  ScreenShareTile,
+} from "./ScreenShareView";
 import { useCall } from "./useCall";
 
 import { Icon } from "@/components/icon";
+import { SettingsModal } from "@/components/SettingsModal";
+import {
+  DEFAULT_SCREEN_SHARE_AUDIO,
+  readScreenShareAudioPref,
+  writeScreenShareAudioPref,
+} from "@/lib/media-prefs";
 import type { MessageSender } from "../_Chat/ChatThread";
 
 interface CallPanelProps {
@@ -50,14 +61,20 @@ export function CallPanel({
     muted,
     screenSharing,
     screenShares,
+    error,
     join,
     leave,
     scheduleLeave,
     toggleMute,
     toggleScreenShare,
+    watchScreenShareAudio,
   } = useCall(conversationId);
 
   const [elapsed, setElapsed] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [screenShareAudio, setScreenShareAudio] = useState(
+    DEFAULT_SCREEN_SHARE_AUDIO,
+  );
   /** Identity of the share being watched full-size, if any. */
   const [watching, setWatching] = useState<string | null>(null);
   const [callHeightPercent, setCallHeightPercent] = useState(
@@ -79,9 +96,10 @@ export function CallPanel({
   // Drop back to the tiles if whoever we were watching stopped sharing.
   useEffect(() => {
     if (watching && !screenShares.some((s) => s.identity === watching)) {
+      watchScreenShareAudio(null);
       setWatching(null);
     }
-  }, [screenShares, watching]);
+  }, [screenShares, watching, watchScreenShareAudio]);
 
   // Join as soon as the panel mounts. The cleanup defers the leave so React
   // StrictMode's throwaway unmount/remount in dev doesn't rebuild the whole
@@ -100,9 +118,24 @@ export function CallPanel({
     return () => clearInterval(id);
   }, [connected]);
 
+  useEffect(() => {
+    setScreenShareAudio(readScreenShareAudioPref());
+  }, []);
+
   function handleClose() {
+    watchScreenShareAudio(null);
     leave();
     onClose();
+  }
+
+  function watchShare(identity: string) {
+    watchScreenShareAudio(identity);
+    setWatching(identity);
+  }
+
+  function closeShare() {
+    watchScreenShareAudio(null);
+    setWatching(null);
   }
 
   function resizeFromPointer(clientY: number) {
@@ -189,12 +222,32 @@ export function CallPanel({
                   ? formatElapsed(elapsed)
                   : "Call"}
           </span>
-          <Button isIconOnly size="sm" variant="light" onPress={handleClose}>
-            <Icon name="close" size={16} />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              isIconOnly
+              aria-label="Call settings"
+              size="sm"
+              variant="light"
+              onPress={() => setSettingsOpen(true)}
+            >
+              <Icon name="settings" size={16} />
+            </Button>
+            <Button isIconOnly size="sm" variant="light" onPress={handleClose}>
+              <Icon name="close" size={16} />
+            </Button>
+          </div>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+          {error && (
+            <div
+              className="rounded-medium bg-danger/15 px-3 py-2 text-tiny text-danger"
+              role="alert"
+            >
+              {error}
+            </div>
+          )}
+
           {/* The watched stage consumes the available middle space so resizing
               the divider resizes the preview instead of clipping it. */}
           {watched ? (
@@ -203,7 +256,7 @@ export function CallPanel({
                 key={watched.identity}
                 name={sharerName(watched.identity)}
                 share={watched}
-                onClose={() => setWatching(null)}
+                onClose={closeShare}
               />
             </div>
           ) : (
@@ -214,12 +267,20 @@ export function CallPanel({
                     key={share.identity}
                     name={sharerName(share.identity)}
                     share={share}
-                    onWatch={() => setWatching(share.identity)}
+                    onWatch={() => watchShare(share.identity)}
                   />
                 ))}
               </div>
             )
           )}
+
+          {screenShares.map((share) => (
+            <ScreenShareAudio
+              key={`audio-${share.identity}`}
+              enabled={watching === share.identity}
+              track={share.audioTrack}
+            />
+          ))}
 
           <div className="flex flex-shrink-0 flex-wrap items-center justify-center gap-4">
             {participants.map((p) => {
@@ -286,7 +347,30 @@ export function CallPanel({
             <Icon className="rotate-[135deg]" name="phone" size={18} />
           </Button>
         </div>
+
+        <div className="flex flex-shrink-0 justify-center">
+          <Switch
+            isSelected={screenShareAudio}
+            size="sm"
+            onValueChange={(enabled) => {
+              setScreenShareAudio(enabled);
+              writeScreenShareAudioPref(enabled);
+            }}
+          >
+            <div className="flex flex-col">
+              <span className="text-small">Share screen audio</span>
+              <span className="text-tiny text-default-400">
+                Include tab audio when screen sharing
+              </span>
+            </div>
+          </Switch>
+        </div>
       </div>
+
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
 
       <div
         aria-label="Resize call panel"

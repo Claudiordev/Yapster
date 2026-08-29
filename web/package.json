@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "https-cert": "bash scripts/generate-local-cert.sh",
+    "dev:https": "next dev --turbopack -H 0.0.0.0 -p 3001 --experimental-https --experimental-https-key certificates/local-ip-key.pem --experimental-https-cert certificates/local-ip.pem",
     "build": "next build",
     "start": "next start",
     "lint": "eslint --fix"

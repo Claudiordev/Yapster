@@ -1,10 +1,6 @@
-import { NextResponse } from "next/server";
-
 import { ApiError } from "@/lib/api-client";
 import { getAuthToken } from "@/lib/auth";
-
-const fail = (error: string, status: number) =>
-  NextResponse.json({ error }, { status });
+import { apiErrorResponse, problemResponse } from "@/lib/problem-response";
 
 /**
  * Wraps a BFF route handler with the boilerplate every proxy route repeats:
@@ -15,19 +11,25 @@ const fail = (error: string, status: number) =>
  * `withAuth<{ params: Promise<{ id: string }> }>(async (req, token, { params }) => …)`.
  */
 export function withAuth<C = unknown>(
-  handler: (request: Request, token: string, ctx: C) => Promise<Response> | Response,
+  handler: (
+    request: Request,
+    token: string,
+    ctx: C,
+  ) => Promise<Response> | Response,
 ) {
   return async (request: Request, ctx: C) => {
     const token = await getAuthToken();
 
-    if (!token) return fail("Not authenticated", 401);
+    if (!token) {
+      return problemResponse(request, 401, "Not authenticated", "Unauthorized");
+    }
 
     try {
       return await handler(request, token, ctx);
     } catch (error) {
       return error instanceof ApiError
-        ? fail(error.message, error.status)
-        : fail("Something went wrong", 500);
+        ? apiErrorResponse(request, error)
+        : problemResponse(request, 500, "Something went wrong");
     }
   };
 }

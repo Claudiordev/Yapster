@@ -20,6 +20,7 @@ import { useSound } from "react-sounds";
 import {
   ADAPTIVE_RESOLUTION_LADDER,
   ADAPTIVE_RESOLUTIONS,
+  DEFAULT_SCREEN_SHARE_AUDIO,
   type AdaptiveResolutionTier,
   readAudioProcessingPrefs,
   readScreenShareAudioPref,
@@ -37,6 +38,7 @@ export interface CallParticipant {
 
 export interface ScreenShare {
   track: LocalTrack | RemoteTrack;
+  audioTrack?: LocalTrack | RemoteTrack;
   identity: string;
 }
 
@@ -569,6 +571,9 @@ interface UseCallState {
   scheduleLeave: () => void;
   toggleMute: () => Promise<void>;
   toggleScreenShare: () => Promise<void>;
+  /** Play only the selected remote screen share's audio. Pass null when the
+   *  expanded screen-share view is closed. */
+  watchScreenShareAudio: (identity: string | null) => void;
 }
 
 /**
@@ -604,6 +609,60 @@ export function useCall(conversationId: string | null): UseCallState {
   const [screenShares, setScreenShares] = useState<ScreenShare[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [speakingIds, setSpeakingIds] = useState<string[]>([]);
+  const watchedScreenShareAudioRef = useRef<string | null>(null);
+  const pendingScreenShareAudioTracksRef = useRef(
+    new Map<string, LocalTrack | RemoteTrack>(),
+  );
+
+  const watchScreenShareAudio = useCallback((identity: string | null) => {
+    const room = roomRef.current;
+    const previouslyWatched = watchedScreenShareAudioRef.current;
+
+    if (room && previouslyWatched && previouslyWatched !== identity) {
+      const previousPublication = room.remoteParticipants
+        .get(previouslyWatched)
+        ?.getTrackPublication(Track.Source.ScreenShareAudio);
+
+      previousPublication?.setEnabled(false);
+      previousPublication?.setSubscribed(false);
+    }
+
+    watchedScreenShareAudioRef.current = identity;
+
+    if (identity) {
+      // Screen audio is a separate LiveKit publication from screen video.
+      // Explicitly subscribe and enable it when the viewer chooses a stream,
+      // matching the screen-share subscription flow used by Fluxer.
+      const remotePublication = room?.remoteParticipants
+        .get(identity)
+        ?.getTrackPublication(Track.Source.ScreenShareAudio);
+      const localPublication =
+        room?.localParticipant.identity === identity
+          ? room.localParticipant.getTrackPublication(
+              Track.Source.ScreenShareAudio,
+            )
+          : undefined;
+
+      if (!remotePublication && !localPublication) {
+        setError(
+          "This screen share is not publishing an audio track. The sender must restart the share, select the YouTube tab, and enable Share tab audio.",
+        );
+      } else {
+        setError(null);
+      }
+
+      remotePublication?.setSubscribed(true);
+      remotePublication?.setEnabled(true);
+
+      // Called directly by the Watch button, so LiveKit can unlock its audio
+      // context while the browser still considers this a user gesture. This
+      // also lets a screen-audio track that subscribes slightly later play.
+      void room?.startAudio().catch((playbackError) => {
+        // eslint-disable-next-line no-console
+        console.warn("Could not enable call audio", playbackError);
+      });
+    }
+  }, []);
 
   // Our OWN mic is analysed here in the browser rather than via LiveKit's
   // participant.isSpeaking, which comes from the server's audio-level observer
@@ -691,19 +750,47 @@ export function useCall(conversationId: string | null): UseCallState {
   // previous entry rather than stacking up.
   const addScreenShare = useCallback(
     (identity: string, track: LocalTrack | RemoteTrack) => {
+      const audioTrack = pendingScreenShareAudioTracksRef.current.get(identity);
+
       setScreenShares((prev) => [
         ...prev.filter((s) => s.identity !== identity),
-        { identity, track },
+        { identity, track, audioTrack },
       ]);
     },
     [],
   );
 
+  const addScreenShareAudio = useCallback(
+    (identity: string, audioTrack: LocalTrack | RemoteTrack) => {
+      pendingScreenShareAudioTracksRef.current.set(identity, audioTrack);
+      setScreenShares((prev) =>
+        prev.map((share) =>
+          share.identity === identity ? { ...share, audioTrack } : share,
+        ),
+      );
+    },
+    [],
+  );
+
+  const removeScreenShareAudio = useCallback((identity: string) => {
+    pendingScreenShareAudioTracksRef.current.delete(identity);
+    setScreenShares((prev) =>
+      prev.map((share) => {
+        if (share.identity !== identity) return share;
+
+        const { audioTrack: _audioTrack, ...videoShare } = share;
+
+        return videoShare;
+      }),
+    );
+  }, []);
+
   const removeScreenShare = useCallback((identity: string) => {
+    pendingScreenShareAudioTracksRef.current.delete(identity);
     setScreenShares((prev) => prev.filter((s) => s.identity !== identity));
   }, []);
 
-  const screenAudioEnabledRef = useRef(true);
+  const screenAudioEnabledRef = useRef(DEFAULT_SCREEN_SHARE_AUDIO);
 
   useEffect(() => {
     screenAudioEnabledRef.current = readScreenShareAudioPref();
@@ -983,19 +1070,11 @@ export function useCall(conversationId: string | null): UseCallState {
         {
           resolution,
           contentHint: "motion",
-          // Ask getDisplayMedia for the selected source's audio too.
-          // Chrome still requires the user to enable "Share tab audio" in
-          // its picker; unsupported browsers simply return video only.
-          audio: includeAudio
-            ? {
-                restrictOwnAudio: { ideal: true },
-                channelCount: { ideal: 2 },
-                sampleRate: { ideal: 48_000 },
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
-              }
-            : false,
+          // Use the browser's standard display-audio request, as Fluxer does.
+          // Microphone-style constraints here can make Chromium return video
+          // without a display-audio track on otherwise supported sources.
+          // Chrome still requires the user to select "Share tab audio".
+          audio: includeAudio,
           systemAudio: includeAudio ? "include" : "exclude",
           suppressLocalAudioPlayback: false,
         },
@@ -1295,6 +1374,23 @@ export function useCall(conversationId: string | null): UseCallState {
       room.on(RoomEvent.TrackMuted, () => refreshParticipants(room));
       room.on(RoomEvent.TrackUnmuted, () => refreshParticipants(room));
 
+      // Screen-share audio is its own publication. Keep it unsubscribed until
+      // the receiver actively watches that participant, then subscribe here
+      // as well as in the click handler so a publication arriving later is
+      // not missed.
+      room.on(RoomEvent.TrackPublished, (publication, participant) => {
+        if (publication.source !== Track.Source.ScreenShareAudio) return;
+
+        // Subscribe while the share tile is visible so its audio element can
+        // be primed muted before the viewer clicks Watch stream. The click
+        // only changes playback volume; it no longer races subscription.
+        publication.setSubscribed(true);
+        publication.setEnabled(true);
+        if (watchedScreenShareAudioRef.current === participant.identity) {
+          setError(null);
+        }
+      });
+
       // Notify other conversation members as soon as the room is actually
       // connected (fires on the initial connect and on any reconnect) --
       // decoupled from the rest of join() so a later failure (e.g. the mic
@@ -1303,19 +1399,22 @@ export function useCall(conversationId: string | null): UseCallState {
         if (conversationId) send({ type: "CALL_STARTED", conversationId });
       });
 
-      // Remote audio doesn't play itself -- attach each subscribed track to a
-      // hidden <audio> element and clean it up once unsubscribed. A remote
-      // screen share is video, not auto-played anywhere -- surface the Track
-      // itself so CallPanel can attach it to a visible <video>.
-      room.on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
-        if (track.kind === Track.Kind.Audio) {
+      // Microphones play through hidden audio elements. Screen-share video and
+      // its separate audio track are kept together in ScreenShare state and
+      // attached by the expanded ScreenShareStage.
+      room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        if (publication.source === Track.Source.ScreenShareAudio) {
+          addScreenShareAudio(participant.identity, track);
+        } else if (track.kind === Track.Kind.Audio) {
           const el = track.attach();
 
           el.autoplay = true;
           el.dataset.livekitTrack = track.sid ?? "";
+          el.dataset.livekitParticipant = participant.identity;
+          el.dataset.livekitSource = publication.source;
           document.body.appendChild(el);
         }
-        if (track.source === Track.Source.ScreenShare) {
+        if (publication.source === Track.Source.ScreenShare) {
           addScreenShare(participant.identity, track);
           startReceiverStatsLogging(
             track as RemoteVideoTrack,
@@ -1325,9 +1424,12 @@ export function useCall(conversationId: string | null): UseCallState {
       });
       room.on(
         RoomEvent.TrackUnsubscribed,
-        (track, _publication, participant) => {
+        (track, publication, participant) => {
           track.detach().forEach((el) => el.remove());
-          if (track.source === Track.Source.ScreenShare) {
+          if (publication.source === Track.Source.ScreenShareAudio) {
+            removeScreenShareAudio(participant.identity);
+          }
+          if (publication.source === Track.Source.ScreenShare) {
             removeScreenShare(participant.identity);
             stopScreenShareStatsLogging(
               `recv:${participant.identity}:${track.sid ?? ""}`,
@@ -1355,8 +1457,33 @@ export function useCall(conversationId: string | null): UseCallState {
         ) {
           addAnalyser(participant.identity, publication.track.mediaStreamTrack);
         }
+        if (
+          publication.source === Track.Source.ScreenShareAudio &&
+          publication.track
+        ) {
+          addScreenShareAudio(participant.identity, publication.track);
+          const mediaTrack = publication.track.mediaStreamTrack;
+
+          // Apply fidelity hints only after Chrome has returned the display
+          // track. They are optional and must not block screen-audio capture.
+          mediaTrack.contentHint = "music";
+          void mediaTrack
+            .applyConstraints({
+              channelCount: 2,
+              sampleRate: 48_000,
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+            })
+            .catch(() => {
+              // Unsupported hints do not prevent using the captured track.
+            });
+        }
       });
       room.on(RoomEvent.LocalTrackUnpublished, (publication, participant) => {
+        if (publication.source === Track.Source.ScreenShareAudio) {
+          removeScreenShareAudio(participant.identity);
+        }
         if (publication.source === Track.Source.ScreenShare) {
           setScreenSharing(false);
           // Keyed by identity, not publication.track -- LiveKit clears that
@@ -1369,10 +1496,12 @@ export function useCall(conversationId: string | null): UseCallState {
 
       room.on(RoomEvent.Disconnected, () => {
         roomRef.current = null;
+        watchedScreenShareAudioRef.current = null;
         setConnected(false);
         setReconnecting(false);
         setParticipants([]);
         setScreenShares([]);
+        pendingScreenShareAudioTracksRef.current.clear();
         stopAllScreenShareStatsLogging();
         clearMediaSession();
       });
@@ -1478,7 +1607,9 @@ export function useCall(conversationId: string | null): UseCallState {
     publishMic,
     addAnalyser,
     addScreenShare,
+    addScreenShareAudio,
     removeScreenShare,
+    removeScreenShareAudio,
     startSenderStatsLogging,
     startReceiverStatsLogging,
     stopScreenShareStatsLogging,
@@ -1534,6 +1665,20 @@ export function useCall(conversationId: string | null): UseCallState {
       screenAudioEnabledRef.current = includeAudio;
       await setConfiguredScreenShareEnabled(room, next, includeAudio);
       setScreenSharing(next);
+
+      if (
+        next &&
+        includeAudio &&
+        !room.localParticipant.getTrackPublication(
+          Track.Source.ScreenShareAudio,
+        )
+      ) {
+        setError(
+          'Chrome did not provide shared audio. Select a browser tab and enable "Share tab audio" in the picker.',
+        );
+      } else if (next) {
+        setError(null);
+      }
     } catch {
       // Screen picker was cancelled, or unsupported in this browser -- no-op.
     }
@@ -1560,5 +1705,6 @@ export function useCall(conversationId: string | null): UseCallState {
     scheduleLeave,
     toggleMute,
     toggleScreenShare,
+    watchScreenShareAudio,
   };
 }
