@@ -80,7 +80,7 @@ public class UserController {
             throw new BadRequestException("empty_file", "No file was uploaded.");
         }
         String contentType = file.getContentType();
-        if (contentType == null || !contentType.startsWith("image/")) {
+        if (contentType == null) {
             throw new BadRequestException("not_an_image", "The uploaded file must be an image.");
         }
 

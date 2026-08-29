@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * Normalises an uploaded avatar before it is stored: square center-crop, downscale
@@ -23,12 +25,25 @@ public class AvatarImageProcessor {
 
     /** Master edge length in px. 256 is crisp for small icons at high DPR and tiny as JPEG. */
     private static final int SIZE = 256;
+    private static final int MAX_INPUT_SIZE = 5 * 1024 * 1024;
+    private static final Set<String> SUPPORTED_CONTENT_TYPES =
+            Set.of("image/jpeg", "image/png", "image/webp");
     /** JPEG quality 0..1 — 0.85 is visually lossless for photos at this size. */
     private static final double QUALITY = 0.85;
 
-    public ProcessedImage process(byte[] input) {
+    public ProcessedImage process(byte[] input, String contentType) {
         if (input == null || input.length == 0) {
             throw new BadRequestException("invalid_image", "No image data was uploaded");
+        }
+        if (input.length > MAX_INPUT_SIZE) {
+            throw new BadRequestException("image_too_large", "Profile pictures must be 5 MB or smaller");
+        }
+        String normalizedContentType = contentType == null
+                ? ""
+                : contentType.toLowerCase(Locale.ROOT).split(";", 2)[0].trim();
+        if (!SUPPORTED_CONTENT_TYPES.contains(normalizedContentType)) {
+            throw new BadRequestException(
+                    "unsupported_image", "Profile pictures must be JPEG, PNG, or WebP images");
         }
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
