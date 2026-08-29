@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Allow phones and other devices on this LAN to load development-only
+  // Next assets from the dev server. This setting has no production effect.
+  allowedDevOrigins: ["192.168.68.64"],
   // Emit a self-contained server bundle (.next/standalone) so the Docker image
   // ships only the traced node_modules + a minimal server.js.
   output: "standalone",

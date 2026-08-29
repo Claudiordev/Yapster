@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { apiPost, ApiError } from "@/lib/api-client";
 import { getAuthToken } from "@/lib/auth";
+import { apiErrorResponse, problemResponse } from "@/lib/problem-response";
 
 interface RoomAccessResponse {
   serverUrl: string;
@@ -18,10 +19,7 @@ export async function POST(
     const token = await getAuthToken();
 
     if (!token) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 },
-      );
+      return problemResponse(request, 401, "Not authenticated", "Unauthorized");
     }
 
     const { room } = await params;
@@ -35,15 +33,9 @@ export async function POST(
     return NextResponse.json(data);
   } catch (error) {
     if (error instanceof ApiError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.status },
-      );
+      return apiErrorResponse(request, error);
     }
 
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return problemResponse(request, 500, "Internal server error");
   }
 }

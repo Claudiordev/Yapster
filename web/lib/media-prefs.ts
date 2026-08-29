@@ -45,6 +45,8 @@ export function writeAudioProcessingPref(key: string, enabled: boolean): void {
 export const VIDEO_RESOLUTION_KEY = "video-resolution";
 export const VIDEO_FRAME_RATE_KEY = "video-frame-rate";
 export const SCREEN_SHARE_AUDIO_KEY = "screen-share-audio";
+/** Shared default used by the settings page, in-call settings, and call hook. */
+export const DEFAULT_SCREEN_SHARE_AUDIO = true;
 
 export type VideoResolution = "720p" | "1080p" | "1440p";
 export type VideoFrameRate = 30 | 60;
@@ -126,16 +128,19 @@ export interface VideoPrefs {
   frameRate: VideoFrameRate;
 }
 
-// Default to sharp 1080p at the broadly supported 30 fps. Users sharing
-// high-motion content can still select 60 fps in Settings.
+// Default new users to the highest built-in screen-share quality.
 export const DEFAULT_VIDEO_PREFS: VideoPrefs = {
-  resolution: "1080p",
-  frameRate: 30,
+  resolution: "1440p",
+  frameRate: 60,
 };
 
-/** Absent key = enabled, so existing users share audio by default. */
+/** An explicit local preference wins; absent preference defaults to enabled. */
 export function readScreenShareAudioPref(): boolean {
-  return readFlag(SCREEN_SHARE_AUDIO_KEY);
+  if (typeof window === "undefined") return DEFAULT_SCREEN_SHARE_AUDIO;
+
+  const stored = window.localStorage.getItem(SCREEN_SHARE_AUDIO_KEY);
+
+  return stored === null ? DEFAULT_SCREEN_SHARE_AUDIO : stored === "true";
 }
 
 export function writeScreenShareAudioPref(enabled: boolean): void {
