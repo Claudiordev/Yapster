@@ -9,7 +9,6 @@ import {
 } from "react";
 import { Avatar } from "@heroui/avatar";
 import { Button } from "@heroui/button";
-import { Switch } from "@heroui/switch";
 
 import { formatElapsed } from "./call-utils";
 import {
@@ -21,11 +20,6 @@ import { useCall } from "./useCall";
 
 import { Icon } from "@/components/icon";
 import { SettingsModal } from "@/components/SettingsModal";
-import {
-  DEFAULT_SCREEN_SHARE_AUDIO,
-  readScreenShareAudioPref,
-  writeScreenShareAudioPref,
-} from "@/lib/media-prefs";
 import type { MessageSender } from "../_Chat/ChatThread";
 
 interface CallPanelProps {
@@ -72,9 +66,6 @@ export function CallPanel({
 
   const [elapsed, setElapsed] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [screenShareAudio, setScreenShareAudio] = useState(
-    DEFAULT_SCREEN_SHARE_AUDIO,
-  );
   /** Identity of the share being watched full-size, if any. */
   const [watching, setWatching] = useState<string | null>(null);
   const [callHeightPercent, setCallHeightPercent] = useState(
@@ -117,10 +108,6 @@ export function CallPanel({
 
     return () => clearInterval(id);
   }, [connected]);
-
-  useEffect(() => {
-    setScreenShareAudio(readScreenShareAudioPref());
-  }, []);
 
   function handleClose() {
     watchScreenShareAudio(null);
@@ -282,7 +269,7 @@ export function CallPanel({
             />
           ))}
 
-          <div className="flex flex-shrink-0 flex-wrap items-center justify-center gap-4">
+          <div className="flex min-h-[72px] min-w-0 flex-1 flex-wrap items-center justify-center gap-4">
             {participants.map((p) => {
               const sender = senders[p.identity];
               const name = p.isLocal ? "You" : (sender?.name ?? "Unknown");
@@ -346,24 +333,6 @@ export function CallPanel({
           >
             <Icon className="rotate-[135deg]" name="phone" size={18} />
           </Button>
-        </div>
-
-        <div className="flex flex-shrink-0 justify-center">
-          <Switch
-            isSelected={screenShareAudio}
-            size="sm"
-            onValueChange={(enabled) => {
-              setScreenShareAudio(enabled);
-              writeScreenShareAudioPref(enabled);
-            }}
-          >
-            <div className="flex flex-col">
-              <span className="text-small">Share screen audio</span>
-              <span className="text-tiny text-default-400">
-                Include tab audio when screen sharing
-              </span>
-            </div>
-          </Switch>
         </div>
       </div>
 

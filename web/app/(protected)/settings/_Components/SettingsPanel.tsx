@@ -10,16 +10,19 @@ import { Icon } from "@/components/icon";
 import { siteConfig } from "@/config/site";
 import {
   DEFAULT_VIDEO_PREFS,
+  DEFAULT_SCREEN_SHARE_AUDIO,
   ECHO_CANCELLATION_KEY,
   NOISE_SUPPRESSION_KEY,
   readAudioProcessingPrefs,
   readVideoPrefs,
+  readScreenShareAudioPref,
   VIDEO_FRAME_RATE_KEY,
   VIDEO_RESOLUTION_KEY,
   VIDEO_RESOLUTIONS,
   type VideoFrameRate,
   type VideoResolution,
   writeAudioProcessingPref,
+  writeScreenShareAudioPref,
 } from "@/lib/media-prefs";
 
 interface AudioDevice {
@@ -74,6 +77,9 @@ export function SettingsPanel() {
   const [videoFrameRate, setVideoFrameRate] = useState<VideoFrameRate>(
     DEFAULT_VIDEO_PREFS.frameRate,
   );
+  const [screenShareAudio, setScreenShareAudio] = useState(
+    DEFAULT_SCREEN_SHARE_AUDIO,
+  );
 
   useEffect(() => {
     setInput(localStorage.getItem(INPUT_KEY) ?? "default");
@@ -90,6 +96,7 @@ export function SettingsPanel() {
 
     setVideoResolution(videoPrefs.resolution);
     setVideoFrameRate(videoPrefs.frameRate);
+    setScreenShareAudio(readScreenShareAudioPref());
     const md =
       typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
 
@@ -287,6 +294,22 @@ export function SettingsPanel() {
           </Select>
         </div>
       </div>
+
+      <Switch
+        isSelected={screenShareAudio}
+        size="sm"
+        onValueChange={(enabled) => {
+          setScreenShareAudio(enabled);
+          writeScreenShareAudioPref(enabled);
+        }}
+      >
+        <div className="flex flex-col">
+          <span className="text-small">Share screen audio</span>
+          <span className="text-tiny text-default-400">
+            Requests audio when you start sharing. Enabled by default.
+          </span>
+        </div>
+      </Switch>
 
       <p className="text-tiny text-default-400">
         Sends up to{" "}
