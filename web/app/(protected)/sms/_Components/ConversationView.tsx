@@ -14,7 +14,11 @@ import { useTyping } from "./_Message/useTyping";
 import { conversationName, isGroupCreator } from "@/lib/chat";
 
 /** The thread for a single conversation, rendered at /sms/[conversationId]. */
-export function ConversationView({ conversationId }: { conversationId: string }) {
+export function ConversationView({
+  conversationId,
+}: {
+  conversationId: string;
+}) {
   const {
     conversations,
     markRead,
@@ -90,7 +94,10 @@ export function ConversationView({ conversationId }: { conversationId: string })
     const map: Record<string, MessageSender> = {};
 
     if (account.userId) {
-      map[account.userId] = { name: account.username ?? "You", avatarUrl: account.avatarUrl };
+      map[account.userId] = {
+        name: account.username ?? "You",
+        avatarUrl: account.avatarUrl,
+      };
     }
 
     for (const member of active?.members ?? []) {
@@ -112,11 +119,35 @@ export function ConversationView({ conversationId }: { conversationId: string })
   const isGroup = active?.type === "GROUP";
   const amCreator = active ? isGroupCreator(active, account.userId) : false;
   const memberIds = useMemo(
-    () => [account.userId, ...(active?.members.map((m) => m.id) ?? [])].filter(
-      (id): id is string => id != null,
-    ),
+    () =>
+      [account.userId, ...(active?.members.map((m) => m.id) ?? [])].filter(
+        (id): id is string => id != null,
+      ),
     [account.userId, active],
   );
+
+  async function addGroupMember(user: Parameters<typeof addMember>[1]) {
+    const added = await addMember(conversationId, user);
+
+    if (added) {
+      await sendMessage(`${user.username} was added to the chat`);
+    }
+
+    return added;
+  }
+
+  async function removeGroupMember(userId: string) {
+    const member = active?.members.find((candidate) => candidate.id === userId);
+    const removed = await removeMember(conversationId, userId);
+
+    if (removed) {
+      await sendMessage(
+        `${member?.username ?? "A user"} was removed from the chat`,
+      );
+    }
+
+    return removed;
+  }
 
   return (
     <>
@@ -150,7 +181,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
         <AddMemberModal
           existingMemberIds={memberIds}
           isOpen={addMemberOpen}
-          onAdd={(user) => addMember(conversationId, user)}
+          onAdd={addGroupMember}
           onClose={() => setAddMemberOpen(false)}
         />
       )}
@@ -163,7 +194,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
           myUsername={account.username}
           onClose={() => setManageOpen(false)}
           onDeleteGroup={() => deleteGroup(conversationId)}
-          onRemoveMember={(userId) => removeMember(conversationId, userId)}
+          onRemoveMember={removeGroupMember}
         />
       )}
     </>

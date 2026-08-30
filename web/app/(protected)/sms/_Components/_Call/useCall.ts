@@ -169,6 +169,7 @@ const ADAPTIVE_STEP_DOWN_COOLDOWN_MS = 10_000;
 const ADAPTIVE_STEP_UP_BASE_COOLDOWN_MS = 5_000;
 const ADAPTIVE_STEP_UP_MAX_COOLDOWN_MS = 30_000; // doubles each step-up, caps here
 const ADAPTIVE_BANDWIDTH_BITRATE_STEP_FACTOR = 0.6; // first move on a bandwidth limit: cut bitrate, not resolution
+const SCREEN_SHARE_MIN_BITRATE = 5_000_000;
 
 // High-quality-first by default. WebRTC reports a transient "bandwidth"
 // limitation while its congestion controller is still probing at startup. An
@@ -316,6 +317,9 @@ async function enforceConfiguredScreenShareSender(
       ...encoding,
       maxBitrate,
       maxFramerate,
+      // Chromium currently treats this as an experimental hint. It is
+      // removed and retried below when the browser rejects the field.
+      minBitrate: SCREEN_SHARE_MIN_BITRATE,
       priority: "high" as const,
       networkPriority: "high" as const,
     };
@@ -327,7 +331,20 @@ async function enforceConfiguredScreenShareSender(
     return restored;
   });
 
-  await sender.setParameters(parameters);
+  try {
+    await sender.setParameters(parameters);
+  } catch {
+    // `minBitrate` is not implemented consistently across browsers. Keep the
+    // reliable max-bitrate configuration if this browser rejects the hint.
+    parameters.encodings = parameters.encodings.map((encoding) => {
+      const fallback = { ...encoding };
+
+      delete (fallback as { minBitrate?: number }).minBitrate;
+
+      return fallback;
+    });
+    await sender.setParameters(parameters);
+  }
 }
 
 function currentAdaptiveBitrate(state: AdaptiveScreenShareState): number {

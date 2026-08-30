@@ -46,6 +46,8 @@ export function AddMemberModal({
     setAddingId(null);
     if (!ok) {
       addToast({ title: "Could not add member", color: "danger" });
+    } else {
+      handleClose();
     }
   }
 
