@@ -57,6 +57,7 @@ interface ScreenShareSendStats {
   frameHeight?: number;
   framesPerSecond?: number;
   targetBitrate?: number;
+  keyFramesEncoded?: number;
   qualityLimitationReason?: string;
   encoderImplementation?: string;
   powerEfficientEncoder?: boolean;
@@ -151,14 +152,12 @@ function clearMediaSession() {
 // ── Adaptive screen-share quality ───────────────────────────────────────────
 //
 // The static ceiling set at share-start (see toggleScreenShare) is a MAX, not
-// a floor -- on a congested link, "detail"/maintain-resolution used to hold
-// the encoder there and let bandwidth estimation crush the bitrate at full
-// res instead (see the comment on contentHint above). Now that we run
-// "motion"/maintain-framerate, nothing stops that same collapse on its own --
-// this closed loop is what's supposed to catch it: watch the same stats
-// startSenderStatsLogging already polls, and when the link clearly can't
-// sustain the current tier, step resolution/bitrate down to one it can, then
-// step back up once things look clear again. Modeled on fluxerapp/fluxer's
+// a floor. "motion" keeps the game/video encoder path while
+// maintain-resolution protects spatial detail when bandwidth is constrained.
+// This closed loop remains available to step both resolution and bitrate down
+// only when the configured tier is genuinely not sustainable, then step back
+// up once things look clear again.
+// Modeled on fluxerapp/fluxer's
 // AdaptiveScreenShareEngine, trimmed down: one resolution ladder (no separate
 // frame-rate ladder -- 30/60 is the whole choice here) and no per-mode
 // (gaming vs. screenshare) branching.
@@ -169,7 +168,14 @@ const ADAPTIVE_STEP_DOWN_COOLDOWN_MS = 10_000;
 const ADAPTIVE_STEP_UP_BASE_COOLDOWN_MS = 5_000;
 const ADAPTIVE_STEP_UP_MAX_COOLDOWN_MS = 30_000; // doubles each step-up, caps here
 const ADAPTIVE_BANDWIDTH_BITRATE_STEP_FACTOR = 0.6; // first move on a bandwidth limit: cut bitrate, not resolution
-const SCREEN_SHARE_MIN_BITRATE = 5_000_000;
+
+// Static screen captures may leave the viewer looking at the first, heavily
+// compressed keyframe because no changing pixels arrive after WebRTC's startup
+// bandwidth estimate rises. Ask Chromium for a few bounded refresh keyframes
+// during that ramp. Moving content already produces replacement frames, while
+// documents gain a clean full-detail frame without continuously wasting the
+// configured 13 Mbps ceiling on identical pixels.
+const SCREEN_SHARE_STARTUP_KEYFRAME_DELAYS_MS = [500, 1_500, 3_000] as const;
 
 // High-quality-first by default. WebRTC reports a transient "bandwidth"
 // limitation while its congestion controller is still probing at startup. An
@@ -256,20 +262,35 @@ async function applyAdaptiveScreenShareTier(
     // Best-effort -- scaleResolutionDownBy + maxFramerate below still apply.
   }
   if (typeof track.setDegradationPreference === "function") {
-    await track.setDegradationPreference("maintain-framerate");
+    await track.setDegradationPreference("maintain-resolution");
   }
 
   const parameters = sender.getParameters();
   const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
 
-  parameters.degradationPreference = "maintain-framerate";
+  parameters.degradationPreference = "maintain-resolution";
   parameters.encodings = encodings.map((encoding) => ({
     ...encoding,
     ...(scaleResolutionDownBy !== undefined ? { scaleResolutionDownBy } : {}),
+    // Keep the floor aligned with this tier's ceiling. If the adaptive engine
+    // selects another tier later, both values move together.
+    minBitrate: maxBitrate,
     maxBitrate,
     maxFramerate: frameRate,
   }));
-  await sender.setParameters(parameters);
+
+  try {
+    await sender.setParameters(parameters);
+  } catch {
+    parameters.encodings = parameters.encodings.map((encoding) => {
+      const fallback = { ...encoding };
+
+      delete (fallback as { minBitrate?: number }).minBitrate;
+
+      return fallback;
+    });
+    await sender.setParameters(parameters);
+  }
 }
 
 /**
@@ -292,7 +313,7 @@ async function restoreConfiguredScreenShare(
   });
 
   if (typeof track.setDegradationPreference === "function") {
-    await track.setDegradationPreference("maintain-framerate");
+    await track.setDegradationPreference("maintain-resolution");
   }
 
   await enforceConfiguredScreenShareSender(track);
@@ -311,15 +332,17 @@ async function enforceConfiguredScreenShareSender(
   const parameters = sender.getParameters();
   const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
 
-  parameters.degradationPreference = "maintain-framerate";
+  parameters.degradationPreference = "maintain-resolution";
   parameters.encodings = encodings.map((encoding) => {
     const restored = {
       ...encoding,
       maxBitrate,
       maxFramerate,
-      // Chromium currently treats this as an experimental hint. It is
-      // removed and retried below when the browser rejects the field.
-      minBitrate: SCREEN_SHARE_MIN_BITRATE,
+      // Best-effort Chromium hint. Browsers that reject the non-standard field
+      // retry below with the standard max-bitrate and priority settings intact.
+      // The selected resolution/frame-rate bitrate is both the requested floor
+      // and ceiling (for example, 1440p60 => 13 Mbps for each).
+      minBitrate: maxBitrate,
       priority: "high" as const,
       networkPriority: "high" as const,
     };
@@ -334,8 +357,6 @@ async function enforceConfiguredScreenShareSender(
   try {
     await sender.setParameters(parameters);
   } catch {
-    // `minBitrate` is not implemented consistently across browsers. Keep the
-    // reliable max-bitrate configuration if this browser rejects the hint.
     parameters.encodings = parameters.encodings.map((encoding) => {
       const fallback = { ...encoding };
 
@@ -344,6 +365,44 @@ async function enforceConfiguredScreenShareSender(
       return fallback;
     });
     await sender.setParameters(parameters);
+  }
+}
+
+/**
+ * Ask the browser encoder for a fresh intra frame without restarting capture.
+ *
+ * Chromium exposes this as the optional second setParameters argument. The
+ * field has not reached this project's TypeScript DOM declarations yet, so the
+ * narrow intersection keeps the unsupported extension contained here. Other
+ * browsers may reject it; the existing stream continues normally in that case.
+ */
+async function requestScreenShareKeyFrame(
+  track: LocalVideoTrack,
+): Promise<boolean> {
+  const sender = track.sender;
+
+  if (!sender || track.mediaStreamTrack.readyState !== "live") return false;
+
+  const parameters = sender.getParameters();
+  const encodingCount = parameters.encodings?.length ?? 0;
+
+  // The extension requires exactly one option per negotiated encoding.
+  if (encodingCount === 0) return false;
+
+  const keyFrameOptions = {
+    encodingOptions: Array.from({ length: encodingCount }, () => ({
+      keyFrame: true,
+    })),
+  } as RTCSetParameterOptions & {
+    encodingOptions: Array<{ keyFrame: boolean }>;
+  };
+
+  try {
+    await sender.setParameters(parameters, keyFrameOptions);
+
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -819,6 +878,9 @@ export function useCall(conversationId: string | null): UseCallState {
   const screenShareStatsTimersRef = useRef(
     new Map<string, ReturnType<typeof setInterval>>(),
   );
+  const screenShareStartupKeyFrameTimersRef = useRef(
+    new Map<string, Set<ReturnType<typeof setTimeout>>>(),
+  );
   const prevScreenShareBytesRef = useRef(
     new Map<
       string,
@@ -845,11 +907,14 @@ export function useCall(conversationId: string | null): UseCallState {
 
   const stopScreenShareStatsLogging = useCallback((key: string) => {
     const timer = screenShareStatsTimersRef.current.get(key);
+    const keyFrameTimers = screenShareStartupKeyFrameTimersRef.current.get(key);
 
     if (timer) {
       clearInterval(timer);
       screenShareStatsTimersRef.current.delete(key);
     }
+    keyFrameTimers?.forEach((keyFrameTimer) => clearTimeout(keyFrameTimer));
+    screenShareStartupKeyFrameTimersRef.current.delete(key);
     prevScreenShareBytesRef.current.delete(key);
     if (key.startsWith("send:")) adaptiveScreenShareRef.current = null;
   }, []);
@@ -871,10 +936,8 @@ export function useCall(conversationId: string | null): UseCallState {
         actual: `${actual.width}x${actual.height}@${actual.frameRate}fps`,
       });
 
-      // "motion"/maintain-framerate (see toggleScreenShare) needs something
-      // watching for the collapse that combination is prone to on a congested
-      // link -- this is that watcher, seeded from the same prefs the capture
-      // itself was built from.
+      // Seed the optional adaptive watcher from the same preferences the
+      // capture itself was built from.
       const configuredPrefs = readVideoPrefs();
 
       adaptiveScreenShareRef.current = ADAPTIVE_SCREEN_SHARE_QUALITY_ENABLED
@@ -886,10 +949,65 @@ export function useCall(conversationId: string | null): UseCallState {
 
       // LiveKit already applies these at publish time. Reassert them on the
       // concrete sender as well so renegotiation or browser defaults cannot
-      // leave a lower ceiling/priority behind.
-      void enforceConfiguredScreenShareSender(track).catch((error) => {
-        // eslint-disable-next-line no-console
-        console.warn("[screen-share] could not enforce sender settings", error);
+      // leave a lower ceiling/priority behind. Each startup keyframe waits for
+      // this promise so setParameters calls cannot race one another.
+      const senderConfigured = enforceConfiguredScreenShareSender(track).then(
+        () => {
+          const requestedBitrate = videoCaptureSettings().maxBitrate;
+          const appliedEncoding = track.sender?.getParameters()
+            .encodings?.[0] as
+            | (RTCRtpEncodingParameters & { minBitrate?: number })
+            | undefined;
+
+          // eslint-disable-next-line no-console
+          console.info("[screen-share] sender bitrate configured", {
+            requestedMinKbps: Math.round(requestedBitrate / 1000),
+            requestedMaxKbps: Math.round(requestedBitrate / 1000),
+            appliedMinKbps: appliedEncoding?.minBitrate
+              ? Math.round(appliedEncoding.minBitrate / 1000)
+              : undefined,
+            appliedMaxKbps: appliedEncoding?.maxBitrate
+              ? Math.round(appliedEncoding.maxBitrate / 1000)
+              : undefined,
+          });
+
+          return true;
+        },
+        (error: unknown) => {
+          // eslint-disable-next-line no-console
+          console.warn(
+            "[screen-share] could not enforce sender settings",
+            error,
+          );
+
+          return false;
+        },
+      );
+      const keyFrameTimers = new Set<ReturnType<typeof setTimeout>>();
+
+      screenShareStartupKeyFrameTimersRef.current.set(key, keyFrameTimers);
+      SCREEN_SHARE_STARTUP_KEYFRAME_DELAYS_MS.forEach((delayMs) => {
+        const timer = setTimeout(() => {
+          keyFrameTimers.delete(timer);
+          if (keyFrameTimers.size === 0) {
+            screenShareStartupKeyFrameTimersRef.current.delete(key);
+          }
+
+          void senderConfigured.then(async (configured) => {
+            if (!configured) return;
+
+            const requestedKeyFrame = await requestScreenShareKeyFrame(track);
+
+            if (requestedKeyFrame) {
+              // eslint-disable-next-line no-console
+              console.info("[screen-share] startup keyframe requested", {
+                afterMs: delayMs,
+              });
+            }
+          });
+        }, delayMs);
+
+        keyFrameTimers.add(timer);
       });
 
       screenShareStatsTimersRef.current.set(
@@ -978,6 +1096,7 @@ export function useCall(conversationId: string | null): UseCallState {
               ? Math.round(outbound.targetBitrate / 1000)
               : undefined,
             actualKbps: bitrateKbps,
+            keyFramesEncoded: outbound.keyFramesEncoded,
             // What congestion control currently thinks the link will carry. If
             // THIS is small, the ceiling and the encoder are innocent -- the
             // estimate collapsed and the network path is the thing to look at.
@@ -1061,6 +1180,10 @@ export function useCall(conversationId: string | null): UseCallState {
   const stopAllScreenShareStatsLogging = useCallback(() => {
     screenShareStatsTimersRef.current.forEach((timer) => clearInterval(timer));
     screenShareStatsTimersRef.current.clear();
+    screenShareStartupKeyFrameTimersRef.current.forEach((timers) =>
+      timers.forEach((timer) => clearTimeout(timer)),
+    );
+    screenShareStartupKeyFrameTimersRef.current.clear();
     prevScreenShareBytesRef.current.clear();
     adaptiveScreenShareRef.current = null;
   }, []);
@@ -1086,6 +1209,9 @@ export function useCall(conversationId: string | null): UseCallState {
         enabled,
         {
           resolution,
+          // Use the high-motion encoder path so games and video can ramp to the
+          // selected bitrate. Timed startup keyframes above still refresh a
+          // static document after WebRTC's initial bandwidth estimate rises.
           contentHint: "motion",
           // Ask Chromium for the selected source's audio. Chrome still
           // requires the user to select "Share tab audio" in its picker.
@@ -1101,7 +1227,7 @@ export function useCall(conversationId: string | null): UseCallState {
           videoCodec: "h264",
           backupCodec: false,
           simulcast: false,
-          degradationPreference: "maintain-framerate",
+          degradationPreference: "maintain-resolution",
         },
       );
     },

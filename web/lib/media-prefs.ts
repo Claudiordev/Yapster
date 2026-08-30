@@ -48,7 +48,7 @@ export const SCREEN_SHARE_AUDIO_KEY = "screen-share-audio";
 /** Shared default used by the settings page, in-call settings, and call hook. */
 export const DEFAULT_SCREEN_SHARE_AUDIO = true;
 
-export type VideoResolution = "720p" | "1080p" | "1440p";
+export type VideoResolution = "720p" | "1080p" | "1440p" | "2160p";
 export type VideoFrameRate = 30 | 60;
 
 /**
@@ -84,6 +84,14 @@ export const VIDEO_RESOLUTIONS: Record<
     bitrate30: 9_000_000,
     bitrate60: 13_000_000,
   },
+  "2160p": {
+    width: 3840,
+    height: 2160,
+    // 4K60 screen content needs substantially more than camera video to keep
+    // fine text edges legible while also retaining smooth motion.
+    bitrate30: 18_000_000,
+    bitrate60: 25_000_000,
+  },
 };
 
 // ── Adaptive screen-share quality ───────────────────────────────────────────
@@ -94,6 +102,7 @@ export const VIDEO_RESOLUTIONS: Record<
 // the ceiling this steps down from and back up to.
 
 export type AdaptiveResolutionTier =
+  | "2160p"
   | "1440p"
   | "1080p"
   | "720p"
@@ -102,6 +111,7 @@ export type AdaptiveResolutionTier =
 
 /** Highest quality first -- index order is the step-down direction. */
 export const ADAPTIVE_RESOLUTION_LADDER: readonly AdaptiveResolutionTier[] = [
+  "2160p",
   "1440p",
   "1080p",
   "720p",
