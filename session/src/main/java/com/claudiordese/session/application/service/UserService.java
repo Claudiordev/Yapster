@@ -45,7 +45,7 @@ public class UserService {
     public List<UserSummaryDto> getUsersByIds(List<UUID> ids) {
         return users.findByIds(ids).stream()
                 .map(user -> new UserSummaryDto(
-                        user.id(), user.username(), user.avatarUrl().orElse(null)))
+                        user.id(), user.username(), user.avatarUrl().orElse(null), roleNames(user)))
                 .toList();
     }
 
@@ -56,7 +56,14 @@ public class UserService {
         return users.searchByUsername(usernameQuery.trim(), page, size).stream()
                 .filter(user -> !user.id().equals(requesterId))
                 .map(user -> new UserSummaryDto(
-                        user.id(), user.username(), user.avatarUrl().orElse(null)))
+                        user.id(), user.username(), user.avatarUrl().orElse(null), roleNames(user)))
+                .toList();
+    }
+
+    private static List<String> roleNames(User user) {
+        return user.roles().stream()
+                .map(role -> role.name())
+                .sorted()
                 .toList();
     }
 
