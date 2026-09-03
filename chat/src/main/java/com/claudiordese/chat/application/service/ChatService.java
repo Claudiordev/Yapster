@@ -7,6 +7,7 @@ import com.claudiordese.chat.application.domain.chat.Message;
 import com.claudiordese.chat.application.domain.chat.types.ConversationType;
 import com.claudiordese.chat.application.domain.chat.types.UserStatusType;
 import com.claudiordese.chat.application.domain.event.server.CallEndedEvent;
+import com.claudiordese.chat.application.domain.event.server.CallStatusEvent;
 import com.claudiordese.chat.application.domain.event.server.CallStartedEvent;
 import com.claudiordese.chat.application.domain.event.server.MessageEvent;
 import com.claudiordese.chat.application.domain.event.server.TypingEvent;
@@ -221,6 +222,16 @@ public class ChatService {
 
         for (UUID m : members) {
             if (!m.equals(senderId)) events.send(m.toString(), event);
+        }
+    }
+
+    public void sendCallStatus(UUID conversationId, boolean ongoing, int participantCount) {
+        List<UUID> members = conversations.membersOf(conversationId);
+        CallStatusEvent event = new CallStatusEvent(
+                conversationId.toString(), ongoing, Math.max(0, participantCount));
+
+        for (UUID member : members) {
+            events.send(member.toString(), event);
         }
     }
 

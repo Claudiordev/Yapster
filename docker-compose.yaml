@@ -119,6 +119,7 @@ services:
       - LIVEKIT_URL=ws://${PUBLIC_HOST:-localhost}:7880
       - LIVEKIT_API_KEY=devkey
       - LIVEKIT_API_SECRET=devsecretdevsecretdevsecret12345
+      - INTERNAL_SECRET=${INTERNAL_SECRET:-}
     depends_on:
       - livekit
   chat:
@@ -138,6 +139,7 @@ services:
       - SPRING_DATA_REDIS_PORT=${SPRING_DATA_REDIS_PORT:-6379}
       - RATE_LIMITING_MESSAGE_MAX_ATTEMPTS=${RATE_LIMITING_MESSAGE_MAX_ATTEMPTS:-20}
       - RATE_LIMITING_MESSAGE_WINDOW=${RATE_LIMITING_MESSAGE_WINDOW:-10s}
+      - INTERNAL_SECRET=${INTERNAL_SECRET:-}
       - MANAGEMENT_OTLP_TRACING_ENDPOINT=http://jaeger:4318/v1/traces
     depends_on:
       - chat_postgres
