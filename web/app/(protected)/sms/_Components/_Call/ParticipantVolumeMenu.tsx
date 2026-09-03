@@ -10,10 +10,13 @@ interface ParticipantVolumeMenuProps {
   name: string;
   volume: number;
   showLocalControls: boolean;
+  canMuteForEveryone: boolean;
+  isMutedForEveryone: boolean;
   x: number;
   y: number;
   onChange: (volume: number) => void;
   onToggleMute: () => void;
+  onMuteForEveryone: () => void;
   onClose: () => void;
 }
 
@@ -24,10 +27,13 @@ export function ParticipantVolumeMenu({
   name,
   volume,
   showLocalControls,
+  canMuteForEveryone,
+  isMutedForEveryone,
   x,
   y,
   onChange,
   onToggleMute,
+  onMuteForEveryone,
   onClose,
 }: ParticipantVolumeMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -110,6 +116,20 @@ export function ParticipantVolumeMenu({
             {volume === 0 ? "Muted" : "Unmuted"}
           </Button>
         </>
+      )}
+      {canMuteForEveryone && (
+        <Button
+          aria-label={`Mute ${name} for everyone`}
+          className={`${showLocalControls ? "mt-2" : "mt-1"} w-full`}
+          color="danger"
+          isDisabled={isMutedForEveryone}
+          size="sm"
+          startContent={<Icon name="mic-off" size={14} />}
+          variant="flat"
+          onPress={onMuteForEveryone}
+        >
+          {isMutedForEveryone ? "Muted for everyone" : "Mute for everyone"}
+        </Button>
       )}
     </div>,
     document.body,

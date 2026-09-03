@@ -158,6 +158,7 @@ export function ConversationView({
       {callOpen && (
         <CallPanel
           conversationId={conversationId}
+          isGroupCreator={amCreator}
           senders={senders}
           onClose={() => setCallOpen(false)}
         />
