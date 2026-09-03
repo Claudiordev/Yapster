@@ -5,12 +5,14 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { Avatar } from "@heroui/avatar";
 import { Button } from "@heroui/button";
 
 import { formatElapsed } from "./call-utils";
+import { ParticipantVolumeMenu } from "./ParticipantVolumeMenu";
 import {
   ScreenShareAudio,
   ScreenShareStage,
@@ -20,6 +22,7 @@ import { useCall } from "./useCall";
 
 import { Icon } from "@/components/icon";
 import { SettingsModal } from "@/components/SettingsModal";
+import { useAccount } from "@/lib/use-account";
 import type { MessageSender } from "../_Chat/ChatThread";
 
 interface CallPanelProps {
@@ -47,6 +50,8 @@ export function CallPanel({
   senders,
   onClose,
 }: CallPanelProps) {
+  const { roles: accountRoles } = useAccount();
+  const currentUserIsAdmin = accountRoles.includes("ADMIN");
   const {
     connected,
     connecting,
@@ -61,11 +66,19 @@ export function CallPanel({
     scheduleLeave,
     toggleMute,
     toggleScreenShare,
+    setParticipantVolume,
+    toggleParticipantMute,
+    setScreenShareVolume,
     watchScreenShareAudio,
   } = useCall(conversationId);
 
   const [elapsed, setElapsed] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [participantMenu, setParticipantMenu] = useState<{
+    identity: string;
+    x: number;
+    y: number;
+  } | null>(null);
   /** Identity of the share being watched full-size, if any. */
   const [watching, setWatching] = useState<string | null>(null);
   const [callHeightPercent, setCallHeightPercent] = useState(
@@ -80,6 +93,20 @@ export function CallPanel({
 
   const localIdentity = participants.find((p) => p.isLocal)?.identity;
   const watched = screenShares.find((s) => s.identity === watching) ?? null;
+  const menuParticipant = participantMenu
+    ? participants.find(
+        (participant) => participant.identity === participantMenu.identity,
+      )
+    : undefined;
+  const canAdjustMenuParticipant =
+    menuParticipant != null &&
+    (currentUserIsAdmin ||
+      !senders[menuParticipant.identity]?.roles.includes("ADMIN"));
+  const canOpenMenuParticipant =
+    menuParticipant != null && canAdjustMenuParticipant;
+
+  const canAdjustUserVolume = (identity: string) =>
+    currentUserIsAdmin || !senders[identity]?.roles.includes("ADMIN");
 
   const sharerName = (identity: string) =>
     identity === localIdentity ? "You" : (senders[identity]?.name ?? "Someone");
@@ -123,6 +150,20 @@ export function CallPanel({
   function closeShare() {
     watchScreenShareAudio(null);
     setWatching(null);
+  }
+
+  function openParticipantMenu(identity: string, x: number, y: number) {
+    setParticipantMenu({ identity, x, y });
+  }
+
+  function handleParticipantContextMenu(
+    event: ReactMouseEvent<HTMLDivElement>,
+    identity: string,
+    canOpenMenu: boolean,
+  ) {
+    event.preventDefault();
+    if (!canOpenMenu) return;
+    openParticipantMenu(identity, event.clientX, event.clientY);
   }
 
   function resizeFromPointer(clientY: number) {
@@ -243,6 +284,11 @@ export function CallPanel({
                 key={watched.identity}
                 name={sharerName(watched.identity)}
                 share={watched}
+                volume={watched.audioVolume}
+                canAdjustVolume={canAdjustUserVolume(watched.identity)}
+                onVolumeChange={(volume) =>
+                  setScreenShareVolume(watched.identity, volume)
+                }
                 onClose={closeShare}
               />
             </div>
@@ -266,6 +312,7 @@ export function CallPanel({
               key={`audio-${share.identity}`}
               enabled={watching === share.identity}
               track={share.audioTrack}
+              volume={share.audioVolume}
             />
           ))}
 
@@ -273,16 +320,62 @@ export function CallPanel({
             {participants.map((p) => {
               const sender = senders[p.identity];
               const name = p.isLocal ? "You" : (sender?.name ?? "Unknown");
+              const isAdmin = sender?.roles.includes("ADMIN") ?? false;
+              const canAdjustVolume =
+                !p.isLocal && (currentUserIsAdmin || !isAdmin);
+              const canOpenMenu = !p.isLocal && canAdjustVolume;
 
               return (
                 <div
                   key={p.identity}
-                  className="flex flex-col items-center gap-1.5"
+                  aria-label={
+                    canOpenMenu ? `${name} participant options` : undefined
+                  }
+                  aria-haspopup={canOpenMenu ? "dialog" : undefined}
+                  className={`flex flex-col items-center gap-1.5 rounded-medium outline-none ${
+                    canOpenMenu
+                      ? "cursor-context-menu focus-visible:ring-2 focus-visible:ring-brand"
+                      : ""
+                  }`}
+                  role={canOpenMenu ? "button" : undefined}
+                  tabIndex={canOpenMenu ? 0 : undefined}
+                  onContextMenu={
+                    p.isLocal
+                      ? undefined
+                      : (event) =>
+                          handleParticipantContextMenu(
+                            event,
+                            p.identity,
+                            canOpenMenu,
+                          )
+                  }
+                  onKeyDown={
+                    canOpenMenu
+                      ? (event) => {
+                          if (
+                            event.key !== "ContextMenu" &&
+                            !(event.shiftKey && event.key === "F10")
+                          ) {
+                            return;
+                          }
+
+                          event.preventDefault();
+                          const bounds =
+                            event.currentTarget.getBoundingClientRect();
+
+                          openParticipantMenu(
+                            p.identity,
+                            bounds.left + bounds.width / 2,
+                            bounds.top + bounds.height / 2,
+                          );
+                        }
+                      : undefined
+                  }
                 >
                   <div
                     className={`rounded-full p-1 ${
                       p.isSpeaking ? "ring-2 ring-danger" : ""
-                    }`}
+                    } relative`}
                   >
                     <Avatar
                       className="bg-brand text-white"
@@ -290,6 +383,15 @@ export function CallPanel({
                       size="lg"
                       src={sender?.avatarUrl ?? undefined}
                     />
+                    {!p.isLocal && p.volume === 0 && (
+                      <span
+                        aria-label={`${name} is muted locally`}
+                        className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-danger text-white ring-2 ring-content1"
+                        title="Muted for you"
+                      >
+                        <Icon name="mic-off" size={11} />
+                      </span>
+                    )}
                   </div>
                   <span className="flex items-center gap-1 text-tiny text-default-500">
                     {p.isMuted && <Icon name="mic-off" size={12} />}
@@ -340,6 +442,24 @@ export function CallPanel({
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
+
+      {participantMenu &&
+        menuParticipant &&
+        !menuParticipant.isLocal &&
+        canOpenMenuParticipant && (
+          <ParticipantVolumeMenu
+            name={senders[menuParticipant.identity]?.name ?? "Unknown"}
+            showLocalControls={canAdjustMenuParticipant}
+            volume={menuParticipant.volume}
+            x={participantMenu.x}
+            y={participantMenu.y}
+            onChange={(volume) =>
+              setParticipantVolume(menuParticipant.identity, volume)
+            }
+            onToggleMute={() => toggleParticipantMute(menuParticipant.identity)}
+            onClose={() => setParticipantMenu(null)}
+          />
+        )}
 
       <div
         aria-label="Resize call panel"
