@@ -153,6 +153,34 @@ public class ChatService {
         conversations.delete(conversationId);
     }
 
+    public void verifyCanModerateCall(
+            UUID conversationId,
+            UUID requesterId,
+            UUID targetUserId,
+            boolean platformAdmin) {
+        Conversation conversation = conversations.findById(conversationId)
+                .orElseThrow(() -> new NotFound("not_found", "Conversation not found"));
+        List<UUID> members = conversations.membersOf(conversationId);
+
+        if (!members.contains(requesterId)) {
+            throw new InterdictedException("not_a_member", "Not a member of this conversation");
+        }
+        if (!members.contains(targetUserId)) {
+            throw new NotFound("target_not_a_member", "Target user is not a member of this conversation");
+        }
+        if (requesterId.equals(targetUserId)) {
+            throw new BadRequestException("cannot_moderate_self", "Use your own call controls to mute yourself");
+        }
+
+        boolean isGroupCreator = conversation.type() == ConversationType.GROUP
+                && requesterId.equals(conversation.creatorId());
+        if (!platformAdmin && !isGroupCreator) {
+            throw new InterdictedException(
+                    "not_call_moderator",
+                    "Only the group creator or a platform administrator can moderate this call");
+        }
+    }
+
     @Transactional
     public Message sendMessage(UUID conversationId, UUID senderId, String body) {
         if (!rateLimitGuard.tryConsume(

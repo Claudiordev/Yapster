@@ -24,6 +24,12 @@ public interface ChatClient {
             @PathVariable String conversationId,
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization);
 
+    @GetExchange("/chat/{conversationId}/call-moderation/{targetUserId}")
+    void checkCallModeration(
+            @PathVariable String conversationId,
+            @PathVariable String targetUserId,
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization);
+
     @PostExchange("/chat/internal/status")
     void publishCallStatus(
             @RequestHeader("X-Internal-Secret") String secret,

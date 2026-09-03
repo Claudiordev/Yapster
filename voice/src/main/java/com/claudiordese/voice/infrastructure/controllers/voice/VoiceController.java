@@ -11,7 +11,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
 
 /**
  * Issues LiveKit join tokens. The caller must present a valid session JWT.
@@ -45,6 +47,15 @@ public class VoiceController {
             @PathVariable String room,
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
         return roomService.status(room, authorization);
+    }
+
+    @PostMapping("/rooms/{room}/participants/{participantIdentity}/mute")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void muteParticipant(
+            @PathVariable String room,
+            @PathVariable String participantIdentity,
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
+        roomService.muteParticipant(room, participantIdentity, authorization);
     }
 
 }

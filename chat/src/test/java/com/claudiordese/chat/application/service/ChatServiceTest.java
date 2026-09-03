@@ -4,6 +4,7 @@ import com.claudiordese.chat.application.config.MessageRateLimitPolicy;
 import com.claudiordese.chat.application.domain.chat.Conversation;
 import com.claudiordese.chat.application.domain.chat.ConversationMember;
 import com.claudiordese.chat.application.domain.chat.Message;
+import com.claudiordese.chat.application.domain.chat.types.ConversationType;
 import com.claudiordese.chat.application.domain.chat.types.UserStatusType;
 import com.claudiordese.chat.application.domain.event.server.ServerEvent;
 import com.claudiordese.chat.application.port.persistence.ConversationStore;
@@ -11,10 +12,13 @@ import com.claudiordese.chat.application.port.persistence.MessageStore;
 import com.claudiordese.chat.application.port.socket.EventGateway;
 import com.claudiordese.chat.support.InMemoryRateLimitGuard;
 import com.claudiordese.exceptions.TooManyRequestsException;
+import com.claudiordese.exceptions.InterdictedException;
+import com.claudiordese.exceptions.NotFound;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -61,6 +65,72 @@ class ChatServiceTest {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    void verifyCanModerateCall_allowsGroupCreator() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId, targetId);
+
+        assertThatCode(() -> service.verifyCanModerateCall(
+                conversationId, creatorId, targetId, false))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void verifyCanModerateCall_allowsPlatformAdminWhoIsMember() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId, adminId, targetId);
+
+        assertThatCode(() -> service.verifyCanModerateCall(
+                conversationId, adminId, targetId, true))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void verifyCanModerateCall_rejectsOrdinaryMember() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId, memberId, targetId);
+
+        assertThatThrownBy(() -> service.verifyCanModerateCall(
+                conversationId, memberId, targetId, false))
+                .isInstanceOf(InterdictedException.class)
+                .hasMessage("Only the group creator or a platform administrator can moderate this call");
+    }
+
+    @Test
+    void verifyCanModerateCall_rejectsTargetOutsideConversation() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId);
+
+        assertThatThrownBy(() -> service.verifyCanModerateCall(
+                conversationId, creatorId, targetId, false))
+                .isInstanceOf(NotFound.class)
+                .hasMessage("Target user is not a member of this conversation");
+    }
+
+    private static Conversation group(UUID id, UUID creatorId) {
+        return new Conversation(
+                id,
+                ConversationType.GROUP,
+                "Group",
+                null,
+                Instant.now(),
+                creatorId);
+    }
+
     private static final class InMemoryMessageStore implements MessageStore {
 
         private final List<Message> messages = new ArrayList<>();
@@ -98,6 +168,7 @@ class ChatServiceTest {
     private static final class InMemoryConversationStore implements ConversationStore {
 
         private List<UUID> members = List.of();
+        private Optional<Conversation> conversation = Optional.empty();
 
         @Override
         public List<UUID> membersOf(UUID conversationId) {
@@ -116,7 +187,7 @@ class ChatServiceTest {
 
         @Override
         public Optional<Conversation> findById(UUID id) {
-            return Optional.empty();
+            return conversation.filter(candidate -> candidate.id().equals(id));
         }
 
         @Override
