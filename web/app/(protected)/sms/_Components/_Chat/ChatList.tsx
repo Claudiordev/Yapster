@@ -71,7 +71,7 @@ export function ChatList({
 
       <div
         aria-busy={isLoading}
-        className="flex-grow overflow-y-auto flex flex-col gap-1 min-h-0"
+        className="flex-grow min-h-0 flex flex-col gap-1.5 overflow-y-auto"
       >
         {isLoading ? (
           <ChatListSkeleton />
@@ -96,9 +96,9 @@ export function ChatList({
               <button
                 key={conversation.id}
                 aria-pressed={isActive}
-                className={`group flex items-center gap-3 text-left p-3 rounded-medium transition-colors ${
+                className={`group flex items-center gap-3 rounded-medium border-2 border-transparent p-3 text-left transition-[background-color,border-color,box-shadow] ${
                   isActive
-                    ? "bg-brand-deep text-white"
+                    ? "chat-conversation-active text-white"
                     : "text-foreground hover:bg-default-100"
                 }`}
                 type="button"
