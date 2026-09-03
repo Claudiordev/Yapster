@@ -40,6 +40,9 @@ interface ChatThreadProps {
   onStartCall?: () => void;
   /** True while a call panel is already open for this conversation. */
   inCall?: boolean;
+  /** True when anyone is currently connected to this conversation's call. */
+  callOngoing?: boolean;
+  callParticipantCount?: number;
 }
 
 // Consecutive messages from the same sender within this window are grouped
@@ -81,6 +84,8 @@ export function ChatThread({
   onManageGroup,
   onStartCall,
   inCall,
+  callOngoing = false,
+  callParticipantCount = 0,
 }: ChatThreadProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // Scroll height captured right before a load-more, so we can keep the
@@ -136,17 +141,44 @@ export function ChatThread({
         <h2 className="font-semibold truncate text-foreground">{title}</h2>
         <div className="ml-auto flex items-center gap-1">
           {onStartCall && (
-            <Button
-              isIconOnly
-              aria-label={inCall ? "Call in progress" : "Start call"}
-              className={inCall ? "text-brand" : "text-default-400 hover:text-foreground"}
-              isDisabled={inCall}
-              size="sm"
-              variant="light"
-              onPress={onStartCall}
-            >
-              <Icon name="phone" size={18} />
-            </Button>
+            <div className="flex items-center gap-1">
+              {callOngoing && (
+                <span
+                  aria-label={`${callParticipantCount} participants in call`}
+                  className="flex items-center gap-0.5 text-danger"
+                >
+                  <Icon name="users" size={15} />
+                  <span className="text-tiny font-semibold">
+                    {callParticipantCount > 99 ? "99+" : callParticipantCount}
+                  </span>
+                </span>
+              )}
+              <Button
+                aria-label={
+                  inCall
+                    ? "You are in the call"
+                    : callOngoing
+                      ? `Join ongoing call with ${callParticipantCount} participants`
+                      : "Start call"
+                }
+                className={
+                  inCall
+                    ? "text-brand"
+                    : callOngoing
+                      ? "text-danger"
+                      : "text-default-400 hover:text-foreground"
+                }
+                isIconOnly
+                size="sm"
+                variant="light"
+                onPress={onStartCall}
+              >
+                <Icon
+                  name={callOngoing || inCall ? "phone-waves" : "phone"}
+                  size={20}
+                />
+              </Button>
+            </div>
           )}
           {onAddMember && (
             <Button

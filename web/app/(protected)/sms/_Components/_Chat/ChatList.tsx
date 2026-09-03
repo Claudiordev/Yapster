@@ -83,6 +83,7 @@ export function ChatList({
           conversations.map((conversation) => {
             const isActive = conversation.id === activeConversationId;
             const isGroup = conversation.type === "GROUP";
+            const callOngoing = conversation.callOngoing ?? false;
             const name = conversationName(conversation);
             const avatarUrl = isGroup
               ? undefined
@@ -136,17 +137,35 @@ export function ChatList({
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <p
-                      className={`text-tiny truncate ${
-                        isActive
-                          ? "text-white/85"
-                          : unread
-                            ? "text-foreground font-medium"
-                            : "text-default-500"
-                      }`}
-                    >
-                      {preview}
-                    </p>
+                    {callOngoing ? (
+                      <div className="flex min-w-0 items-center gap-1.5 text-danger">
+                        <Icon name="phone-waves" size={15} />
+                        <p
+                          aria-label="Call ongoing"
+                          className={`truncate text-tiny ${
+                            isActive
+                              ? "text-white/85"
+                              : unread
+                                ? "text-foreground font-medium"
+                                : "text-default-500"
+                          }`}
+                        >
+                          {preview}
+                        </p>
+                      </div>
+                    ) : (
+                      <p
+                        className={`text-tiny truncate ${
+                          isActive
+                            ? "text-white/85"
+                            : unread
+                              ? "text-foreground font-medium"
+                              : "text-default-500"
+                        }`}
+                      >
+                        {preview}
+                      </p>
+                    )}
                     {unread && (
                       <span
                         aria-label={`${conversation.unreadCount} unread`}

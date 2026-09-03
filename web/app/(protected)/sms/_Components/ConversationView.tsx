@@ -83,6 +83,8 @@ export function ConversationView({
 
   const active = conversations.find((c) => c.id === conversationId);
   const title = active ? conversationName(active) : "Direct message";
+  const callOngoing = active?.callOngoing ?? false;
+  const callParticipantCount = active?.callParticipantCount ?? 0;
 
   // Clear unread on open and whenever a new message arrives while it's open.
   useEffect(() => {
@@ -164,6 +166,8 @@ export function ConversationView({
       <ChatThread
         hasMore={hasMore}
         inCall={callOpen}
+        callOngoing={callOngoing}
+        callParticipantCount={callParticipantCount}
         isLoading={isLoading}
         isLoadingMore={isLoadingMore}
         isSending={isSending}
