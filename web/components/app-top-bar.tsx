@@ -32,7 +32,7 @@ export function AppTopBar() {
         <span className="text-brand">
           <Icon name="logo" size={26} />
         </span>
-        <span className="hidden font-bold tracking-tight sm:inline">Yapp</span>
+        <span className="hidden font-bold tracking-tight sm:inline">Guild Voice</span>
       </NextLink>
 
       <nav className="flex items-center gap-1">

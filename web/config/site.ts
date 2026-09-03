@@ -1,7 +1,7 @@
 export type SiteConfig = typeof siteConfig;
 
 export const siteConfig = {
-  name: "Yaappr",
+  name: "GuildVo",
   description: "Chat, voice and game all in one place!",
   navItems: [
     {
