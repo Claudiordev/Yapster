@@ -59,7 +59,7 @@ class UserServiceTest {
     }
 
     @Test
-    void searchUsers_returnsPublicInfoOnly() {
+    void searchUsers_returnsPublicProfileAndRoles() {
         User alice = users.create("alice", "alice@example.com", "hash");
         User bob = users.create("bob", "bob@example.com", "hash");
         users.update(bob.withAvatarUrl("https://cdn.example.com/bob.png"));
@@ -70,6 +70,7 @@ class UserServiceTest {
             assertThat(summary.id()).isEqualTo(bob.id());
             assertThat(summary.username()).isEqualTo("bob");
             assertThat(summary.avatarUrl()).isEqualTo("https://cdn.example.com/bob.png");
+            assertThat(summary.roles()).containsExactly("USER");
         });
     }
 
