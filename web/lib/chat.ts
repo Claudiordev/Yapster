@@ -31,10 +31,15 @@ export interface Conversation {
   lastMessageSeq: number | null; // seq of the last message
   lastReadSeq: number; // how far this user has read
   unreadCount: number; // messages in this conversation with seq > lastReadSeq
+  callOngoing?: boolean;
+  callParticipantCount?: number;
 }
 
 /** True when `userId` created this group (meaningless/false for DMs). */
-export function isGroupCreator(c: Conversation, userId: string | null): boolean {
+export function isGroupCreator(
+  c: Conversation,
+  userId: string | null,
+): boolean {
   return c.type === "GROUP" && userId != null && c.creatorId === userId;
 }
 
@@ -66,7 +71,8 @@ export type EventType =
   | "TYPING"
   | "USER_STATUS_EVENT"
   | "CALL_STARTED"
-  | "CALL_ENDED";
+  | "CALL_ENDED"
+  | "CALL_STATUS";
 
 /** Pushed when a new message lands — matches the backend MessageEvent. */
 export interface MessageEvent {
@@ -121,13 +127,21 @@ export interface CallEndedEvent {
   senderId: string;
 }
 
+export interface CallStatusEvent {
+  type: "CALL_STATUS";
+  conversationId: string;
+  ongoing: boolean;
+  participantCount: number;
+}
+
 /** Any event the server can push over the socket. */
 export type ServerEvent =
   | MessageEvent
   | TypeEvent
   | UserStatusServerEvent
   | CallStartedEvent
-  | CallEndedEvent;
+  | CallEndedEvent
+  | CallStatusEvent;
 
 /**
  * Anything the client may send UP the socket — mirrors the backend's

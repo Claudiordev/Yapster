@@ -76,6 +76,22 @@ export function useConversations(myUserId: string | null) {
     });
   }, [subscribe]);
 
+  useEffect(() => {
+    return subscribe("CALL_STATUS", (event) => {
+      setConversations((previous) =>
+        previous.map((conversation) =>
+          conversation.id === event.conversationId
+            ? {
+                ...conversation,
+                callOngoing: event.ongoing,
+                callParticipantCount: event.participantCount,
+              }
+            : conversation,
+        ),
+      );
+    });
+  }, [subscribe]);
+
   // Live messages update the matching row in place: preview, ordering, and the
   // unread count bumped in realtime (only for messages from others; my own
   // sends aren't unread). An unknown conversation → pull it (with its count).

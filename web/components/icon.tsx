@@ -7,6 +7,7 @@ export type IconName =
   | "logout"
   | "dollar"
   | "phone"
+  | "phone-waves"
   | "edit"
   | "send"
   | "github"
