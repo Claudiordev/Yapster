@@ -1,5 +1,4 @@
-export const API_BASE_URL =
-  process.env.API_BASE_URL || "http://localhost:8080";
+export const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:8080";
 
 export const AUTH_COOKIE_NAME = "auth-token";
 export const REFRESH_COOKIE_NAME = "refresh-token";
@@ -32,8 +31,6 @@ export const PUBLIC_ROUTES = [ROUTES.LOGIN, ROUTES.REGISTER];
 // Defaults to the dev keypair shipped in session/src/main/resources/keys/public.pem.
 export const JWT_PUBLIC_KEY = process.env.JWT_PUBLIC_KEY;
 
-// The OAuth2 provider buttons (Google/GitHub/Facebook/Discord) aren't wired to a
-// backend yet -- off by default until that lands. Read client-side, so this
-// needs the NEXT_PUBLIC_ prefix to be inlined into the browser bundle.
+// Social sign-in remains hidden until its backend OAuth flow is available.
 export const FEATURE_OAUTH2_LOGIN =
   process.env.NEXT_PUBLIC_FEATURE_OAUTH2_LOGIN === "true";
