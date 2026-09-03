@@ -29,6 +29,7 @@ interface CallPanelProps {
   conversationId: string;
   /** identity (userId) -> display name/avatar, same map ChatThread uses for senders. */
   senders: Record<string, MessageSender>;
+  isGroupCreator: boolean;
   onClose: () => void;
 }
 
@@ -48,10 +49,12 @@ function clampCallHeight(value: number) {
 export function CallPanel({
   conversationId,
   senders,
+  isGroupCreator,
   onClose,
 }: CallPanelProps) {
   const { roles: accountRoles } = useAccount();
   const currentUserIsAdmin = accountRoles.includes("ADMIN");
+  const canModerateCall = currentUserIsAdmin || isGroupCreator;
   const {
     connected,
     connecting,
@@ -68,6 +71,7 @@ export function CallPanel({
     toggleScreenShare,
     setParticipantVolume,
     toggleParticipantMute,
+    muteParticipantForEveryone,
     setScreenShareVolume,
     watchScreenShareAudio,
   } = useCall(conversationId);
@@ -103,7 +107,7 @@ export function CallPanel({
     (currentUserIsAdmin ||
       !senders[menuParticipant.identity]?.roles.includes("ADMIN"));
   const canOpenMenuParticipant =
-    menuParticipant != null && canAdjustMenuParticipant;
+    menuParticipant != null && (canAdjustMenuParticipant || canModerateCall);
 
   const canAdjustUserVolume = (identity: string) =>
     currentUserIsAdmin || !senders[identity]?.roles.includes("ADMIN");
@@ -323,7 +327,8 @@ export function CallPanel({
               const isAdmin = sender?.roles.includes("ADMIN") ?? false;
               const canAdjustVolume =
                 !p.isLocal && (currentUserIsAdmin || !isAdmin);
-              const canOpenMenu = !p.isLocal && canAdjustVolume;
+              const canOpenMenu =
+                !p.isLocal && (canAdjustVolume || canModerateCall);
 
               return (
                 <div
@@ -448,6 +453,8 @@ export function CallPanel({
         !menuParticipant.isLocal &&
         canOpenMenuParticipant && (
           <ParticipantVolumeMenu
+            canMuteForEveryone={canModerateCall}
+            isMutedForEveryone={menuParticipant.isMuted}
             name={senders[menuParticipant.identity]?.name ?? "Unknown"}
             showLocalControls={canAdjustMenuParticipant}
             volume={menuParticipant.volume}
@@ -457,6 +464,11 @@ export function CallPanel({
               setParticipantVolume(menuParticipant.identity, volume)
             }
             onToggleMute={() => toggleParticipantMute(menuParticipant.identity)}
+            onMuteForEveryone={async () => {
+              if (await muteParticipantForEveryone(menuParticipant.identity)) {
+                setParticipantMenu(null);
+              }
+            }}
             onClose={() => setParticipantMenu(null)}
           />
         )}

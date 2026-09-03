@@ -653,6 +653,7 @@ interface UseCallState {
   toggleScreenShare: () => Promise<void>;
   setParticipantVolume: (identity: string, volume: number) => void;
   toggleParticipantMute: (identity: string) => void;
+  muteParticipantForEveryone: (identity: string) => Promise<boolean>;
   setScreenShareVolume: (identity: string, volume: number) => void;
   /** Play only the selected remote screen share's audio. Pass null when the
    *  expanded screen-share view is closed. */
@@ -769,6 +770,41 @@ export function useCall(conversationId: string | null): UseCallState {
       setParticipantVolume(identity, restored);
     },
     [participantVolume, setParticipantVolume],
+  );
+
+  const muteParticipantForEveryone = useCallback(
+    async (identity: string) => {
+      if (!conversationId) return false;
+
+      try {
+        const response = await fetch(
+          `/api/voice/rooms/${encodeURIComponent(conversationId)}/participants/${encodeURIComponent(identity)}/mute`,
+          { method: "POST" },
+        );
+
+        if (!response.ok) {
+          addToast({
+            title: await readProblemDetail(
+              response,
+              "Could not mute this participant for everyone.",
+            ),
+            color: "danger",
+          });
+
+          return false;
+        }
+
+        return true;
+      } catch {
+        addToast({
+          title: "Could not mute this participant for everyone.",
+          color: "danger",
+        });
+
+        return false;
+      }
+    },
+    [conversationId],
   );
 
   const screenShareVolume = useCallback((identity: string) => {
@@ -2043,6 +2079,7 @@ export function useCall(conversationId: string | null): UseCallState {
     toggleScreenShare,
     setParticipantVolume,
     toggleParticipantMute,
+    muteParticipantForEveryone,
     setScreenShareVolume,
     watchScreenShareAudio,
   };
