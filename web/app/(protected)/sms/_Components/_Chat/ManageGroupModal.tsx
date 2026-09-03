@@ -9,6 +9,7 @@ import { addToast } from "@heroui/toast";
 
 import { Icon } from "@/components/icon";
 import type { Conversation } from "@/lib/chat";
+import type { ChatMutationResult } from "../ChatProvider";
 
 interface Member {
   id: string;
@@ -22,8 +23,8 @@ interface ManageGroupModalProps {
   conversation: Conversation;
   myUserId: string;
   myUsername: string | null;
-  onRemoveMember: (userId: string) => Promise<boolean>;
-  onDeleteGroup: () => Promise<boolean>;
+  onRemoveMember: (userId: string) => Promise<ChatMutationResult>;
+  onDeleteGroup: () => Promise<ChatMutationResult>;
 }
 
 export function ManageGroupModal({
@@ -51,19 +52,19 @@ export function ManageGroupModal({
 
   async function handleRemove(member: Member) {
     setRemovingId(member.id);
-    const ok = await onRemoveMember(member.id);
+    const result = await onRemoveMember(member.id);
 
     setRemovingId(null);
-    if (!ok) addToast({ title: "Could not remove member", color: "danger" });
+    if (!result.ok) addToast({ title: result.detail, color: "danger" });
   }
 
   async function handleDelete() {
     setDeleting(true);
-    const ok = await onDeleteGroup();
+    const result = await onDeleteGroup();
 
-    if (!ok) {
+    if (!result.ok) {
       setDeleting(false);
-      addToast({ title: "Could not delete group", color: "danger" });
+      addToast({ title: result.detail, color: "danger" });
 
       return;
     }

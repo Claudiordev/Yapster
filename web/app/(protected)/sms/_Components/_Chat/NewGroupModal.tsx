@@ -17,6 +17,7 @@ import { useUserSearch } from "./useUserSearch";
 
 import { Icon } from "@/components/icon";
 import type { PlatformUser } from "@/app/api/users/search/route";
+import type { ChatMutationResult } from "../ChatProvider";
 
 /** Creator + this many others — mirrors the chat service's MAX_GROUP_SIZE. */
 const MAX_OTHER_MEMBERS = 14;
@@ -24,10 +25,17 @@ const MAX_OTHER_MEMBERS = 14;
 interface NewGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (name: string, members: PlatformUser[]) => Promise<boolean>;
+  onCreate: (
+    name: string,
+    members: PlatformUser[],
+  ) => Promise<ChatMutationResult>;
 }
 
-export function NewGroupModal({ isOpen, onClose, onCreate }: NewGroupModalProps) {
+export function NewGroupModal({
+  isOpen,
+  onClose,
+  onCreate,
+}: NewGroupModalProps) {
   const [name, setName] = useState("");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<PlatformUser[]>([]);
@@ -66,10 +74,10 @@ export function NewGroupModal({ isOpen, onClose, onCreate }: NewGroupModalProps)
     setCreating(true);
     setError(null);
 
-    const ok = await onCreate(name.trim(), selected);
+    const result = await onCreate(name.trim(), selected);
 
-    if (!ok) {
-      setError("Could not create the group. Please try again.");
+    if (!result.ok) {
+      setError(result.detail);
       setCreating(false);
 
       return;
@@ -121,7 +129,11 @@ export function NewGroupModal({ isOpen, onClose, onCreate }: NewGroupModalProps)
                 : "Search users to add"
             }
             startContent={
-              <Icon className="text-default-400 flex-shrink-0" name="search" size={18} />
+              <Icon
+                className="text-default-400 flex-shrink-0"
+                name="search"
+                size={18}
+              />
             }
             value={query}
             variant="flat"
@@ -157,7 +169,11 @@ export function NewGroupModal({ isOpen, onClose, onCreate }: NewGroupModalProps)
                     {user.username}
                   </p>
                   {isSelected && (
-                    <Icon className="text-brand flex-shrink-0" name="check" size={16} />
+                    <Icon
+                      className="text-brand flex-shrink-0"
+                      name="check"
+                      size={16}
+                    />
                   )}
                 </button>
               );

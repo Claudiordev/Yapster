@@ -11,14 +11,18 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
+import { addToast } from "@heroui/toast";
 
 import { useConversations } from "./_Chat/useConversations";
 import { IncomingCallModal } from "./_Call/IncomingCallModal";
 
 import { useAccount } from "@/lib/use-account";
 import { conversationName, type Conversation } from "@/lib/chat";
+import { readProblemDetail } from "@/lib/problem-details";
 import { useRealtime } from "@/lib/useRealtime";
 import type { PlatformUser } from "@/app/api/users/search/route";
+
+export type ChatMutationResult = { ok: true } | { ok: false; detail: string };
 
 interface ChatContextValue {
   conversations: Conversation[];
@@ -26,13 +30,22 @@ interface ChatContextValue {
   markRead: (conversationId: string) => void;
   startConversation: (user: PlatformUser) => Promise<void>;
   /** Creates a group (name + up to 14 other members) and navigates to it. */
-  createGroup: (name: string, members: PlatformUser[]) => Promise<boolean>;
-  /** Adds one member to an existing group. Returns false on failure (full, etc). */
-  addMember: (conversationId: string, user: PlatformUser) => Promise<boolean>;
-  /** Creator-only: removes a member from a group. Returns false on failure. */
-  removeMember: (conversationId: string, userId: string) => Promise<boolean>;
+  createGroup: (
+    name: string,
+    members: PlatformUser[],
+  ) => Promise<ChatMutationResult>;
+  /** Adds one member to an existing group. */
+  addMember: (
+    conversationId: string,
+    user: PlatformUser,
+  ) => Promise<ChatMutationResult>;
+  /** Creator-only: removes a member from a group. */
+  removeMember: (
+    conversationId: string,
+    userId: string,
+  ) => Promise<ChatMutationResult>;
   /** Creator-only: deletes a group entirely and navigates back to /sms. */
-  deleteGroup: (conversationId: string) => Promise<boolean>;
+  deleteGroup: (conversationId: string) => Promise<ChatMutationResult>;
   /**
    * Conversation whose call this user is currently in, if any. Set by
    * ConversationView so the incoming-call prompt can skip anyone already
@@ -105,7 +118,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     const offEnded = subscribe("CALL_ENDED", (event) => {
       // The caller hung up before we answered -- drop the prompt.
-      setIncomingCallId((prev) => (prev === event.conversationId ? null : prev));
+      setIncomingCallId((prev) =>
+        prev === event.conversationId ? null : prev,
+      );
     });
 
     return () => {
@@ -127,7 +142,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({ recipientUserId: user.id }),
         });
 
-        if (!res.ok) return;
+        if (!res.ok) {
+          addToast({
+            title: await readProblemDetail(res, "Could not start conversation"),
+            color: "danger",
+          });
+
+          return;
+        }
         const conversation: Conversation = await res.json();
 
         // Seed the peer from the searched user so the name/avatar show at once.
@@ -144,7 +166,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         });
         router.push(`/sms/${conversation.id}`);
       } catch {
-        // ignore — failed to start conversation
+        addToast({ title: "Could not start conversation", color: "danger" });
       }
     },
     [addConversation, router],
@@ -162,7 +184,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           }),
         });
 
-        if (!res.ok) return false;
+        if (!res.ok) {
+          return {
+            ok: false as const,
+            detail: await readProblemDetail(res, "Could not create group"),
+          };
+        }
         const conversation: Conversation = await res.json();
 
         // Seed the members from what we already know so the list/thread show
@@ -178,9 +205,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         });
         router.push(`/sms/${conversation.id}`);
 
-        return true;
+        return { ok: true as const };
       } catch {
-        return false;
+        return { ok: false as const, detail: "Could not create group" };
       }
     },
     [addConversation, router],
@@ -195,7 +222,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({ memberId: user.id }),
         });
 
-        if (!res.ok) return false;
+        if (!res.ok) {
+          return {
+            ok: false as const,
+            detail: await readProblemDetail(res, "Could not add member"),
+          };
+        }
 
         addMemberToConversation(conversationId, {
           id: user.id,
@@ -204,9 +236,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           roles: user.roles,
         });
 
-        return true;
+        return { ok: true as const };
       } catch {
-        return false;
+        return { ok: false as const, detail: "Could not add member" };
       }
     },
     [addMemberToConversation],
@@ -220,12 +252,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           { method: "DELETE" },
         );
 
-        if (!res.ok) return false;
+        if (!res.ok) {
+          return {
+            ok: false as const,
+            detail: await readProblemDetail(res, "Could not remove member"),
+          };
+        }
         removeMemberFromConversation(conversationId, userId);
 
-        return true;
+        return { ok: true as const };
       } catch {
-        return false;
+        return { ok: false as const, detail: "Could not remove member" };
       }
     },
     [removeMemberFromConversation],
@@ -238,13 +275,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           method: "DELETE",
         });
 
-        if (!res.ok) return false;
+        if (!res.ok) {
+          return {
+            ok: false as const,
+            detail: await readProblemDetail(res, "Could not delete group"),
+          };
+        }
         removeConversation(conversationId);
         router.push("/sms");
 
-        return true;
+        return { ok: true as const };
       } catch {
-        return false;
+        return { ok: false as const, detail: "Could not delete group" };
       }
     },
     [removeConversation, router],

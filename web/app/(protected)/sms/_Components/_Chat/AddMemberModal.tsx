@@ -10,6 +10,7 @@ import { useUserSearch } from "./useUserSearch";
 
 import { Icon } from "@/components/icon";
 import type { PlatformUser } from "@/app/api/users/search/route";
+import type { ChatMutationResult } from "../ChatProvider";
 
 const MAX_MEMBERS = 15;
 
@@ -18,7 +19,7 @@ interface AddMemberModalProps {
   onClose: () => void;
   /** Ids already in the group (creator + current members) — filtered out of results. */
   existingMemberIds: string[];
-  onAdd: (user: PlatformUser) => Promise<boolean>;
+  onAdd: (user: PlatformUser) => Promise<ChatMutationResult>;
 }
 
 export function AddMemberModal({
@@ -41,11 +42,11 @@ export function AddMemberModal({
 
   async function handleAdd(user: PlatformUser) {
     setAddingId(user.id);
-    const ok = await onAdd(user);
+    const result = await onAdd(user);
 
     setAddingId(null);
-    if (!ok) {
-      addToast({ title: "Could not add member", color: "danger" });
+    if (!result.ok) {
+      addToast({ title: result.detail, color: "danger" });
     } else {
       handleClose();
     }

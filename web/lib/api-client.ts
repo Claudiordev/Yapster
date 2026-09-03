@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "./constants";
+import { problemDetail } from "./problem-details";
 
 export class ApiError extends Error {
   constructor(
@@ -37,9 +38,7 @@ async function handleResponse<TRes>(response: Response): Promise<TRes> {
 
     if (text) {
       try {
-        const body = JSON.parse(text);
-
-        message = body.detail || body.message || body.error || message;
+        message = problemDetail(JSON.parse(text), message);
       } catch {
         message = text;
       }
