@@ -1,9 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { Button } from "@heroui/button";
+import { RemoteAudioTrack } from "livekit-client";
 
 import type { ScreenShare } from "./useCall";
+import { ScreenShareVolumeMenu } from "./ScreenShareVolumeMenu";
 
 import { Icon } from "@/components/icon";
 
@@ -36,19 +44,29 @@ export function ScreenShareTile({ name, onWatch }: ScreenShareTileProps) {
 interface ScreenShareStageProps {
   share: ScreenShare;
   name: string;
+  volume: number;
+  canAdjustVolume: boolean;
+  onVolumeChange: (volume: number) => void;
   onClose: () => void;
 }
 
 interface ScreenShareAudioProps {
   enabled: boolean;
   track?: ScreenShare["audioTrack"];
+  volume: number;
 }
 
 /** Keeps display audio attached before the Watch click so autoplay is unlocked. */
-export function ScreenShareAudio({ enabled, track }: ScreenShareAudioProps) {
+export function ScreenShareAudio({
+  enabled,
+  track,
+  volume,
+}: ScreenShareAudioProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const enabledRef = useRef(enabled);
+  const volumeRef = useRef(volume);
   enabledRef.current = enabled;
+  volumeRef.current = volume;
 
   useEffect(() => {
     const el = audioRef.current;
@@ -56,8 +74,17 @@ export function ScreenShareAudio({ enabled, track }: ScreenShareAudioProps) {
     if (!el || !track) return;
 
     el.autoplay = true;
-    el.muted = !enabled;
     track.attach(el);
+
+    if (track instanceof RemoteAudioTrack) {
+      // LiveKit's Web Audio gain supports 0–200%; keep the media element muted
+      // so it does not play a second, unamplified copy of the same track.
+      el.muted = true;
+      track.setVolume(enabledRef.current ? volumeRef.current / 100 : 0);
+    } else {
+      // Local preview audio does not need amplification.
+      el.muted = !enabledRef.current;
+    }
 
     const logPlaybackState = (event: string) => {
       const mediaTrack = track.mediaStreamTrack;
@@ -102,7 +129,7 @@ export function ScreenShareAudio({ enabled, track }: ScreenShareAudioProps) {
         // eslint-disable-next-line no-console
         console.warn("[screen-share-audio] play-rejected", {
           error,
-          enabled,
+          enabled: enabledRef.current,
           trackSid: track.sid,
         });
         logPlaybackState("play-rejected");
@@ -123,17 +150,23 @@ export function ScreenShareAudio({ enabled, track }: ScreenShareAudioProps) {
       el.pause();
       el.srcObject = null;
     };
-  }, [enabled, track]);
+  }, [track]);
 
   useEffect(() => {
     const el = audioRef.current;
 
     if (!el || !track) return;
 
-    el.muted = !enabledRef.current;
+    if (track instanceof RemoteAudioTrack) {
+      el.muted = true;
+      track.setVolume(enabled ? volume / 100 : 0);
+    } else {
+      el.muted = !enabled;
+    }
     // eslint-disable-next-line no-console
     console.info("[screen-share-audio] watch-state-changed", {
       enabled,
+      volume,
       trackSid: track.sid,
       elementMuted: el.muted,
       elementPaused: el.paused,
@@ -155,7 +188,7 @@ export function ScreenShareAudio({ enabled, track }: ScreenShareAudioProps) {
         },
       );
     }
-  }, [track]);
+  }, [enabled, track, volume]);
 
   // The track is deliberately mounted in the call panel, including while the
   // share is still a tile, so it can be primed muted before the Watch click.
@@ -166,11 +199,45 @@ export function ScreenShareAudio({ enabled, track }: ScreenShareAudioProps) {
 export function ScreenShareStage({
   share,
   name,
+  volume,
+  canAdjustVolume,
+  onVolumeChange,
   onClose,
 }: ScreenShareStageProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [volumeMenu, setVolumeMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  function openVolumeMenu(x: number, y: number) {
+    if (!canAdjustVolume || !share.audioTrack) return;
+    setVolumeMenu({ x, y });
+  }
+
+  function handleContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
+    event.preventDefault();
+    openVolumeMenu(event.clientX, event.clientY);
+  }
+
+  function handleContextMenuKey(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (
+      event.key !== "ContextMenu" &&
+      !(event.shiftKey && event.key === "F10")
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+
+    openVolumeMenu(
+      bounds.left + bounds.width / 2,
+      bounds.top + bounds.height / 2,
+    );
+  }
 
   useEffect(() => {
     const el = videoRef.current;
@@ -223,7 +290,13 @@ export function ScreenShareStage({
   return (
     <div
       ref={stageRef}
+      aria-label={canAdjustVolume ? `${name} shared screen options` : undefined}
+      aria-haspopup={canAdjustVolume ? "dialog" : undefined}
       className="relative h-full min-h-0 w-full overflow-hidden rounded-medium bg-black"
+      role={canAdjustVolume ? "button" : undefined}
+      tabIndex={canAdjustVolume ? 0 : undefined}
+      onContextMenu={handleContextMenu}
+      onKeyDown={canAdjustVolume ? handleContextMenuKey : undefined}
     >
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
@@ -249,6 +322,17 @@ export function ScreenShareStage({
           Stop watching
         </Button>
       </div>
+
+      {canAdjustVolume && volumeMenu && share.audioTrack && (
+        <ScreenShareVolumeMenu
+          name={name}
+          volume={volume}
+          x={volumeMenu.x}
+          y={volumeMenu.y}
+          onChange={onVolumeChange}
+          onClose={() => setVolumeMenu(null)}
+        />
+      )}
     </div>
   );
 }

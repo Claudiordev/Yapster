@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ConnectionState,
+  AudioPresets,
   type LocalTrack,
   type LocalVideoTrack,
-  type Participant,
   ParticipantEvent,
+  type RemoteParticipant,
   type RemoteTrack,
   type RemoteVideoTrack,
   Room,
@@ -27,6 +28,7 @@ import {
   readVideoPrefs,
   videoCaptureSettings,
 } from "@/lib/media-prefs";
+import { readProblemDetail } from "@/lib/problem-details";
 import { useRealtime } from "@/lib/useRealtime";
 
 export interface CallParticipant {
@@ -34,11 +36,13 @@ export interface CallParticipant {
   isLocal: boolean;
   isSpeaking: boolean;
   isMuted: boolean;
+  volume: number;
 }
 
 export interface ScreenShare {
   track: LocalTrack | RemoteTrack;
   audioTrack?: LocalTrack | RemoteTrack;
+  audioVolume: number;
   identity: string;
 }
 
@@ -647,6 +651,9 @@ interface UseCallState {
   scheduleLeave: () => void;
   toggleMute: () => Promise<void>;
   toggleScreenShare: () => Promise<void>;
+  setParticipantVolume: (identity: string, volume: number) => void;
+  toggleParticipantMute: (identity: string) => void;
+  setScreenShareVolume: (identity: string, volume: number) => void;
   /** Play only the selected remote screen share's audio. Pass null when the
    *  expanded screen-share view is closed. */
   watchScreenShareAudio: (identity: string | null) => void;
@@ -689,56 +696,181 @@ export function useCall(conversationId: string | null): UseCallState {
   const pendingScreenShareAudioTracksRef = useRef(
     new Map<string, LocalTrack | RemoteTrack>(),
   );
+  const participantVolumesRef = useRef(new Map<string, number>());
+  const participantAudibleVolumesRef = useRef(new Map<string, number>());
+  const screenShareVolumesRef = useRef(new Map<string, number>());
 
-  const watchScreenShareAudio = useCallback((identity: string | null) => {
-    const room = roomRef.current;
-    const previouslyWatched = watchedScreenShareAudioRef.current;
+  const participantVolume = useCallback((identity: string) => {
+    const existing = participantVolumesRef.current.get(identity);
 
-    if (room && previouslyWatched && previouslyWatched !== identity) {
-      const previousPublication = room.remoteParticipants
-        .get(previouslyWatched)
-        ?.getTrackPublication(Track.Source.ScreenShareAudio);
+    if (existing != null) return existing;
 
-      previousPublication?.setEnabled(false);
-      previousPublication?.setSubscribed(false);
-    }
+    const saved = localStorage.getItem(`call-volume:${identity}`);
+    const stored = saved == null ? Number.NaN : Number(saved);
+    const volume = Number.isFinite(stored)
+      ? Math.min(200, Math.max(0, stored))
+      : 100;
 
-    watchedScreenShareAudioRef.current = identity;
+    participantVolumesRef.current.set(identity, volume);
+    if (volume > 0) participantAudibleVolumesRef.current.set(identity, volume);
 
-    if (identity) {
-      // Screen audio is a separate LiveKit publication from screen video.
-      // Explicitly subscribe and enable it when the viewer chooses a stream,
-      // matching the screen-share subscription flow used by Fluxer.
-      const remotePublication = room?.remoteParticipants
-        .get(identity)
-        ?.getTrackPublication(Track.Source.ScreenShareAudio);
-      const localPublication =
-        room?.localParticipant.identity === identity
-          ? room.localParticipant.getTrackPublication(
-              Track.Source.ScreenShareAudio,
-            )
-          : undefined;
+    return volume;
+  }, []);
 
-      if (!remotePublication && !localPublication) {
-        setError(
-          "This screen share is not publishing an audio track. The sender must restart the share, select the YouTube tab, and enable Share tab audio.",
+  const setParticipantVolume = useCallback(
+    (identity: string, value: number) => {
+      const volume = Math.round(Math.min(200, Math.max(0, value)));
+
+      participantVolumesRef.current.set(identity, volume);
+      localStorage.setItem(`call-volume:${identity}`, String(volume));
+      if (volume > 0) {
+        participantAudibleVolumesRef.current.set(identity, volume);
+        localStorage.setItem(
+          `call-volume-before-mute:${identity}`,
+          String(volume),
         );
-      } else {
-        setError(null);
+      }
+      roomRef.current?.remoteParticipants
+        .get(identity)
+        ?.setVolume(volume / 100, Track.Source.Microphone);
+      setParticipants((current) =>
+        current.map((participant) =>
+          participant.identity === identity
+            ? { ...participant, volume }
+            : participant,
+        ),
+      );
+    },
+    [],
+  );
+
+  const toggleParticipantMute = useCallback(
+    (identity: string) => {
+      const current = participantVolume(identity);
+
+      if (current > 0) {
+        participantAudibleVolumesRef.current.set(identity, current);
+        localStorage.setItem(
+          `call-volume-before-mute:${identity}`,
+          String(current),
+        );
+        setParticipantVolume(identity, 0);
+
+        return;
       }
 
-      remotePublication?.setSubscribed(true);
-      remotePublication?.setEnabled(true);
+      const saved = Number(
+        localStorage.getItem(`call-volume-before-mute:${identity}`),
+      );
+      const restored =
+        participantAudibleVolumesRef.current.get(identity) ??
+        (Number.isFinite(saved) && saved > 0 ? saved : 100);
 
-      // Called directly by the Watch button, so LiveKit can unlock its audio
-      // context while the browser still considers this a user gesture. This
-      // also lets a screen-audio track that subscribes slightly later play.
-      void room?.startAudio().catch((playbackError) => {
-        // eslint-disable-next-line no-console
-        console.warn("Could not enable call audio", playbackError);
-      });
-    }
+      setParticipantVolume(identity, restored);
+    },
+    [participantVolume, setParticipantVolume],
+  );
+
+  const screenShareVolume = useCallback((identity: string) => {
+    const existing = screenShareVolumesRef.current.get(identity);
+
+    if (existing != null) return existing;
+
+    const saved = localStorage.getItem(`screen-share-volume:${identity}`);
+    const stored = saved == null ? Number.NaN : Number(saved);
+    const volume = Number.isFinite(stored)
+      ? Math.min(200, Math.max(0, stored))
+      : 100;
+
+    screenShareVolumesRef.current.set(identity, volume);
+
+    return volume;
   }, []);
+
+  const setScreenShareVolume = useCallback(
+    (identity: string, value: number) => {
+      const volume = Math.round(Math.min(200, Math.max(0, value)));
+
+      screenShareVolumesRef.current.set(identity, volume);
+      localStorage.setItem(`screen-share-volume:${identity}`, String(volume));
+      roomRef.current?.remoteParticipants
+        .get(identity)
+        ?.setVolume(
+          watchedScreenShareAudioRef.current === identity ? volume / 100 : 0,
+          Track.Source.ScreenShareAudio,
+        );
+      setScreenShares((current) =>
+        current.map((share) =>
+          share.identity === identity
+            ? { ...share, audioVolume: volume }
+            : share,
+        ),
+      );
+    },
+    [],
+  );
+
+  const watchScreenShareAudio = useCallback(
+    (identity: string | null) => {
+      const room = roomRef.current;
+      const previouslyWatched = watchedScreenShareAudioRef.current;
+
+      if (room && previouslyWatched && previouslyWatched !== identity) {
+        const previousParticipant =
+          room.remoteParticipants.get(previouslyWatched);
+        const previousPublication = previousParticipant?.getTrackPublication(
+          Track.Source.ScreenShareAudio,
+        );
+
+        previousParticipant?.setVolume(0, Track.Source.ScreenShareAudio);
+        previousPublication?.setEnabled(false);
+        previousPublication?.setSubscribed(false);
+      }
+
+      watchedScreenShareAudioRef.current = identity;
+
+      if (identity) {
+        // Screen audio is a separate LiveKit publication from screen video.
+        // Explicitly subscribe and enable it when the viewer chooses a stream,
+        // matching the screen-share subscription flow used by Fluxer.
+        const remotePublication = room?.remoteParticipants
+          .get(identity)
+          ?.getTrackPublication(Track.Source.ScreenShareAudio);
+        const localPublication =
+          room?.localParticipant.identity === identity
+            ? room.localParticipant.getTrackPublication(
+                Track.Source.ScreenShareAudio,
+              )
+            : undefined;
+
+        if (!remotePublication && !localPublication) {
+          setError(
+            "This screen share is not publishing an audio track. The sender must restart the share, select the YouTube tab, and enable Share tab audio.",
+          );
+        } else {
+          setError(null);
+        }
+
+        room?.remoteParticipants
+          .get(identity)
+          ?.setVolume(
+            screenShareVolume(identity) / 100,
+            Track.Source.ScreenShareAudio,
+          );
+        remotePublication?.setSubscribed(true);
+        remotePublication?.setEnabled(true);
+
+        // Called directly by the Watch button, so LiveKit can unlock its audio
+        // context while the browser still considers this a user gesture. This
+        // also lets a screen-audio track that subscribes slightly later play.
+        void room?.startAudio().catch((playbackError) => {
+          // eslint-disable-next-line no-console
+          console.warn("Could not enable call audio", playbackError);
+        });
+      }
+    },
+    [screenShareVolume],
+  );
 
   // Our OWN mic is analysed here in the browser rather than via LiveKit's
   // participant.isSpeaking, which comes from the server's audio-level observer
@@ -803,24 +935,29 @@ export function useCall(conversationId: string | null): UseCallState {
     [],
   );
 
-  const refreshParticipants = useCallback((room: Room) => {
-    const local = room.localParticipant;
+  const refreshParticipants = useCallback(
+    (room: Room) => {
+      const local = room.localParticipant;
 
-    setParticipants([
-      {
-        identity: local.identity,
-        isLocal: true,
-        isSpeaking: false, // ours is filled in from the analyser on the way out
-        isMuted: !local.isMicrophoneEnabled,
-      },
-      ...Array.from(room.remoteParticipants.values()).map((p) => ({
-        identity: p.identity,
-        isLocal: false,
-        isSpeaking: p.isSpeaking,
-        isMuted: !p.isMicrophoneEnabled,
-      })),
-    ]);
-  }, []);
+      setParticipants([
+        {
+          identity: local.identity,
+          isLocal: true,
+          isSpeaking: false, // ours is filled in from the analyser on the way out
+          isMuted: !local.isMicrophoneEnabled,
+          volume: 100,
+        },
+        ...Array.from(room.remoteParticipants.values()).map((p) => ({
+          identity: p.identity,
+          isLocal: false,
+          isSpeaking: p.isSpeaking,
+          isMuted: !p.isMicrophoneEnabled,
+          volume: participantVolume(p.identity),
+        })),
+      ]);
+    },
+    [participantVolume],
+  );
 
   // Keyed by identity: one share per participant, and re-sharing replaces the
   // previous entry rather than stacking up.
@@ -830,10 +967,15 @@ export function useCall(conversationId: string | null): UseCallState {
 
       setScreenShares((prev) => [
         ...prev.filter((s) => s.identity !== identity),
-        { identity, track, audioTrack },
+        {
+          identity,
+          track,
+          audioTrack,
+          audioVolume: screenShareVolume(identity),
+        },
       ]);
     },
-    [],
+    [screenShareVolume],
   );
 
   const addScreenShareAudio = useCallback(
@@ -1218,12 +1360,33 @@ export function useCall(conversationId: string | null): UseCallState {
           // `restrictOwnAudio` is the capture hint used by the known-working
           // screen-share implementation and prevents the tab from receiving
           // an unintended copy of the local call audio.
-          audio: includeAudio ? { restrictOwnAudio: { ideal: true } } : false,
+          audio: includeAudio
+            ? {
+                // Screen audio is music/media, not speech. Avoid voice
+                // processing and request the browser's native stereo 48 kHz
+                // capture where supported.
+                restrictOwnAudio: { ideal: true },
+                channelCount: 2,
+                sampleRate: 48_000,
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+              }
+            : false,
           systemAudio: includeAudio ? "include" : "exclude",
           suppressLocalAudioPlayback: false,
         },
         {
           screenShareEncoding: { maxBitrate, maxFramerate, priority: "high" },
+          // The default music preset is 48 kbps. Screen/tab audio benefits
+          // from the higher Opus ceiling, especially for games and video.
+          audioPreset: AudioPresets.musicHighQualityStereo,
+          forceStereo: true,
+          dtx: false,
+          red: true,
+          // Keep screen video and screen audio in the same MediaStream for
+          // better A/V synchronization on subscribers.
+          stream: "screen-share",
           videoCodec: "h264",
           backupCodec: false,
           simulcast: false,
@@ -1479,7 +1642,7 @@ export function useCall(conversationId: string | null): UseCallState {
       });
 
       if (!res.ok) {
-        setError("Could not join the call.");
+        setError(await readProblemDetail(res, "Could not join the call."));
 
         return;
       }
@@ -1489,14 +1652,25 @@ export function useCall(conversationId: string | null): UseCallState {
         token: string;
       };
 
-      const room = new Room();
+      const room = new Room({ webAudioMix: true });
 
       // Remote speaking comes from LiveKit; isSpeakingChanged is per-participant
       // and more reliable than the room-level ActiveSpeakersChanged aggregate.
-      const wireRemote = (p: Participant) =>
+      const wireRemote = (p: RemoteParticipant) => {
+        p.setVolume(
+          participantVolume(p.identity) / 100,
+          Track.Source.Microphone,
+        );
+        p.setVolume(
+          watchedScreenShareAudioRef.current === p.identity
+            ? screenShareVolume(p.identity) / 100
+            : 0,
+          Track.Source.ScreenShareAudio,
+        );
         p.on(ParticipantEvent.IsSpeakingChanged, () =>
           refreshParticipants(room),
         );
+      };
 
       room.on(RoomEvent.ParticipantConnected, (p) => {
         wireRemote(p);
@@ -1508,22 +1682,29 @@ export function useCall(conversationId: string | null): UseCallState {
         refreshParticipants(room);
         playLeaveRef.current().catch(() => {});
       });
-      room.on(RoomEvent.TrackMuted, () => refreshParticipants(room));
-      room.on(RoomEvent.TrackUnmuted, () => refreshParticipants(room));
+      const refreshMuteState = () => {
+        refreshParticipants(room);
+        setMuted(!room.localParticipant.isMicrophoneEnabled);
+      };
 
-      // Screen-share audio is its own publication. Keep it unsubscribed until
-      // the receiver actively watches that participant, then subscribe here
-      // as well as in the click handler so a publication arriving later is
-      // not missed.
+      room.on(RoomEvent.TrackMuted, refreshMuteState);
+      room.on(RoomEvent.TrackUnmuted, refreshMuteState);
+
+      // Screen-share audio is its own publication. It remains disabled and
+      // unsubscribed until the receiver explicitly watches that share.
       room.on(RoomEvent.TrackPublished, (publication, participant) => {
         if (publication.source !== Track.Source.ScreenShareAudio) return;
 
-        // Subscribe while the share tile is visible so its audio element can
-        // be primed muted before the viewer clicks Watch stream. The click
-        // only changes playback volume; it no longer races subscription.
-        publication.setSubscribed(true);
-        publication.setEnabled(true);
-        if (watchedScreenShareAudioRef.current === participant.identity) {
+        const isWatched =
+          watchedScreenShareAudioRef.current === participant.identity;
+
+        participant.setVolume(
+          isWatched ? screenShareVolume(participant.identity) / 100 : 0,
+          Track.Source.ScreenShareAudio,
+        );
+        publication.setEnabled(isWatched);
+        publication.setSubscribed(isWatched);
+        if (isWatched) {
           setError(null);
         }
       });
@@ -1541,8 +1722,24 @@ export function useCall(conversationId: string | null): UseCallState {
       // attached by the expanded ScreenShareStage.
       room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
         if (publication.source === Track.Source.ScreenShareAudio) {
-          addScreenShareAudio(participant.identity, track);
+          const isWatched =
+            watchedScreenShareAudioRef.current === participant.identity;
+
+          participant.setVolume(
+            isWatched ? screenShareVolume(participant.identity) / 100 : 0,
+            Track.Source.ScreenShareAudio,
+          );
+          publication.setEnabled(isWatched);
+          if (isWatched) {
+            addScreenShareAudio(participant.identity, track);
+          } else {
+            publication.setSubscribed(false);
+          }
         } else if (track.kind === Track.Kind.Audio) {
+          participant.setVolume(
+            participantVolume(participant.identity) / 100,
+            Track.Source.Microphone,
+          );
           const el = track.attach();
 
           el.autoplay = true;
@@ -1752,6 +1949,8 @@ export function useCall(conversationId: string | null): UseCallState {
     stopScreenShareStatsLogging,
     stopAllScreenShareStatsLogging,
     recoverScreenShareAfterReconnect,
+    participantVolume,
+    screenShareVolume,
   ]);
 
   const toggleMute = useCallback(async () => {
@@ -1842,6 +2041,9 @@ export function useCall(conversationId: string | null): UseCallState {
     scheduleLeave,
     toggleMute,
     toggleScreenShare,
+    setParticipantVolume,
+    toggleParticipantMute,
+    setScreenShareVolume,
     watchScreenShareAudio,
   };
 }
