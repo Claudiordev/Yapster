@@ -1,10 +1,12 @@
 package com.claudiordese.voice.infrastructure.controllers.voice;
 
 import com.claudiordese.voice.application.domain.rooms.RoomAccess;
+import com.claudiordese.voice.application.domain.rooms.RoomStatus;
 import com.claudiordese.voice.application.service.RoomService;
 import com.claudiordese.voice.infrastructure.controllers.response.RoomAccessResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -36,4 +38,13 @@ public class VoiceController {
         RoomAccess access = roomService.join(authentication.getName(), room, authorization);
         return RoomAccessResponse.from(access);
     }
+
+    @GetMapping("/rooms/{room}/status")
+    public RoomStatus roomStatus(
+            Authentication authentication,
+            @PathVariable String room,
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
+        return roomService.status(room, authorization);
+    }
+
 }

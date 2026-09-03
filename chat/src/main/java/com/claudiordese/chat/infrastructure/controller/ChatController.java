@@ -1,11 +1,13 @@
 package com.claudiordese.chat.infrastructure.controller;
 
 import com.claudiordese.chat.application.service.ChatService;
+import com.claudiordese.chat.infrastructure.configuration.InternalProperties;
 import com.claudiordese.chat.infrastructure.controller.request.AddMemberRequest;
 import com.claudiordese.chat.infrastructure.controller.request.CreateGroupRequest;
 import com.claudiordese.chat.infrastructure.controller.request.MarkReadRequest;
 import com.claudiordese.chat.infrastructure.controller.request.SendMessageRequest;
 import com.claudiordese.chat.infrastructure.controller.request.StartDmRequest;
+import com.claudiordese.chat.infrastructure.controller.request.CallStatusRequest;
 import com.claudiordese.chat.infrastructure.controller.responses.*;
 import com.claudiordese.exceptions.InterdictedException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -13,7 +15,6 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
-import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,10 +26,17 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("${url.api.base-path}/chat")
-@AllArgsConstructor
 public class ChatController {
 
-    private ChatService chatService;
+    private final ChatService chatService;
+    private final String internalSecret;
+
+    public ChatController(
+            ChatService chatService,
+            InternalProperties internalProperties) {
+        this.chatService = chatService;
+        this.internalSecret = internalProperties.secret();
+    }
 
     @PostMapping("/dm")
     @ResponseStatus(HttpStatus.CREATED)
@@ -130,6 +138,23 @@ public class ChatController {
         if (!chatService.isMember(conversationId, loggedUser(auth))) {
             throw new InterdictedException("not_a_member", "Not a member of this conversation");
         }
+    }
+
+    /** Receives authoritative LiveKit presence from the voice service. */
+    @PostMapping("/internal/status")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void callStatus(
+            @RequestHeader("X-Internal-Secret") String secret,
+            @RequestBody CallStatusRequest request) {
+        if (internalSecret.isBlank() || !internalSecret.equals(secret)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "Invalid voice service credentials");
+        }
+
+        chatService.sendCallStatus(
+                UUID.fromString(request.conversationId()),
+                request.ongoing(),
+                request.participantCount());
     }
 
 

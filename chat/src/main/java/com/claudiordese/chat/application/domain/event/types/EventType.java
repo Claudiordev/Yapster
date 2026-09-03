@@ -5,5 +5,6 @@ public enum EventType {
     TYPING,
     USER_STATUS_EVENT,
     CALL_STARTED,
-    CALL_ENDED
+    CALL_ENDED,
+    CALL_STATUS
 }
