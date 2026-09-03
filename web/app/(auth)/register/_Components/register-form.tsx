@@ -9,10 +9,10 @@ import { Link } from "@heroui/link";
 import { useSound } from "react-sounds";
 
 import { RotatingTagline } from "../../_Components/rotating-tagline";
-import { SocialLogin } from "../../_Components/social-login";
 
 import { Icon } from "@/components/icon";
 import { ROUTES } from "@/lib/constants";
+import { readProblemDetail } from "@/lib/problem-details";
 
 const INPUT_CLASSNAMES = { inputWrapper: "border-small bg-content1" };
 
@@ -26,9 +26,10 @@ export function RegisterForm() {
     playSubmit();
     setErrors({});
 
-    const data = Object.fromEntries(
-      new FormData(e.currentTarget),
-    ) as Record<string, string>;
+    const data = Object.fromEntries(new FormData(e.currentTarget)) as Record<
+      string,
+      string
+    >;
 
     if (data.email !== data.confirmEmail) {
       setErrors({ confirmEmail: "Emails do not match" });
@@ -51,9 +52,9 @@ export function RegisterForm() {
       });
 
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-
-        setErrors({ form: body.error || "Registration failed" });
+        setErrors({
+          form: await readProblemDetail(res, "Registration failed"),
+        });
 
         return;
       }
@@ -69,7 +70,9 @@ export function RegisterForm() {
       });
 
       if (!loginRes.ok) {
-        window.location.assign(ROUTES.LOGIN);
+        setErrors({
+          form: await readProblemDetail(loginRes, "Automatic login failed"),
+        });
 
         return;
       }
@@ -102,7 +105,7 @@ export function RegisterForm() {
           </div>
         </div>
 
-        <div className="rounded-medium border border-divider bg-content2 p-6 shadow-xl shadow-black/20">
+        <div className="login-form-frame p-6">
           <Form
             className="flex w-full flex-col gap-4"
             validationErrors={errors}
@@ -175,6 +178,9 @@ export function RegisterForm() {
                 if (validationDetails.valueMissing) {
                   return "Please choose a password";
                 }
+                if (validationDetails.tooShort) {
+                  return "Password must be at least 8 characters";
+                }
 
                 return errors.password;
               }}
@@ -194,14 +200,12 @@ export function RegisterForm() {
             )}
 
             <Button
-              className="w-full bg-brand font-medium text-white shadow-md shadow-brand/30 hover:bg-brand-hover"
+              className="login-sign-in w-full"
               isLoading={isLoading}
               type="submit"
             >
               Create account
             </Button>
-
-            <SocialLogin />
 
             <p className="w-full text-center text-small text-default-500">
               Already have an account?{" "}
