@@ -97,6 +97,7 @@ export function ConversationView({
       map[account.userId] = {
         name: account.username ?? "You",
         avatarUrl: account.avatarUrl,
+        roles: account.roles,
       };
     }
 
@@ -104,6 +105,7 @@ export function ConversationView({
       map[member.id] = {
         name: member.username ?? "Unknown",
         avatarUrl: member.avatarUrl,
+        roles: member.roles,
       };
     }
 

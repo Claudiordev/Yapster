@@ -19,6 +19,7 @@ export default async function ProtectedLayout({
         <AccountProvider
           initialAvatarUrl={account?.avatarUrl ?? null}
           initialBalance={account?.balance ?? 0}
+          initialRoles={account?.roles ?? []}
           initialUserId={account?.userId ?? null}
           initialUsername={account?.username ?? ""}
         >
