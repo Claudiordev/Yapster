@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Avatar } from "@heroui/avatar";
+import { Button } from "@heroui/button";
 import {
   Dropdown,
   DropdownItem,
@@ -13,6 +14,7 @@ import { AvatarUploadModal } from "@/components/AvatarUploadModal";
 import { useMyStatus } from "./useMyStatus";
 
 import { Icon } from "@/components/icon";
+import { SettingsModal } from "@/components/SettingsModal";
 import type { SelectableStatus } from "@/lib/chat";
 import { useAccount } from "@/lib/use-account";
 
@@ -27,14 +29,15 @@ const CHOICES: { key: SelectableStatus; dot: string; label: string }[] = [
 const DISCONNECTED = { dot: "bg-default-300", label: "Offline" };
 
 export function ChatProfile() {
-  const { username, avatarUrl } = useAccount();
+  const { username, avatarUrl, logout } = useAccount();
   const { myStatus, choose, isConnected } = useMyStatus();
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const current = CHOICES.find((c) => c.key === myStatus) ?? CHOICES[0];
 
   return (
-    <div className="flex-shrink-0 mx-3 mb-3 flex items-center gap-3 px-3 py-3 rounded-large bg-content2 shadow-lg shadow-black/30">
+    <div className="chat-profile-card mx-3 mb-3 flex flex-shrink-0 items-center gap-3 px-3 py-3">
       <button
         aria-label="Change avatar"
         className="group relative flex-shrink-0 rounded-full"
@@ -93,9 +96,35 @@ export function ChatProfile() {
 
       <div className="flex-grow" />
 
+      <Button
+        isIconOnly
+        aria-label="Settings"
+        className="chat-profile-action chat-profile-settings min-w-9"
+        size="sm"
+        variant="light"
+        onPress={() => setSettingsOpen(true)}
+      >
+        <Icon name="settings" size={18} />
+      </Button>
+
+      <Button
+        isIconOnly
+        aria-label="Logout"
+        className="chat-profile-action chat-profile-logout min-w-9"
+        size="sm"
+        variant="light"
+        onPress={logout}
+      >
+        <Icon name="logout" size={18} />
+      </Button>
+
       <AvatarUploadModal
         isOpen={avatarOpen}
         onClose={() => setAvatarOpen(false)}
+      />
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
       />
     </div>
   );
