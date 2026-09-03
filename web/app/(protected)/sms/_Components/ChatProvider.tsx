@@ -44,6 +44,7 @@ interface ChatContextValue {
     userId: string | null;
     username: string | null;
     avatarUrl: string | null;
+    roles: string[];
   };
 }
 
@@ -57,7 +58,7 @@ const ChatContext = createContext<ChatContextValue | null>(null);
 export function ChatProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { subscribe } = useRealtime();
-  const { userId, username, avatarUrl } = useAccount();
+  const { userId, username, avatarUrl, roles } = useAccount();
   const {
     conversations,
     isLoading,
@@ -133,7 +134,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         addConversation({
           ...conversation,
           members: [
-            { id: user.id, username: user.username, avatarUrl: user.avatarUrl },
+            {
+              id: user.id,
+              username: user.username,
+              avatarUrl: user.avatarUrl,
+              roles: user.roles,
+            },
           ],
         });
         router.push(`/sms/${conversation.id}`);
@@ -167,6 +173,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             id: m.id,
             username: m.username,
             avatarUrl: m.avatarUrl,
+            roles: m.roles,
           })),
         });
         router.push(`/sms/${conversation.id}`);
@@ -194,6 +201,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           id: user.id,
           username: user.username,
           avatarUrl: user.avatarUrl,
+          roles: user.roles,
         });
 
         return true;
@@ -253,7 +261,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       removeMember,
       deleteGroup,
       setActiveCall,
-      account: { userId, username, avatarUrl },
+      account: { userId, username, avatarUrl, roles },
     }),
     [
       conversations,
@@ -268,6 +276,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       userId,
       username,
       avatarUrl,
+      roles,
     ],
   );
 

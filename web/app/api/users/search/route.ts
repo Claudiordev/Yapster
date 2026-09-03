@@ -8,6 +8,7 @@ export interface PlatformUser {
   id: string;
   username: string;
   avatarUrl: string | null;
+  roles: string[];
 }
 
 export const GET = withAuth(async (request, token) => {
@@ -25,6 +26,10 @@ export const GET = withAuth(async (request, token) => {
   );
 
   return NextResponse.json(
-    users.map((u) => ({ ...u, avatarUrl: toRelativeAvatar(u.avatarUrl) })),
+    users.map((u) => ({
+      ...u,
+      avatarUrl: toRelativeAvatar(u.avatarUrl),
+      roles: Array.isArray(u.roles) ? u.roles : [],
+    })),
   );
 });

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 
 import { toRelativeAvatar } from "@/lib/avatar";
+import { rolesFromClaims, verifyJwt } from "@/lib/auth";
 import { API_BASE_URL, AUTH_COOKIE_NAME } from "@/lib/constants";
 
 interface SessionUser {
@@ -15,6 +16,7 @@ export interface Account {
   username: string;
   balance: number;
   avatarUrl: string | null;
+  roles: string[];
 }
 
 /**
@@ -33,10 +35,13 @@ export async function getAccount(): Promise<Account | null> {
   if (!token) return null;
 
   try {
-    const res = await fetch(`${API_BASE_URL}/user`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
+    const [res, claims] = await Promise.all([
+      fetch(`${API_BASE_URL}/user`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      }),
+      verifyJwt(token),
+    ]);
 
     if (!res.ok) return null;
 
@@ -47,6 +52,7 @@ export async function getAccount(): Promise<Account | null> {
       username: user.username,
       balance: user.balance ?? 0,
       avatarUrl: toRelativeAvatar(user.avatarUrl),
+      roles: rolesFromClaims(claims),
     };
   } catch {
     return null;

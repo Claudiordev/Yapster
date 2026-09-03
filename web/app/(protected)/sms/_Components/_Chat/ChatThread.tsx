@@ -16,6 +16,7 @@ import { Icon } from "@/components/icon";
 export interface MessageSender {
   name: string;
   avatarUrl: string | null;
+  roles: string[];
 }
 
 interface ChatThreadProps {

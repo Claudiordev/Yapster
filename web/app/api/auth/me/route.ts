@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { apiGet } from "@/lib/api-client";
 import { toRelativeAvatar } from "@/lib/avatar";
-import { verifyJwt } from "@/lib/auth";
+import { rolesFromClaims, verifyJwt } from "@/lib/auth";
 import { withAuth } from "@/lib/bff";
 
 interface SessionUser {
@@ -22,6 +22,6 @@ export const GET = withAuth(async (_request, token) => {
     username: user.username,
     balance: user.balance ?? null,
     avatarUrl: toRelativeAvatar(user.avatarUrl),
-    role: claims?.role ?? null,
+    roles: rolesFromClaims(claims),
   });
 });

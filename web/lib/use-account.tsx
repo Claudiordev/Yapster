@@ -18,6 +18,7 @@ interface Account {
   balance: number | null;
   state: string | null;
   avatarUrl: string | null;
+  roles: string[];
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -29,6 +30,7 @@ interface AccountProviderProps {
   initialUsername: string | null;
   initialBalance: number | null;
   initialAvatarUrl: string | null;
+  initialRoles: string[];
   children: ReactNode;
 }
 
@@ -44,6 +46,7 @@ export function AccountProvider({
   initialUsername,
   initialBalance,
   initialAvatarUrl,
+  initialRoles,
   children,
 }: AccountProviderProps) {
   const router = useRouter();
@@ -51,6 +54,7 @@ export function AccountProvider({
   const [username, setUsername] = useState<string | null>(initialUsername);
   const [balance, setBalance] = useState<number | null>(initialBalance);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initialAvatarUrl);
+  const [roles, setRoles] = useState<string[]>(initialRoles);
   const [state] = useState<string | null>("Online");
 
   const refresh = useCallback(async () => {
@@ -64,6 +68,7 @@ export function AccountProvider({
       if (data?.username) setUsername(data.username);
       if (typeof data?.balance === "number") setBalance(data.balance);
       setAvatarUrl(data?.avatarUrl ?? null);
+      if (Array.isArray(data?.roles)) setRoles(data.roles);
     } catch {
       // ignore — keep whatever we already have
     }
@@ -86,7 +91,16 @@ export function AccountProvider({
 
   return (
     <AccountContext.Provider
-      value={{ userId, username, balance, state, avatarUrl, logout, refresh }}
+      value={{
+        userId,
+        username,
+        balance,
+        state,
+        avatarUrl,
+        roles,
+        logout,
+        refresh,
+      }}
     >
       {children}
     </AccountContext.Provider>

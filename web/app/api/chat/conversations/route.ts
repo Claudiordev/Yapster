@@ -59,6 +59,7 @@ export const GET = withAuth(async (_request, token) => {
         id: member.id,
         username: byId.get(member.id)?.username ?? null,
         avatarUrl: toRelativeAvatar(byId.get(member.id)?.avatarUrl),
+        roles: byId.get(member.id)?.roles ?? [],
         // Java enum is UPPERCASE (ONLINE/BUSY/IDLE/OFFLINE); the UI union is
         // lowercase. Guard the mapping so an unknown value degrades to offline
         // rather than rendering an undefined CSS class.

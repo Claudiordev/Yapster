@@ -14,6 +14,7 @@ export interface ConversationMember {
   id: string;
   username: string | null; // null if the user could not be resolved
   avatarUrl: string | null;
+  roles: string[];
   /** Absent until the backend supplies presence — treated as "offline". */
   status?: UserStatus;
 }

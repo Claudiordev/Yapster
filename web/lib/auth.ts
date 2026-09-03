@@ -47,7 +47,20 @@ export interface SessionRegisterResponse {
 
 export interface AuthClaims extends JWTPayload {
   sub: string;
+  roles?: string[];
+  /** Backward compatibility for tokens issued before roles became a list. */
   role?: string;
+}
+
+export function rolesFromClaims(claims: AuthClaims | null): string[] {
+  if (!claims) return [];
+  if (Array.isArray(claims.roles)) {
+    return claims.roles.filter(
+      (role): role is string => typeof role === "string",
+    );
+  }
+
+  return typeof claims.role === "string" ? [claims.role] : [];
 }
 
 export function toTokenPair(response: SessionTokenResponse): TokenPair {
