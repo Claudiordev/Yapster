@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button } from "@heroui/button";
 import { Select, SelectItem } from "@heroui/select";
 import { Switch } from "@heroui/switch";
 
 import { MicTest } from "./MicTest";
+import { ServerInformationModal } from "./ServerInformationModal";
 
 import { Icon } from "@/components/icon";
 import { siteConfig } from "@/config/site";
+import { useAccount } from "@/lib/use-account";
 import {
   DEFAULT_VIDEO_PREFS,
   DEFAULT_SCREEN_SHARE_AUDIO,
@@ -62,6 +65,7 @@ function VolumeBar({
 }
 
 export function SettingsPanel() {
+  const { roles } = useAccount();
   const [inputs, setInputs] = useState<AudioDevice[]>([]);
   const [outputs, setOutputs] = useState<AudioDevice[]>([]);
   const [input, setInput] = useState("default");
@@ -80,6 +84,8 @@ export function SettingsPanel() {
   const [screenShareAudio, setScreenShareAudio] = useState(
     DEFAULT_SCREEN_SHARE_AUDIO,
   );
+  const [serverInformationOpen, setServerInformationOpen] = useState(false);
+  const isAdmin = roles.includes("ADMIN");
 
   useEffect(() => {
     setInput(localStorage.getItem(INPUT_KEY) ?? "default");
@@ -334,6 +340,31 @@ export function SettingsPanel() {
 
       <div className="h-px bg-divider" />
 
+      {isAdmin && (
+        <>
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-foreground">
+                Server information
+              </h2>
+              <p className="text-tiny text-default-500">
+                View current users and connected devices.
+              </p>
+            </div>
+            <Button
+              className="flex-shrink-0"
+              size="sm"
+              variant="flat"
+              onPress={() => setServerInformationOpen(true)}
+            >
+              View information
+            </Button>
+          </div>
+
+          <div className="h-px bg-divider" />
+        </>
+      )}
+
       <a
         aria-label="GitHub"
         className="flex w-fit items-center gap-2 text-tiny text-default-400 transition-colors hover:text-foreground"
@@ -344,6 +375,11 @@ export function SettingsPanel() {
         <Icon name="github" size={16} />
         View on GitHub
       </a>
+
+      <ServerInformationModal
+        isOpen={serverInformationOpen}
+        onClose={() => setServerInformationOpen(false)}
+      />
     </div>
   );
 }

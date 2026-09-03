@@ -17,6 +17,7 @@ export type IconName =
   | "plus"
   | "check"
   | "search"
+  | "refresh"
   | "game"
   | "users"
   | "mic"
