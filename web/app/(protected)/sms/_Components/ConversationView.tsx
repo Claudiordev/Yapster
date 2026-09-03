@@ -129,26 +129,26 @@ export function ConversationView({
   );
 
   async function addGroupMember(user: Parameters<typeof addMember>[1]) {
-    const added = await addMember(conversationId, user);
+    const result = await addMember(conversationId, user);
 
-    if (added) {
+    if (result.ok) {
       await sendMessage(`${user.username} was added to the chat`);
     }
 
-    return added;
+    return result;
   }
 
   async function removeGroupMember(userId: string) {
     const member = active?.members.find((candidate) => candidate.id === userId);
-    const removed = await removeMember(conversationId, userId);
+    const result = await removeMember(conversationId, userId);
 
-    if (removed) {
+    if (result.ok) {
       await sendMessage(
         `${member?.username ?? "A user"} was removed from the chat`,
       );
     }
 
-    return removed;
+    return result;
   }
 
   return (

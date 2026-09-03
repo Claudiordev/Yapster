@@ -12,6 +12,7 @@ import {
 import { addToast } from "@heroui/toast";
 
 import { Icon } from "@/components/icon";
+import { readProblemDetail } from "@/lib/problem-details";
 import { useAccount } from "@/lib/use-account";
 
 interface AvatarUploadModalProps {
@@ -62,9 +63,7 @@ export function AvatarUploadModal({ isOpen, onClose }: AvatarUploadModalProps) {
       const res = await fetch("/api/user/avatar", { method: "POST", body });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-
-        setError(data.error || "Upload failed");
+        setError(await readProblemDetail(res, "Upload failed"));
 
         return;
       }

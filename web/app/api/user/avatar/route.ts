@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { ApiError } from "@/lib/api-client";
 import { withAuth } from "@/lib/bff";
 import { API_BASE_URL } from "@/lib/constants";
+import { problemDetail } from "@/lib/problem-details";
+import { apiErrorResponse } from "@/lib/problem-response";
 
 export const POST = withAuth(async (request, token) => {
   const formData = await request.formData();
@@ -17,10 +20,26 @@ export const POST = withAuth(async (request, token) => {
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    let detail = res.statusText || "Upload failed";
 
-    return NextResponse.json(
-      { error: text || "Upload failed" },
-      { status: res.status },
+    if (text) {
+      try {
+        detail = problemDetail(JSON.parse(text), detail);
+      } catch {
+        detail = text;
+      }
+    }
+
+    return apiErrorResponse(
+      request,
+      new ApiError(
+        res.status,
+        detail,
+        text,
+        res.headers.get("content-type"),
+        res.headers,
+        res.statusText,
+      ),
     );
   }
 
