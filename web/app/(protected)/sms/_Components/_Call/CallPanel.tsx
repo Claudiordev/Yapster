@@ -38,6 +38,27 @@ const MAX_CALL_HEIGHT_PERCENT = 60;
 const DEFAULT_CALL_HEIGHT_PERCENT = 40;
 const KEYBOARD_RESIZE_STEP_PERCENT = 2;
 
+const CALL_ROLE_BADGES = [
+  {
+    role: "ADMIN",
+    label: "ADMIN",
+    title: "Administrator",
+    className: "call-role-badge--admin",
+  },
+  {
+    role: "MODERATOR",
+    label: "MOD",
+    title: "Moderator",
+    className: "call-role-badge--moderator",
+  },
+  {
+    role: "PREMIUM",
+    label: "PREMIUM",
+    title: "Premium member",
+    className: "call-role-badge--premium",
+  },
+] as const;
+
 function clampCallHeight(value: number) {
   return Math.min(
     MAX_CALL_HEIGHT_PERCENT,
@@ -325,6 +346,9 @@ export function CallPanel({
               const sender = senders[p.identity];
               const name = p.isLocal ? "You" : (sender?.name ?? "Unknown");
               const isAdmin = sender?.roles.includes("ADMIN") ?? false;
+              const roleBadges = CALL_ROLE_BADGES.filter(({ role }) =>
+                sender?.roles.includes(role),
+              );
               const canAdjustVolume =
                 !p.isLocal && (currentUserIsAdmin || !isAdmin);
               const canOpenMenu =
@@ -395,6 +419,20 @@ export function CallPanel({
                         title="Muted for you"
                       >
                         <Icon name="mic-off" size={11} />
+                      </span>
+                    )}
+                    {roleBadges.length > 0 && (
+                      <span className="absolute -right-2 -bottom-1 z-[1] flex flex-col items-end gap-1">
+                        {roleBadges.map((badge) => (
+                          <span
+                            key={badge.role}
+                            aria-label={`${name} is a ${badge.title.toLowerCase()}`}
+                            className={`call-role-badge ${badge.className}`}
+                            title={badge.title}
+                          >
+                            {badge.label}
+                          </span>
+                        ))}
                       </span>
                     )}
                   </div>
