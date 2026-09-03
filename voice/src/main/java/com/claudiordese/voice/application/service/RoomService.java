@@ -2,7 +2,9 @@ package com.claudiordese.voice.application.service;
 
 import com.claudiordese.voice.application.domain.rooms.RoomAccess;
 import com.claudiordese.voice.application.port.ConversationMembershipVerifier;
+import com.claudiordese.voice.application.port.ConversationCallModerator;
 import com.claudiordese.voice.application.port.RoomAccessProvider;
+import com.claudiordese.voice.application.port.RoomModerationProvider;
 import com.claudiordese.voice.application.port.RoomPresenceProvider;
 import com.claudiordese.voice.application.domain.rooms.RoomStatus;
 import com.claudiordese.voice.infrastructure.adapter.chat.ChatClient;
@@ -17,17 +19,23 @@ public class RoomService {
 
     private final RoomAccessProvider accessProvider;
     private final ConversationMembershipVerifier membershipVerifier;
+    private final ConversationCallModerator callModerator;
+    private final RoomModerationProvider moderationProvider;
     private final RoomPresenceProvider presenceProvider;
     private final ChatClient chatClient;
     private final InternalProperties internalProperties;
 
     public RoomService(RoomAccessProvider accessProvider,
                        ConversationMembershipVerifier membershipVerifier,
+                       ConversationCallModerator callModerator,
+                       RoomModerationProvider moderationProvider,
                        RoomPresenceProvider presenceProvider,
                        ChatClient chatClient,
                        InternalProperties internalProperties) {
         this.accessProvider = accessProvider;
         this.membershipVerifier = membershipVerifier;
+        this.callModerator = callModerator;
+        this.moderationProvider = moderationProvider;
         this.presenceProvider = presenceProvider;
         this.chatClient = chatClient;
         this.internalProperties = internalProperties;
@@ -58,6 +66,26 @@ public class RoomService {
         membershipVerifier.verifyMember(normalized, authorizationHeader);
         int count = presenceProvider.participantCount(normalized);
         return new RoomStatus(normalized, count > 0, count);
+    }
+
+    public void muteParticipant(
+            String room,
+            String targetIdentity,
+            String authorizationHeader) {
+        String normalizedRoom = room == null ? "" : room.strip();
+        String normalizedTarget = targetIdentity == null ? "" : targetIdentity.strip();
+        if (normalizedRoom.isEmpty()) {
+            throw new IllegalArgumentException("room must not be blank");
+        }
+        if (normalizedTarget.isEmpty()) {
+            throw new IllegalArgumentException("target identity must not be blank");
+        }
+
+        callModerator.verifyCanModerate(
+                normalizedRoom,
+                normalizedTarget,
+                authorizationHeader);
+        moderationProvider.muteMicrophone(normalizedRoom, normalizedTarget);
     }
 
     public void publishStatus(String room) {

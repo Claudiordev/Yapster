@@ -140,6 +140,23 @@ public class ChatController {
         }
     }
 
+    /** Authorization check consumed by voice before muting a participant for everyone. */
+    @GetMapping("/{conversationId}/call-moderation/{targetUserId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void checkCallModeration(
+            @PathVariable UUID conversationId,
+            @PathVariable UUID targetUserId,
+            Authentication auth) {
+        boolean platformAdmin = auth.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
+
+        chatService.verifyCanModerateCall(
+                conversationId,
+                loggedUser(auth),
+                targetUserId,
+                platformAdmin);
+    }
+
     /** Receives authoritative LiveKit presence from the voice service. */
     @PostMapping("/internal/status")
     @ResponseStatus(HttpStatus.NO_CONTENT)
