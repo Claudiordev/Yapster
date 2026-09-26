@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { apiGet, apiPost } from "@/lib/api-client";
+import { apiGet, apiPost } from "@/lib/apiClient";
 import { withAuth } from "@/lib/bff";
-import type { ChatMessageDto } from "@/lib/chat";
-
-type Ctx = { params: Promise<{ conversationId: string }> };
+import type { ChatMessageDto } from "@/types/chat";
+import type { RouteContext } from "@/types/api";
 
 // History — newest-first, keyset by `seq` (?beforeSeq=&limit=).
-export const GET = withAuth<Ctx>(async (request, token, { params }) => {
+export const GET = withAuth<RouteContext<{ conversationId: string }>>(async (request, token, { params }) => {
   const { conversationId } = await params;
   const { searchParams } = new URL(request.url);
   const qs = new URLSearchParams({ limit: searchParams.get("limit") ?? "20" });
@@ -24,7 +23,7 @@ export const GET = withAuth<Ctx>(async (request, token, { params }) => {
 });
 
 // Send a message.
-export const POST = withAuth<Ctx>(async (request, token, { params }) => {
+export const POST = withAuth<RouteContext<{ conversationId: string }>>(async (request, token, { params }) => {
   const { conversationId } = await params;
   const body = (await request.json()) as { body: string };
   const data = await apiPost<{ body: string }, ChatMessageDto>(

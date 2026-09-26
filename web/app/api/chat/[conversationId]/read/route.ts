@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { apiPost } from "@/lib/api-client";
+import { apiPost } from "@/lib/apiClient";
 import { withAuth } from "@/lib/bff";
+import type { RouteContext } from "@/types/api";
 
-type Ctx = { params: Promise<{ conversationId: string }> };
-
-export const POST = withAuth<Ctx>(async (request, token, { params }) => {
+export const POST = withAuth<RouteContext<{ conversationId: string }>>(async (request, token, { params }) => {
   const { conversationId } = await params;
   const body = (await request.json()) as { seq: number };
 

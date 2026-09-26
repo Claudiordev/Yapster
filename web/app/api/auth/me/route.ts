@@ -1,19 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { apiGet } from "@/lib/api-client";
+import { apiGet } from "@/lib/apiClient";
 import { toRelativeAvatar } from "@/lib/avatar";
 import { rolesFromClaims, verifyJwt } from "@/lib/auth";
 import { withAuth } from "@/lib/bff";
-
-interface SessionUser {
-  id: string;
-  username: string;
-  balance?: number;
-  avatarUrl?: string | null;
-}
+import type { SessionUser } from "@/types/user";
 
 export const GET = withAuth(async (_request, token) => {
-  // getAuthToken already validated the token; decode it for the role claim.
+  // getAuthToken already validated the token. Roles come from the DB via /user
+  // (the JWT claim is only a fallback) so a role change shows up immediately.
   const claims = await verifyJwt(token);
   const user = await apiGet<SessionUser>("/user", token);
 
@@ -22,6 +17,6 @@ export const GET = withAuth(async (_request, token) => {
     username: user.username,
     balance: user.balance ?? null,
     avatarUrl: toRelativeAvatar(user.avatarUrl),
-    roles: rolesFromClaims(claims),
+    roles: Array.isArray(user.roles) ? user.roles : rolesFromClaims(claims),
   });
 });

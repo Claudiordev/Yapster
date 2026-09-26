@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { apiPost, ApiError } from "@/lib/api-client";
-import {
-  setAuthCookies,
-  toTokenPair,
-  type LoginRequest,
-  type SessionTokenResponse,
-} from "@/lib/auth";
-import { apiErrorResponse, problemResponse } from "@/lib/problem-response";
+import { apiPost, ApiError } from "@/lib/apiClient";
+import { setAuthCookies, toTokenPair } from "@/lib/auth";
+import type { LoginRequest, SessionTokenResponse } from "@/types/auth";
+import { apiErrorResponse, problemResponse } from "@/lib/problemResponse";
 
 export async function POST(request: Request) {
   try {
