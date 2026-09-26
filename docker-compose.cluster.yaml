@@ -1,0 +1,105 @@
+# Override for running the backend services LOCALLY against the CLUSTER's
+# Postgres / Redis / MinIO / LiveKit, reached through `kubectl port-forward`.
+#
+# Do not use this file by hand: scripts/cluster-dev.sh reads the credentials from
+# the cluster's Secrets, starts the port-forwards and exports the CLUSTER_*
+# variables below. No secret value is stored in this repo.
+#
+#   scripts/cluster-dev.sh up      # start
+#   scripts/cluster-dev.sh down    # stop containers + port-forwards
+#
+# Start only the services listed by the script with --no-deps, so the local
+# postgres/redis containers are not started.
+
+services:
+  session:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:${CLUSTER_PF_SESSION_DB_PORT:-15432}/${CLUSTER_SESSION_DB}
+      - SPRING_DATASOURCE_USERNAME=${CLUSTER_SESSION_DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${CLUSTER_SESSION_DB_PASSWORD}
+      # A separate Redis DB index keeps this instance's cache/rate-limit keys away
+      # from the live services (cached users have a different shape, see the
+      # script header).
+      - SPRING_DATA_REDIS_HOST=host.docker.internal
+      - SPRING_DATA_REDIS_PORT=${CLUSTER_PF_REDIS_PORT:-16379}
+      - SPRING_DATA_REDIS_PASSWORD=${CLUSTER_REDIS_PASSWORD}
+      - SPRING_DATA_REDIS_DATABASE=${CLUSTER_REDIS_DB:-7}
+      - MINIO_ENDPOINT=http://host.docker.internal:${CLUSTER_PF_MINIO_PORT:-19000}
+      - MINIO_ACCESS_KEY=${CLUSTER_MINIO_USER}
+      - MINIO_SECRET_KEY=${CLUSTER_MINIO_PASSWORD}
+      # Origin the browser loads avatars from (the web dev server proxies /avatars).
+      - MINIO_PUBLIC_URL=${CLUSTER_MINIO_PUBLIC_URL:-http://localhost:3000}
+      # Session needs its newest migrations (e.g. users.bio); see the script.
+      - SPRING_FLYWAY_ENABLED=${CLUSTER_SESSION_FLYWAY:-true}
+      # no Jaeger locally; JDWP so an IDE can attach (host port 5011); DEBUG logs for our code
+      - MANAGEMENT_TRACING_ENABLED=false
+      - MANAGEMENT_OTLP_TRACING_EXPORT_ENABLED=false
+      - LOGGING_LEVEL_COM_CLAUDIORDESE=DEBUG
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    ports:
+      - "5011:5005"
+
+  chat:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:${CLUSTER_PF_CHAT_DB_PORT:-15433}/${CLUSTER_CHAT_DB}
+      - SPRING_DATASOURCE_USERNAME=${CLUSTER_CHAT_DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${CLUSTER_CHAT_DB_PASSWORD}
+      - SPRING_DATA_REDIS_HOST=host.docker.internal
+      - SPRING_DATA_REDIS_PORT=${CLUSTER_PF_REDIS_PORT:-16379}
+      - SPRING_DATA_REDIS_PASSWORD=${CLUSTER_REDIS_PASSWORD}
+      - SPRING_DATA_REDIS_DATABASE=${CLUSTER_REDIS_DB:-7}
+      # ON by default, like session: your local chat code may include migrations the live DB
+      # lacks (e.g. a new V3), and without them chat fails schema validation at startup.
+      # Set CLUSTER_CHAT_FLYWAY=false to forbid any change to the live chat database.
+      # Never edit an applied migration; add a new version instead (checksum mismatch).
+      - SPRING_FLYWAY_ENABLED=${CLUSTER_CHAT_FLYWAY:-true}
+      # chat's config registers it in Eureka as host.docker.internal, but its port
+      # is not published on the host, so the router could not reach it. Register the
+      # container IP instead (like session/voice/router do).
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+      # no Jaeger locally; JDWP so an IDE can attach (host port 5012); DEBUG logs for our code
+      - MANAGEMENT_TRACING_ENABLED=false
+      - MANAGEMENT_OTLP_TRACING_EXPORT_ENABLED=false
+      - LOGGING_LEVEL_COM_CLAUDIORDESE=DEBUG
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    ports:
+      - "5012:5005"
+
+  voice:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - LIVEKIT_URL=${CLUSTER_LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${CLUSTER_LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${CLUSTER_LIVEKIT_API_SECRET}
+      # no Jaeger locally; JDWP so an IDE can attach (host port 5013); DEBUG logs for our code
+      - MANAGEMENT_TRACING_ENABLED=false
+      - MANAGEMENT_OTLP_TRACING_EXPORT_ENABLED=false
+      - LOGGING_LEVEL_COM_CLAUDIORDESE=DEBUG
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    ports:
+      - "5013:5005"
+
+  discovery:
+    environment:
+      # no Jaeger locally; JDWP so an IDE can attach (host port 5010); DEBUG logs for our code
+      - MANAGEMENT_TRACING_ENABLED=false
+      - MANAGEMENT_OTLP_TRACING_EXPORT_ENABLED=false
+      - LOGGING_LEVEL_COM_CLAUDIORDESE=DEBUG
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    ports:
+      - "5010:5005"
+
+  router:
+    environment:
+      # no Jaeger locally; JDWP so an IDE can attach (host port 5014); DEBUG logs for our code
+      - MANAGEMENT_TRACING_ENABLED=false
+      - MANAGEMENT_OTLP_TRACING_EXPORT_ENABLED=false
+      - LOGGING_LEVEL_COM_CLAUDIORDESE=DEBUG
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    ports:
+      - "5014:5005"
