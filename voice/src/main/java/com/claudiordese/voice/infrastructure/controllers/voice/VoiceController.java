@@ -1,8 +1,8 @@
 package com.claudiordese.voice.infrastructure.controllers.voice;
 
 import com.claudiordese.voice.application.domain.rooms.RoomAccess;
-import com.claudiordese.voice.application.domain.rooms.RoomStatus;
 import com.claudiordese.voice.application.service.RoomService;
+import com.claudiordese.voice.infrastructure.controllers.response.PingResponse;
 import com.claudiordese.voice.infrastructure.controllers.response.RoomAccessResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
@@ -32,6 +32,15 @@ public class VoiceController {
         this.roomService = roomService;
     }
 
+    /**
+     * Latency probe: authenticated but does no work, so the client's measured
+     * round trip reflects the network path to the voice service, not processing.
+     */
+    @GetMapping("/ping")
+    public PingResponse ping() {
+        return new PingResponse(System.currentTimeMillis());
+    }
+
     @PostMapping("/rooms/{room}/token")
     public RoomAccessResponse joinRoom(
             Authentication authentication,
@@ -39,14 +48,6 @@ public class VoiceController {
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
         RoomAccess access = roomService.join(authentication.getName(), room, authorization);
         return RoomAccessResponse.from(access);
-    }
-
-    @GetMapping("/rooms/{room}/status")
-    public RoomStatus roomStatus(
-            Authentication authentication,
-            @PathVariable String room,
-            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
-        return roomService.status(room, authorization);
     }
 
     @PostMapping("/rooms/{room}/participants/{participantIdentity}/mute")
@@ -57,5 +58,4 @@ public class VoiceController {
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
         roomService.muteParticipant(room, participantIdentity, authorization);
     }
-
 }

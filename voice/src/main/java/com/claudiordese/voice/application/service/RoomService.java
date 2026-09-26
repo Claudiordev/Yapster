@@ -5,10 +5,6 @@ import com.claudiordese.voice.application.port.ConversationMembershipVerifier;
 import com.claudiordese.voice.application.port.ConversationCallModerator;
 import com.claudiordese.voice.application.port.RoomAccessProvider;
 import com.claudiordese.voice.application.port.RoomModerationProvider;
-import com.claudiordese.voice.application.port.RoomPresenceProvider;
-import com.claudiordese.voice.application.domain.rooms.RoomStatus;
-import com.claudiordese.voice.infrastructure.adapter.chat.ChatClient;
-import com.claudiordese.voice.infrastructure.configurations.InternalProperties;
 import org.springframework.stereotype.Service;
 
 /**
@@ -21,24 +17,15 @@ public class RoomService {
     private final ConversationMembershipVerifier membershipVerifier;
     private final ConversationCallModerator callModerator;
     private final RoomModerationProvider moderationProvider;
-    private final RoomPresenceProvider presenceProvider;
-    private final ChatClient chatClient;
-    private final InternalProperties internalProperties;
 
     public RoomService(RoomAccessProvider accessProvider,
                        ConversationMembershipVerifier membershipVerifier,
                        ConversationCallModerator callModerator,
-                       RoomModerationProvider moderationProvider,
-                       RoomPresenceProvider presenceProvider,
-                       ChatClient chatClient,
-                       InternalProperties internalProperties) {
+                       RoomModerationProvider moderationProvider) {
         this.accessProvider = accessProvider;
         this.membershipVerifier = membershipVerifier;
         this.callModerator = callModerator;
         this.moderationProvider = moderationProvider;
-        this.presenceProvider = presenceProvider;
-        this.chatClient = chatClient;
-        this.internalProperties = internalProperties;
     }
 
     /**
@@ -55,17 +42,6 @@ public class RoomService {
         membershipVerifier.verifyMember(normalized, authorizationHeader);
 
         return accessProvider.accessFor(identity, normalized);
-    }
-
-    public RoomStatus status(String room, String authorizationHeader) {
-        String normalized = room == null ? "" : room.strip();
-        if (normalized.isEmpty()) {
-            throw new IllegalArgumentException("room must not be blank");
-        }
-
-        membershipVerifier.verifyMember(normalized, authorizationHeader);
-        int count = presenceProvider.participantCount(normalized);
-        return new RoomStatus(normalized, count > 0, count);
     }
 
     public void muteParticipant(
@@ -86,18 +62,5 @@ public class RoomService {
                 normalizedTarget,
                 authorizationHeader);
         moderationProvider.muteMicrophone(normalizedRoom, normalizedTarget);
-    }
-
-    public void publishStatus(String room) {
-        int count = presenceProvider.participantCount(room);
-        chatClient.publishCallStatus(
-                internalProperties.secret(),
-                new ChatClient.CallStatusPayload(room, count > 0, count));
-    }
-
-    public void publishEmptyStatus(String room) {
-        chatClient.publishCallStatus(
-                internalProperties.secret(),
-                new ChatClient.CallStatusPayload(room, false, 0));
     }
 }

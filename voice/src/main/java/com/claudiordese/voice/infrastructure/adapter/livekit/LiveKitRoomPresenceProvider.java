@@ -18,6 +18,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /** Queries LiveKit's authoritative list of currently connected participants. */
@@ -41,7 +43,7 @@ public class LiveKitRoomPresenceProvider implements RoomPresenceProvider {
     }
 
     @Override
-    public int participantCount(String room) {
+    public List<String> participantIdentities(String room) {
         try {
             String body = objectMapper.writeValueAsString(Map.of("room", room));
             HttpRequest request = HttpRequest.newBuilder(listParticipantsUri)
@@ -59,7 +61,16 @@ public class LiveKitRoomPresenceProvider implements RoomPresenceProvider {
             }
 
             JsonNode participants = objectMapper.readTree(response.body()).path("participants");
-            return participants.isArray() ? participants.size() : 0;
+            List<String> identities = new ArrayList<>();
+
+            if (participants.isArray()) {
+                participants.forEach(participant -> {
+                    String identity = participant.path("identity").asText("");
+
+                    if (!identity.isBlank()) identities.add(identity);
+                });
+            }
+            return identities;
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("LiveKit participant lookup was interrupted", error);
