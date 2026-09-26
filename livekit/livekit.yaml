@@ -32,5 +32,14 @@ rtc:
 keys:
   devkey: devsecretdevsecretdevsecret12345
 
+# Room events (participant joined/left, room finished) go to the voice service, which
+# reads the room's full participant list and reports it to chat (who is in a call).
+# LiveKit signs each request with this API key's secret; voice verifies it. voice is
+# the compose service name, so this only works inside the compose network.
+webhook:
+  api_key: devkey
+  urls:
+    - http://voice:8085/api/v1/voice/livekit
+
 logging:
   level: info
