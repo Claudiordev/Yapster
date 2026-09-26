@@ -43,6 +43,11 @@ public class JpaUserStore implements UserStore {
     }
 
     @Override
+    public Optional<User> findByEmail(String email) {
+        return repo.findByEmail(email).map(JpaUserStore::toDomain);
+    }
+
+    @Override
     public boolean existsByUsername(String username) {
         return repo.findByUsername(username).isPresent();
     }
@@ -71,6 +76,7 @@ public class JpaUserStore implements UserStore {
         entity.setEmail(user.email());
         entity.setPassword(user.passwordHash());
         entity.setAvatarUrl(user.avatarUrl().orElse(null));
+        entity.setBio(user.bio().orElse(null));
         return toDomain(repo.save(entity));
     }
 
@@ -81,6 +87,24 @@ public class JpaUserStore implements UserStore {
                         PageRequest.of(page, size)).stream()
                 .map(JpaUserStore::toDomain)
                 .toList();
+    }
+
+    @Override
+    public List<String> findAllRoleNames() {
+        return roleRepo.findAll().stream().map(RoleEntity::getName).sorted().toList();
+    }
+
+    @Override
+    public User updateRoles(UUID userId, Set<String> roleNames) {
+        UserEntity entity = repo.findById(userId)
+                .orElseThrow(() -> new IllegalStateException("User vanished: " + userId));
+        Set<RoleEntity> roles = roleNames.stream()
+                .map(name -> roleRepo.findByName(name)
+                        .orElseThrow(() -> new IllegalStateException("Unknown role: " + name)))
+                .collect(Collectors.toSet());
+        entity.getRoles().clear();
+        entity.getRoles().addAll(roles);
+        return toDomain(repo.save(entity));
     }
 
     static User toDomain(UserEntity entity) {
@@ -94,6 +118,7 @@ public class JpaUserStore implements UserStore {
                 entity.getEmail(),
                 entity.getPassword(),
                 roles,
-                Optional.ofNullable(entity.getAvatarUrl()));
+                Optional.ofNullable(entity.getAvatarUrl()),
+                Optional.ofNullable(entity.getBio()));
     }
 }

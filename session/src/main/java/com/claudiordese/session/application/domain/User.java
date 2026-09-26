@@ -10,19 +10,25 @@ public record User(
         String email,
         String passwordHash,
         Set<Role> roles,
-        Optional<String> avatarUrl
+        Optional<String> avatarUrl,
+        Optional<String> bio
 ) {
 
     public User withUsername(String newUsername) {
-        return new User(id, newUsername, email, passwordHash, roles, avatarUrl);
+        return new User(id, newUsername, email, passwordHash, roles, avatarUrl, bio);
+    }
+
+    public User withBio(String newBio) {
+        return new User(id, username, email, passwordHash, roles, avatarUrl,
+                Optional.ofNullable(newBio));
     }
 
     public User withPasswordHash(String newPasswordHash) {
-        return new User(id, username, email, newPasswordHash, roles, avatarUrl);
+        return new User(id, username, email, newPasswordHash, roles, avatarUrl, bio);
     }
 
     public User withAvatarUrl(String newAvatarUrl) {
         return new User(id, username, email, passwordHash, roles,
-                Optional.ofNullable(newAvatarUrl));
+                Optional.ofNullable(newAvatarUrl), bio);
     }
 }

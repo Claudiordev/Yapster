@@ -1,5 +1,7 @@
 package com.claudiordese.session.application.service;
 
+import com.claudiordese.exceptions.BadRequestException;
+import com.claudiordese.exceptions.ForbiddenException;
 import com.claudiordese.exceptions.TooManyRequestsException;
 import com.claudiordese.session.application.config.FileUploadRateLimitPolicy;
 import com.claudiordese.session.application.domain.User;
@@ -7,6 +9,7 @@ import com.claudiordese.session.application.port.PasswordHasher;
 import com.claudiordese.session.application.port.RateLimitGuard;
 import com.claudiordese.session.application.port.UserStore;
 import com.claudiordese.session.application.service.commands.UpdateAvatarCommand;
+import com.claudiordese.session.application.service.commands.UpdateBioCommand;
 import com.claudiordese.session.dto.UserSummaryDto;
 import com.claudiordese.session.support.FakeAvatarStorage;
 import com.claudiordese.session.support.InMemoryRateLimitGuard;
@@ -15,6 +18,7 @@ import com.claudiordese.session.support.PlainTextPasswordHasher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.time.Duration;
 
@@ -28,6 +32,7 @@ class UserServiceTest {
     private PasswordHasher hasher;
     private RateLimitGuard rateLimitGuard;
     private UserService service;
+    private final List<java.util.UUID> notified = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -39,7 +44,9 @@ class UserServiceTest {
                 hasher,
                 new FakeAvatarStorage(),
                 rateLimitGuard,
-                new FileUploadRateLimitPolicy(10, Duration.ofHours(1)));
+                new FileUploadRateLimitPolicy(10, Duration.ofHours(1)),
+                List.of(notified::add));
+        notified.clear();
     }
 
     @Test
@@ -109,5 +116,73 @@ class UserServiceTest {
         assertThatCode(() -> service.updateAvatar(new UpdateAvatarCommand(
                 bob.id(), new byte[]{1, 2, 3}, "image/png")))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void updateRoles_replacesRoles_alwaysKeepsUser_andNotifiesTarget() {
+        User admin = users.create("admin", "admin@example.com", "hash");
+        User bob = users.create("bob", "bob@example.com", "hash");
+
+        var result = service.updateRoles(admin.id(), bob.id(), List.of("moderator", " premium "));
+
+        assertThat(result.roles()).containsExactly("MODERATOR", "PREMIUM", "USER");
+        assertThat(users.findById(bob.id()).orElseThrow().roles())
+                .extracting(r -> r.name())
+                .containsExactlyInAnyOrder("MODERATOR", "PREMIUM", "USER");
+        assertThat(notified).containsExactly(bob.id());
+    }
+
+    @Test
+    void updateRoles_rejectsUnknownRole_withoutChangingOrNotifying() {
+        User admin = users.create("admin", "admin@example.com", "hash");
+        User bob = users.create("bob", "bob@example.com", "hash");
+
+        assertThatThrownBy(() -> service.updateRoles(admin.id(), bob.id(), List.of("GOD")))
+                .isInstanceOf(BadRequestException.class);
+
+        assertThat(users.findById(bob.id()).orElseThrow().roles())
+                .extracting(r -> r.name()).containsExactly("USER");
+        assertThat(notified).isEmpty();
+    }
+
+    @Test
+    void updateRoles_refusesToRemoveOwnAdminRole() {
+        User admin = users.create("admin", "admin@example.com", "hash");
+
+        assertThatThrownBy(() -> service.updateRoles(admin.id(), admin.id(), List.of("MODERATOR")))
+                .isInstanceOf(ForbiddenException.class);
+        assertThat(notified).isEmpty();
+    }
+
+    @Test
+    void listUsers_returnsEveryoneExceptTheRequester() {
+        User admin = users.create("admin", "admin@example.com", "hash");
+        users.create("bob", "bob@example.com", "hash");
+        users.create("carol", "carol@example.com", "hash");
+
+        var list = service.listUsers(admin.id(), 0, 20);
+
+        assertThat(list).extracting(UserSummaryDto::username)
+                .containsExactlyInAnyOrder("bob", "carol");
+    }
+
+    @Test
+    void updateBio_trimsTheText_andABlankValueClearsIt() {
+        User alice = users.create("alice", "alice@example.com", "hash");
+
+        service.updateBio(new UpdateBioCommand(alice.id(), "  Loves late-night ranked  "));
+        assertThat(users.findById(alice.id()).orElseThrow().bio()).contains("Loves late-night ranked");
+
+        service.updateBio(new UpdateBioCommand(alice.id(), "   "));
+        assertThat(users.findById(alice.id()).orElseThrow().bio()).isEmpty();
+    }
+
+    @Test
+    void updateBio_rejectsAnythingOver500Characters() {
+        User alice = users.create("alice", "alice@example.com", "hash");
+
+        assertThatThrownBy(() -> service.updateBio(new UpdateBioCommand(alice.id(), "x".repeat(501))))
+                .isInstanceOf(BadRequestException.class);
+        assertThat(users.findById(alice.id()).orElseThrow().bio()).isEmpty();
     }
 }

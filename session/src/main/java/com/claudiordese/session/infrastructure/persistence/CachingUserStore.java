@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -55,6 +56,12 @@ public class CachingUserStore implements UserStore {
         return delegate.update(user);
     }
 
+    @Override
+    @CacheEvict(value = USERS_CACHE, key = "#userId")
+    public User updateRoles(UUID userId, Set<String> roleNames) {
+        return delegate.updateRoles(userId, roleNames);
+    }
+
     // ── pass-through: not cached ──────────────────────────────────────────────
 
     @Override
@@ -65,6 +72,11 @@ public class CachingUserStore implements UserStore {
     @Override
     public Optional<User> findByUsername(String username) {
         return delegate.findByUsername(username);
+    }
+
+    @Override
+    public Optional<User> findByEmail(String email) {
+        return delegate.findByEmail(email);
     }
 
     @Override
@@ -80,6 +92,11 @@ public class CachingUserStore implements UserStore {
     @Override
     public User create(String username, String email, String passwordHash) {
         return delegate.create(username, email, passwordHash);
+    }
+
+    @Override
+    public List<String> findAllRoleNames() {
+        return delegate.findAllRoleNames();
     }
 
     @Override

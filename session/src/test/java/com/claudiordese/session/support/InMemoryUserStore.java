@@ -36,6 +36,11 @@ public class InMemoryUserStore implements UserStore {
     }
 
     @Override
+    public Optional<User> findByEmail(String email) {
+        return byId.values().stream().filter(u -> u.email().equals(email)).findFirst();
+    }
+
+    @Override
     public boolean existsByUsername(String username) {
         return findByUsername(username).isPresent();
     }
@@ -48,7 +53,7 @@ public class InMemoryUserStore implements UserStore {
     @Override
     public User create(String username, String email, String passwordHash) {
         User user = new User(UUID.randomUUID(), username, email, passwordHash,
-                Set.of(new Role("USER")), Optional.empty());
+                Set.of(new Role("USER")), Optional.empty(), Optional.empty());
         byId.put(user.id(), user);
         return user;
     }
@@ -68,5 +73,21 @@ public class InMemoryUserStore implements UserStore {
                 .skip((long) page * size)
                 .limit(size)
                 .toList();
+    }
+
+    @Override
+    public java.util.List<String> findAllRoleNames() {
+        return java.util.List.of("ADMIN", "MODERATOR", "PREMIUM", "USER");
+    }
+
+    @Override
+    public User updateRoles(UUID userId, java.util.Set<String> roleNames) {
+        User existing = byId.get(userId);
+        User updated = new User(existing.id(), existing.username(), existing.email(),
+                existing.passwordHash(),
+                roleNames.stream().map(Role::new).collect(java.util.stream.Collectors.toSet()),
+                existing.avatarUrl(), existing.bio());
+        byId.put(userId, updated);
+        return updated;
     }
 }
