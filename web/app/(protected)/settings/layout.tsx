@@ -1,4 +1,4 @@
-import { AppTopBar } from "@/components/app-top-bar";
+import { AppTopBar } from "@/components/AppTopBar/AppTopBar";
 
 export default function SettingsLayout({
   children,

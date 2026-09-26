@@ -1,6 +1,6 @@
-import { ApiError } from "@/lib/api-client";
+import { ApiError } from "@/lib/apiClient";
 import { getAuthToken } from "@/lib/auth";
-import { apiErrorResponse, problemResponse } from "@/lib/problem-response";
+import { apiErrorResponse, problemResponse } from "@/lib/problemResponse";
 
 /**
  * Wraps a BFF route handler with the boilerplate every proxy route repeats:

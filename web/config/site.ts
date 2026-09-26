@@ -1,12 +1,12 @@
 export type SiteConfig = typeof siteConfig;
 
 export const siteConfig = {
-  name: "GuildVo",
-  description: "Chat, voice and game all in one place!",
+  name: "Voxsi",
+  description: "Chat, call and compete",
   navItems: [
     {
       label: "Messages",
-      href: "/sms",
+      href: "/message",
     },
     {
       label: "Settings",

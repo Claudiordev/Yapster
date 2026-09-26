@@ -1,4 +1,4 @@
-import { RedVoidBackdrop } from "./_Components/red-void-backdrop";
+import { RedVoidBackdrop } from "@/components/RedVoidBackdrop/RedVoidBackdrop";
 
 export default function AuthLayout({
   children,

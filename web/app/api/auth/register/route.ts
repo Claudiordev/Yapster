@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { apiPost, ApiError } from "@/lib/api-client";
-import type { RegisterRequest, SessionRegisterResponse } from "@/lib/auth";
-import { apiErrorResponse, problemResponse } from "@/lib/problem-response";
+import { apiPost, ApiError } from "@/lib/apiClient";
+import type { RegisterRequest, SessionRegisterResponse } from "@/types/auth";
+import { apiErrorResponse, problemResponse } from "@/lib/problemResponse";
 
 export async function POST(request: Request) {
   try {

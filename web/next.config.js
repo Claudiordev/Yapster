@@ -13,6 +13,12 @@ const nextConfig = {
   // Serve avatars through this origin so every client (including LAN devices)
   // loads them from the app host, not the MinIO host baked into the stored URL.
   // The Next server proxies to MinIO, which it reaches internally.
+  // The messages page sends no Referer, so X videos load straight from X's CDN (it answers 403
+  // to requests carrying another site's Referer) and never pass through this server.
+  // YouTube embeds need a Referer, so their iframe sets its own policy (YouTubeEmbed.tsx).
+  async headers() {
+    return [{ source: "/message/:path*", headers: [{ key: "Referrer-Policy", value: "no-referrer" }] }];
+  },
   async rewrites() {
     const minio = process.env.MINIO_INTERNAL_URL || "http://localhost:9000";
 

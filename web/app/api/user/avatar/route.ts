@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { ApiError } from "@/lib/api-client";
+import { ApiError } from "@/lib/apiClient";
 import { withAuth } from "@/lib/bff";
 import { API_BASE_URL } from "@/lib/constants";
-import { problemDetail } from "@/lib/problem-details";
-import { apiErrorResponse } from "@/lib/problem-response";
+import { problemDetail } from "@/lib/problemDetails";
+import { apiErrorResponse } from "@/lib/problemResponse";
 
 export const POST = withAuth(async (request, token) => {
   const formData = await request.formData();

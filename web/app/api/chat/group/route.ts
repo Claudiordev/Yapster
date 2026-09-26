@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { apiPost } from "@/lib/api-client";
+import { apiPost } from "@/lib/apiClient";
 import { withAuth } from "@/lib/bff";
-import type { Conversation } from "@/lib/chat";
+import type { Conversation } from "@/types/chat";
 
 interface CreateGroupBody {
   groupName: string;

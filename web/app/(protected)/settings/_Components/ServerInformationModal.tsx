@@ -11,13 +11,9 @@ import {
 } from "@heroui/modal";
 import { Spinner } from "@heroui/spinner";
 
-import { Icon } from "@/components/icon";
-import { readProblemDetail } from "@/lib/problem-details";
-
-interface ServerInformation {
-  onlineUsers: number;
-  onlineDevices: number;
-}
+import { Icon } from "@/components/Icon/Icon";
+import { readProblemDetail } from "@/lib/problemDetails";
+import type { ServerInformation } from "@/types/api";
 
 interface ServerInformationModalProps {
   isOpen: boolean;

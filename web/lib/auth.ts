@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { importSPKI, jwtVerify, type JWTPayload } from "jose";
 
-import { apiPost, ApiError } from "./api-client";
+import { apiPost, ApiError } from "./apiClient";
 import {
   AUTH_COOKIE_NAME,
   AUTH_COOKIE_OPTIONS,
@@ -9,48 +9,9 @@ import {
   REFRESH_COOKIE_MAX_AGE_SECONDS,
   REFRESH_COOKIE_NAME,
 } from "./constants";
+import type { AuthClaims, SessionTokenResponse, TokenPair } from "@/types/auth";
 
 const JWT_ALG = "RS256";
-
-export interface LoginRequest {
-  username: string;
-  password: string;
-}
-
-export interface RegisterRequest {
-  username: string;
-  email: string;
-  confirmEmail: string;
-  password: string;
-}
-
-// Wire format returned by the session service (snake_case via @JsonProperty).
-export interface SessionTokenResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  expires_in: number; // seconds until the access token expires (OAuth standard)
-}
-
-export interface TokenPair {
-  accessToken: string;
-  refreshToken: string;
-  tokenType: string;
-  // Seconds until the access token expires (as sent by the backend).
-  accessExpiresInSeconds: number;
-}
-
-export interface SessionRegisterResponse {
-  id: string;
-  username: string;
-}
-
-export interface AuthClaims extends JWTPayload {
-  sub: string;
-  roles?: string[];
-  /** Backward compatibility for tokens issued before roles became a list. */
-  role?: string;
-}
 
 export function rolesFromClaims(claims: AuthClaims | null): string[] {
   if (!claims) return [];
@@ -145,7 +106,26 @@ export async function clearAuthCookies(): Promise<void> {
   cookieStore.delete(REFRESH_COOKIE_NAME);
 }
 
-export async function refreshAccessToken(
+/**
+ * The backend rotates refresh tokens and revokes a token that is presented
+ * twice. Several callers can refresh with the same cookie at once — parallel
+ * BFF requests behind an expired access token, several tabs reacting to one
+ * ROLES_CHANGED push — so the exchange is single-flight per refresh token:
+ * concurrent callers share one backend call, and callers arriving within a
+ * short window after it get the same result instead of a reuse error.
+ * State lives on globalThis so route bundles share it.
+ */
+const REFRESH_REUSE_WINDOW_MS = 10_000;
+
+interface RefreshFlight {
+  promise: Promise<TokenPair | null>;
+  settledAt: number | null;
+}
+
+const refreshFlights = ((globalThis as { __refreshFlights?: Map<string, RefreshFlight> })
+  .__refreshFlights ??= new Map<string, RefreshFlight>());
+
+async function exchangeRefreshToken(
   refreshToken: string,
 ): Promise<TokenPair | null> {
   try {
@@ -159,4 +139,41 @@ export async function refreshAccessToken(
     if (error instanceof ApiError) return null;
     throw error;
   }
+}
+
+export function refreshAccessToken(
+  refreshToken: string,
+): Promise<TokenPair | null> {
+  const now = Date.now();
+
+  refreshFlights.forEach((flight, key) => {
+    if (flight.settledAt !== null && now - flight.settledAt > REFRESH_REUSE_WINDOW_MS) {
+      refreshFlights.delete(key);
+    }
+  });
+
+  const existing = refreshFlights.get(refreshToken);
+
+  if (existing) return existing.promise;
+
+  const flight: RefreshFlight = {
+    settledAt: null,
+    promise: exchangeRefreshToken(refreshToken).then(
+      (pair) => {
+        flight.settledAt = Date.now();
+        // A failed exchange is not worth replaying to later callers.
+        if (!pair) refreshFlights.delete(refreshToken);
+
+        return pair;
+      },
+      (error) => {
+        refreshFlights.delete(refreshToken);
+        throw error;
+      },
+    ),
+  };
+
+  refreshFlights.set(refreshToken, flight);
+
+  return flight.promise;
 }

@@ -7,26 +7,15 @@ import { Switch } from "@heroui/switch";
 
 import { MicTest } from "./MicTest";
 import { ServerInformationModal } from "./ServerInformationModal";
+import { FeatureFlagsModal } from "./FeatureFlagsModal";
+import { UserRolesModal } from "./UserRolesModal";
 
-import { Icon } from "@/components/icon";
+import { Icon } from "@/components/Icon/Icon";
 import { siteConfig } from "@/config/site";
-import { useAccount } from "@/lib/use-account";
-import {
-  DEFAULT_VIDEO_PREFS,
-  DEFAULT_SCREEN_SHARE_AUDIO,
-  ECHO_CANCELLATION_KEY,
-  NOISE_SUPPRESSION_KEY,
-  readAudioProcessingPrefs,
-  readVideoPrefs,
-  readScreenShareAudioPref,
-  VIDEO_FRAME_RATE_KEY,
-  VIDEO_RESOLUTION_KEY,
-  VIDEO_RESOLUTIONS,
-  type VideoFrameRate,
-  type VideoResolution,
-  writeAudioProcessingPref,
-  writeScreenShareAudioPref,
-} from "@/lib/media-prefs";
+import { POPUP_MOTION_PROPS } from "@/lib/popupMotion";
+import { useAccount } from "@/lib/hooks/useAccount";
+import { clampResolution, DEFAULT_VIDEO_PREFS, isResolutionAllowed, DEFAULT_SCREEN_SHARE_AUDIO, ECHO_CANCELLATION_KEY, NOISE_SUPPRESSION_KEY, readAudioProcessingPrefs, readVideoPrefs, readScreenShareAudioPref, VIDEO_RESOLUTION_KEY, VIDEO_RESOLUTIONS, writeAudioProcessingPref, writeScreenShareAudioPref } from "@/lib/mediaPrefs";
+import type { VideoResolution } from "@/types/media";
 
 interface AudioDevice {
   id: string;
@@ -78,14 +67,18 @@ export function SettingsPanel() {
   const [videoResolution, setVideoResolution] = useState<VideoResolution>(
     DEFAULT_VIDEO_PREFS.resolution,
   );
-  const [videoFrameRate, setVideoFrameRate] = useState<VideoFrameRate>(
-    DEFAULT_VIDEO_PREFS.frameRate,
-  );
   const [screenShareAudio, setScreenShareAudio] = useState(
     DEFAULT_SCREEN_SHARE_AUDIO,
   );
   const [serverInformationOpen, setServerInformationOpen] = useState(false);
+  const [userRolesOpen, setUserRolesOpen] = useState(false);
+  const [featuresOpen, setFeaturesOpen] = useState(false);
   const isAdmin = roles.includes("ADMIN");
+  // A saved choice above the current roles is shown (and captured) as the best allowed one.
+  const effectiveResolution = clampResolution(videoResolution, roles);
+  const lockedResolutions = (Object.keys(VIDEO_RESOLUTIONS) as VideoResolution[]).filter(
+    (key) => !isResolutionAllowed(key, roles),
+  );
 
   useEffect(() => {
     setInput(localStorage.getItem(INPUT_KEY) ?? "default");
@@ -101,7 +94,6 @@ export function SettingsPanel() {
     const videoPrefs = readVideoPrefs();
 
     setVideoResolution(videoPrefs.resolution);
-    setVideoFrameRate(videoPrefs.frameRate);
     setScreenShareAudio(readScreenShareAudioPref());
     const md =
       typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
@@ -172,6 +164,7 @@ export function SettingsPanel() {
       <div className="flex flex-col gap-6 sm:flex-row">
         <div className="flex w-full flex-col gap-3 sm:w-1/2">
           <Select
+            popoverProps={{ motionProps: POPUP_MOTION_PROPS }}
             label="Microphone"
             labelPlacement="outside"
             selectedKeys={[input]}
@@ -192,6 +185,7 @@ export function SettingsPanel() {
 
         <div className="flex w-full flex-col gap-3 sm:w-1/2">
           <Select
+            popoverProps={{ motionProps: POPUP_MOTION_PROPS }}
             label="Speaker"
             labelPlacement="outside"
             selectedKeys={[output]}
@@ -257,16 +251,20 @@ export function SettingsPanel() {
       </div>
 
       <div className="flex flex-col gap-6 sm:flex-row">
-        <div className="w-full sm:w-1/2">
+        <div className="w-full">
           <Select
+            popoverProps={{ motionProps: POPUP_MOTION_PROPS }}
             label="Resolution"
             labelPlacement="outside"
-            selectedKeys={[videoResolution]}
+            disabledKeys={lockedResolutions}
+            selectedKeys={[effectiveResolution]}
             variant="bordered"
             onSelectionChange={(keys) => {
               const value =
                 (Array.from(keys)[0] as VideoResolution) ??
                 DEFAULT_VIDEO_PREFS.resolution;
+
+              if (!isResolutionAllowed(value, roles)) return;
 
               setVideoResolution(value);
               localStorage.setItem(VIDEO_RESOLUTION_KEY, value);
@@ -275,28 +273,16 @@ export function SettingsPanel() {
             {(Object.keys(VIDEO_RESOLUTIONS) as VideoResolution[]).map(
               (key) => (
                 <SelectItem key={key}>
-                  {`${key} (${VIDEO_RESOLUTIONS[key].width}×${VIDEO_RESOLUTIONS[key].height})`}
+                  {`${key} (${VIDEO_RESOLUTIONS[key].width}×${VIDEO_RESOLUTIONS[key].height})${
+                    lockedResolutions.includes(key)
+                      ? key === "2160p"
+                        ? " — Premium+ only"
+                        : " — Premium only"
+                      : ""
+                  }`}
                 </SelectItem>
               ),
             )}
-          </Select>
-        </div>
-
-        <div className="w-full sm:w-1/2">
-          <Select
-            label="Frame rate"
-            labelPlacement="outside"
-            selectedKeys={[String(videoFrameRate)]}
-            variant="bordered"
-            onSelectionChange={(keys) => {
-              const value = Number(Array.from(keys)[0]) === 60 ? 60 : 30;
-
-              setVideoFrameRate(value);
-              localStorage.setItem(VIDEO_FRAME_RATE_KEY, String(value));
-            }}
-          >
-            <SelectItem key="30">30 fps</SelectItem>
-            <SelectItem key="60">60 fps</SelectItem>
           </Select>
         </div>
       </div>
@@ -319,12 +305,9 @@ export function SettingsPanel() {
 
       <p className="text-tiny text-default-400">
         Sends up to{" "}
-        {(
-          (videoFrameRate === 60
-            ? VIDEO_RESOLUTIONS[videoResolution].bitrate60
-            : VIDEO_RESOLUTIONS[videoResolution].bitrate30) / 1_000_000
-        ).toFixed(1)}{" "}
-        Mbps. Higher settings look sharper but need more upload bandwidth.
+        {(VIDEO_RESOLUTIONS[videoResolution].bitrate / 1_000_000).toFixed(1)}{" "}
+        Mbps at 60 fps. Higher resolutions look sharper but need more upload
+        bandwidth.
       </p>
 
       <div className="h-px bg-divider" />
@@ -362,6 +345,48 @@ export function SettingsPanel() {
           </div>
 
           <div className="h-px bg-divider" />
+
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-foreground">
+                User roles
+              </h2>
+              <p className="text-tiny text-default-500">
+                Search a user and change the roles they have.
+              </p>
+            </div>
+            <Button
+              className="flex-shrink-0"
+              size="sm"
+              variant="flat"
+              onPress={() => setUserRolesOpen(true)}
+            >
+              Manage roles
+            </Button>
+          </div>
+
+          <div className="h-px bg-divider" />
+
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-foreground">
+                Features
+              </h2>
+              <p className="text-tiny text-default-500">
+                Switch Game servers, Events and Premium on or off.
+              </p>
+            </div>
+            <Button
+              className="flex-shrink-0"
+              size="sm"
+              variant="flat"
+              onPress={() => setFeaturesOpen(true)}
+            >
+              Manage features
+            </Button>
+          </div>
+
+          <div className="h-px bg-divider" />
         </>
       )}
 
@@ -380,6 +405,20 @@ export function SettingsPanel() {
         isOpen={serverInformationOpen}
         onClose={() => setServerInformationOpen(false)}
       />
+
+      {isAdmin && (
+        <FeatureFlagsModal
+          isOpen={featuresOpen}
+          onClose={() => setFeaturesOpen(false)}
+        />
+      )}
+
+      {isAdmin && (
+        <UserRolesModal
+          isOpen={userRolesOpen}
+          onClose={() => setUserRolesOpen(false)}
+        />
+      )}
     </div>
   );
 }

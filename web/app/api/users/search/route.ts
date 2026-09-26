@@ -1,15 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { apiGet } from "@/lib/api-client";
+import { apiGet } from "@/lib/apiClient";
 import { toRelativeAvatar } from "@/lib/avatar";
 import { withAuth } from "@/lib/bff";
-
-export interface PlatformUser {
-  id: string;
-  username: string;
-  avatarUrl: string | null;
-  roles: string[];
-}
+import type { PlatformUser } from "@/types/user";
 
 export const GET = withAuth(async (request, token) => {
   const { searchParams } = new URL(request.url);

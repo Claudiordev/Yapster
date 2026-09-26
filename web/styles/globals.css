@@ -462,6 +462,367 @@
   color: #ff3b47;
 }
 
+/* Composer actions keep the raised Settings-button shape but their own colors:
+   Send is brand red, GIF is blue (same fills as before). The edge/shadow use a
+   deeper shade of the same color, like the grey button's #1e1f22. */
+.chat-profile-action--send,
+.chat-profile-action--send:hover,
+.chat-profile-action--gif,
+.chat-profile-action--gif:hover {
+  color: #fff;
+}
+
+.chat-profile-action--send {
+  background: var(--color-brand);
+  border-color: var(--color-brand-deep);
+  box-shadow:
+    0 4px 0 var(--color-brand-deep),
+    0 8px 16px rgba(0, 0, 0, 0.28);
+}
+
+.chat-profile-action--send:hover {
+  background: var(--color-brand-hover);
+  box-shadow:
+    0 5px 0 var(--color-brand-deep),
+    0 10px 18px rgba(0, 0, 0, 0.3);
+}
+
+.chat-profile-action--send:active {
+  box-shadow:
+    0 1px 0 var(--color-brand-deep),
+    0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* The GIF popup is anchored to this button. The base action style lifts it on
+   hover and drops it on press; the popup measures its position at open time
+   and then the button springs back, so the popup visibly jumps. Keep the
+   shadow feedback, but never move the anchor. */
+.chat-profile-action--gif,
+.chat-profile-action--gif:hover,
+.chat-profile-action--gif:active {
+  transform: none;
+}
+
+.chat-profile-action--gif {
+  background: #3b82f6; /* blue-500 */
+  border-color: #1e40af;
+  box-shadow:
+    0 4px 0 #1e40af,
+    0 8px 16px rgba(0, 0, 0, 0.28);
+}
+
+.chat-profile-action--gif:hover {
+  background: #2563eb; /* blue-600 */
+  box-shadow:
+    0 5px 0 #1e40af,
+    0 10px 18px rgba(0, 0, 0, 0.3);
+}
+
+.chat-profile-action--gif:active {
+  box-shadow:
+    0 1px 0 #1e40af,
+    0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* Call buttons (control bar + header): the same raised key-cap as the Send and
+   Settings buttons (.chat-profile-action) — 36px, 2px dark edge, 4px hard bottom
+   edge, lift on hover, press down. Only the fill changes per state. */
+.call-control {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  border: 2px solid #1e1f22;
+  border-radius: 10px;
+  background: #3f4147;
+  color: #b5bac1;
+  box-shadow:
+    0 4px 0 #1e1f22,
+    0 8px 16px rgba(0, 0, 0, 0.28);
+  transition:
+    transform 0.14s ease,
+    box-shadow 0.14s ease,
+    background 0.14s ease;
+}
+
+.call-control:hover {
+  background: #4a4d52;
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow:
+    0 5px 0 #1e1f22,
+    0 10px 18px rgba(0, 0, 0, 0.3);
+}
+
+.call-control:active {
+  transform: translateY(3px);
+  box-shadow:
+    0 1px 0 #1e1f22,
+    0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* Muted / deafened: brand red, like the Send button. */
+.call-control--off,
+.call-control--off:hover {
+  border-color: var(--color-brand-deep);
+  background: var(--color-brand);
+  color: #fff;
+  box-shadow:
+    0 4px 0 var(--color-brand-deep),
+    0 8px 16px rgba(0, 0, 0, 0.28);
+}
+
+.call-control--off:hover {
+  background: var(--color-brand-hover);
+  box-shadow:
+    0 5px 0 var(--color-brand-deep),
+    0 10px 18px rgba(0, 0, 0, 0.3);
+}
+
+.call-control--off:active {
+  box-shadow:
+    0 1px 0 var(--color-brand-deep),
+    0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* Screen share on: deep wine. */
+.call-control--active,
+.call-control--active:hover {
+  border-color: #3a0812;
+  background: var(--color-brand-deep);
+  color: #ff6878;
+  box-shadow:
+    0 4px 0 #3a0812,
+    0 8px 16px rgba(0, 0, 0, 0.28);
+}
+
+.call-control--active:active {
+  box-shadow:
+    0 1px 0 #3a0812,
+    0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* Leave call: danger red, set slightly apart. */
+.call-control--end,
+.call-control--end:hover {
+  margin-left: 7px;
+  border-color: #861528;
+  background: #d7273e;
+  color: #fff;
+  box-shadow:
+    0 4px 0 #861528,
+    0 8px 16px rgba(0, 0, 0, 0.28);
+}
+
+.call-control--end:active {
+  box-shadow:
+    0 1px 0 #861528,
+    0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* Incoming call prompt */
+.incoming-call-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 26px;
+  background: linear-gradient(180deg, #303236 0%, #26272b 100%);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.incoming-call-avatar {
+  position: relative;
+  display: grid;
+  width: 96px;
+  height: 96px;
+  margin-top: 22px;
+  place-items: center;
+}
+
+.incoming-call-ring {
+  position: absolute;
+  border: 1px solid rgba(255, 63, 82, 0.14);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.incoming-call-ring--outer {
+  inset: -30px;
+  animation: incoming-call-pulse 2.4s ease-out infinite;
+}
+
+.incoming-call-ring--inner {
+  inset: -14px;
+  border-color: rgba(255, 63, 82, 0.22);
+  animation: incoming-call-pulse 2.4s ease-out 0.6s infinite;
+}
+
+@keyframes incoming-call-pulse {
+  0% { opacity: 0.9; transform: scale(0.94); }
+  70% { opacity: 0.25; transform: scale(1.04); }
+  100% { opacity: 0.9; transform: scale(0.94); }
+}
+
+.incoming-call-avatar-face {
+  width: 96px;
+  height: 96px;
+  border: 2px solid rgba(255, 105, 130, 0.5);
+  background: linear-gradient(150deg, #8a2b45, #571a2c);
+  color: #ffc2d1;
+  font-size: 40px;
+  font-weight: 800;
+}
+
+.incoming-call-badge {
+  position: absolute;
+  right: -2px;
+  bottom: 2px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 2px solid #2b2c30;
+  border-radius: 50%;
+  background: var(--color-brand);
+  color: #fff;
+}
+
+.incoming-call-divider {
+  width: 100%;
+  height: 1px;
+  margin: 26px 0 20px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+}
+
+.incoming-call-btn {
+  height: 48px;
+  min-width: 0;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  transition:
+    transform 0.14s ease,
+    box-shadow 0.14s ease,
+    background 0.14s ease;
+}
+
+.incoming-call-btn:hover {
+  transform: translateY(-1px);
+}
+
+/* Focus lands on Decline first, so a stray Enter never opens your mic. */
+.incoming-call-btn:focus-visible {
+  outline: 2px solid rgba(255, 150, 170, 0.9);
+  outline-offset: 3px;
+}
+
+.incoming-call-btn:active {
+  transform: translateY(2px);
+}
+
+/* Decline: red key. */
+.incoming-call-btn--decline,
+.incoming-call-btn--decline:hover {
+  border: 1px solid #861528;
+  background: #d7273e;
+  color: #fff;
+  box-shadow: 0 4px 0 #861528;
+}
+
+.incoming-call-btn--decline:hover {
+  background: #e23a50;
+}
+
+/* Accept / join: green key. */
+.incoming-call-btn--accept,
+.incoming-call-btn--accept:hover {
+  border: 1px solid #1c7a48;
+  background: #2fbf71;
+  color: #fff;
+  box-shadow: 0 4px 0 #1c7a48;
+}
+
+.incoming-call-btn--accept:hover {
+  background: #3ad07f;
+}
+
+.incoming-call-btn--accept:active,
+.incoming-call-btn--decline:active {
+  box-shadow: none;
+}
+
+.incoming-call-kbd {
+  padding: 1px 6px;
+  border: 1px solid #3a3b40;
+  border-radius: 5px;
+  background: #1f2023;
+  color: #b5bac1;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+/* Premium page: a small field of stars behind the closing line. */
+.premium-sky {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  max-width: 900px;
+  height: 300px;
+  margin: 8px auto 0;
+  overflow: hidden;
+  -webkit-mask-image: radial-gradient(ellipse 62% 78% at 50% 48%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(ellipse 62% 78% at 50% 48%, #000 30%, transparent 100%);
+}
+
+/* Sky placed behind whatever sits at the center of its parent (the closing line). */
+.premium-sky--behind {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.premium-sky .auth-stars {
+  z-index: 1;
+}
+
+/* The Premium page still scrolls, but shows no scrollbar (it clashed with the backdrop). */
+.premium-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.premium-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.premium-sky-star {
+  position: absolute;
+  z-index: 2;
+  width: var(--s);
+  height: var(--s);
+  margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2);
+  background: #ffc2ca;
+  -webkit-mask: url("/icons/star.svg") center / contain no-repeat;
+  mask: url("/icons/star.svg") center / contain no-repeat;
+  filter: drop-shadow(0 0 6px rgba(255, 86, 104, 0.9));
+  animation: premium-star-twinkle 3.2s ease-in-out infinite;
+  animation-delay: var(--d);
+}
+
+@keyframes premium-star-twinkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.8) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.15) rotate(12deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .premium-sky-star {
+    animation: none;
+  }
+}
+
 .chat-conversation-active {
   border-color: #530b18;
   background: #7d1d24;
@@ -520,6 +881,13 @@
   --call-role-background: #a45de0;
   --call-role-text: #fff;
   --call-role-depth: #693695;
+}
+
+.call-role-badge--premium-plus {
+  --call-role-border: #7a4a00;
+  --call-role-background: #f0a020;
+  --call-role-text: #fff;
+  --call-role-depth: #b87400;
 }
 
 @keyframes voice-wave {
@@ -603,4 +971,25 @@
 .volume-bar:focus::-moz-range-thumb,
 .volume-bar:active::-moz-range-thumb {
   background: var(--color-brand);
+}
+
+/* Sign-in loader: the signal bars breathe up and down. */
+@keyframes auth-speak {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.auth-speak-bar {
+  animation: auth-speak 1.2s ease-in-out var(--speak-delay, 0s) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-speak-bar {
+    animation: none;
+  }
 }

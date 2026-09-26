@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { apiPost, ApiError } from "@/lib/api-client";
+import { apiPost, ApiError } from "@/lib/apiClient";
 import { getAuthToken } from "@/lib/auth";
-import { apiErrorResponse, problemResponse } from "@/lib/problem-response";
+import { apiErrorResponse, problemResponse } from "@/lib/problemResponse";
+import type { RouteContext } from "@/types/api";
 
 export async function POST(
   request: Request,
-  {
-    params,
-  }: {
-    params: Promise<{ room: string; participant: string }>;
-  },
+  { params }: RouteContext<{ room: string; participant: string }>,
 ) {
   try {
     const token = await getAuthToken();
