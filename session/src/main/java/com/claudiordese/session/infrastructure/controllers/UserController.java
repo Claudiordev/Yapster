@@ -2,10 +2,12 @@ package com.claudiordese.session.infrastructure.controllers;
 
 import com.claudiordese.exceptions.BadRequestException;
 import com.claudiordese.session.infrastructure.controllers.request.user.UpdatePasswordRequest;
+import com.claudiordese.session.infrastructure.controllers.request.user.UpdateBioRequest;
 import com.claudiordese.session.infrastructure.controllers.request.user.UpdateUsernameRequest;
 import com.claudiordese.session.dto.UserDto;
 import com.claudiordese.session.application.service.UserService;
 import com.claudiordese.session.application.service.commands.UpdateAvatarCommand;
+import com.claudiordese.session.application.service.commands.UpdateBioCommand;
 import com.claudiordese.session.application.service.commands.UpdatePasswordCommand;
 import com.claudiordese.session.application.service.commands.UpdateUsernameCommand;
 import com.claudiordese.session.util.AuthenticationUtils;
@@ -64,6 +66,22 @@ public class UserController {
                 new UpdateUsernameCommand(
                         AuthenticationUtils.currentUserId(authentication),
                         request.newUsername()
+                ));
+    }
+
+    @PutMapping("/bio")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Update the current user's bio",
+            description = "Up to 500 characters; a blank value clears it.")
+    @ApiResponse(responseCode = "204", description = "Bio updated")
+    @ApiResponse(responseCode = "400", description = "Bio too long", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(responseCode = "401", description = "Not authenticated", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    public void updateBio(Authentication authentication,
+                          @Valid @RequestBody UpdateBioRequest request) {
+        userService.updateBio(
+                new UpdateBioCommand(
+                        AuthenticationUtils.currentUserId(authentication),
+                        request.bio()
                 ));
     }
 

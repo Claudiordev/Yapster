@@ -1,6 +1,9 @@
 package com.claudiordese.session.infrastructure.controllers;
 
 import com.claudiordese.session.application.service.AuthService;
+import com.claudiordese.session.application.service.GoogleAuthService;
+import com.claudiordese.session.application.service.commands.GoogleLoginCommand;
+import com.claudiordese.session.infrastructure.controllers.request.auth.GoogleLoginRequest;
 import com.claudiordese.session.infrastructure.controllers.request.auth.LoginRequest;
 import com.claudiordese.session.infrastructure.controllers.request.auth.RegisterRequest;
 import com.claudiordese.session.infrastructure.controllers.response.auth.TokenResponse;
@@ -32,6 +35,7 @@ import java.net.URI;
 public class AuthController {
 
     private final AuthService authService;
+    private final GoogleAuthService googleAuthService;
 
     @PostMapping
     @SecurityRequirements()
@@ -40,6 +44,23 @@ public class AuthController {
     @ApiResponse(responseCode = "401", description = "Invalid credentials", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
         LoginResult response = authService.login(new LoginCommand(loginRequest.username(), loginRequest.password()));
+
+        return ResponseEntity.ok(new TokenResponse(response.accessToken(), response.refreshToken(), response.tokenType(), response.expiresIn()));
+    }
+
+    @PostMapping("/google")
+    @SecurityRequirements()
+    @Operation(summary = "Log in with Google",
+            description = "Exchange the authorization code from Google's redirect for an access token and a refresh token. Creates the user on first use.")
+    @ApiResponse(responseCode = "200", description = "Authenticated")
+    @ApiResponse(responseCode = "401", description = "Google rejected the sign-in or the email is not verified", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(responseCode = "503", description = "Google sign-in is not configured", content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    public ResponseEntity<TokenResponse> loginWithGoogle(
+            @Valid @RequestBody GoogleLoginRequest googleRequest,
+            HttpServletRequest request) {
+        LoginResult response = googleAuthService.login(new GoogleLoginCommand(
+                googleRequest.code(), googleRequest.redirectUri(), googleRequest.codeVerifier(),
+                googleRequest.nonce(), clientIp(request)));
 
         return ResponseEntity.ok(new TokenResponse(response.accessToken(), response.refreshToken(), response.tokenType(), response.expiresIn()));
     }

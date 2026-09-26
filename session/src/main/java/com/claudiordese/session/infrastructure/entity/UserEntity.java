@@ -24,7 +24,8 @@ public class UserEntity {
     private String username;
 
     @JsonIgnore
-    @Column(name = "password", nullable = false)
+    /** Null for accounts created through an external provider (e.g. Google). */
+    @Column(name = "password")
     private String password;
 
     @Column(name = "enabled", unique = false)
@@ -43,6 +44,9 @@ public class UserEntity {
 
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
+
+    @Column(name = "bio", length = 500)
+    private String bio;
 
     @Override
     public boolean equals(Object o) {

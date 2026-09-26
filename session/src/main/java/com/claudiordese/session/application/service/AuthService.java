@@ -72,10 +72,16 @@ public class AuthService {
         }
 
         User user = users.findByUsername(command.username())
-                .filter(u -> hasher.matches(command.password(), u.passwordHash()))
+                // Accounts created through Google have no password and can't log in this way.
+                .filter(u -> u.passwordHash() != null && hasher.matches(command.password(), u.passwordHash()))
                 .orElseThrow(() -> new InvalidAuthorizationException(
                         "invalid_credentials", "Invalid username or password"));
 
+        return loginAs(user);
+    }
+
+    /** Issues the session's access + refresh tokens for an already-authenticated user. */
+    public LoginResult loginAs(User user) {
         IssuedToken access = tokens.issue(user, accessTtl());
         RefreshToken refresh = refreshTokens.issueFor(user.username(), refreshTtl());
         return new LoginResult(access.accessToken(), refresh.value(), "Bearer", access.expiresInSeconds());
