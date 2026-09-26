@@ -53,6 +53,11 @@ services:
       - SPRING_DATA_REDIS_PORT=${SPRING_DATA_REDIS_PORT:-6379}
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
       - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL:-http://localhost:9000}
+      - INTERNAL_SECRET=${INTERNAL_SECRET:-}
+      # Sign in with Google (blank client id/secret = disabled). See docs in the session service.
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URIS=${GOOGLE_REDIRECT_URIS:-http://localhost:3000/api/auth/google/callback}
       - MANAGEMENT_OTLP_TRACING_ENDPOINT=${MANAGEMENT_OTLP_TRACING_ENDPOINT:-http://jaeger:4318/v1/traces}
       - RATE_LIMITING_LOGIN_MAX_ATTEMPTS=${RATE_LIMITING_LOGIN_MAX_ATTEMPTS:-10}
       - RATE_LIMITING_LOGIN_WINDOW=${RATE_LIMITING_LOGIN_WINDOW:-15m}
@@ -127,8 +132,6 @@ services:
       context: .
       dockerfile: chat/Dockerfile
     container_name: chat
-    ports:
-      - "8086:8086"
     environment:
       # Override the localhost defaults baked into application.properties so chat
       # joins the compose network: registers in Eureka via the discovery service
@@ -139,8 +142,8 @@ services:
       - SPRING_DATA_REDIS_PORT=${SPRING_DATA_REDIS_PORT:-6379}
       - RATE_LIMITING_MESSAGE_MAX_ATTEMPTS=${RATE_LIMITING_MESSAGE_MAX_ATTEMPTS:-20}
       - RATE_LIMITING_MESSAGE_WINDOW=${RATE_LIMITING_MESSAGE_WINDOW:-10s}
-      - INTERNAL_SECRET=${INTERNAL_SECRET:-}
       - MANAGEMENT_OTLP_TRACING_ENDPOINT=http://jaeger:4318/v1/traces
+      - INTERNAL_SECRET=${INTERNAL_SECRET:-}
     depends_on:
       - chat_postgres
       - redis
