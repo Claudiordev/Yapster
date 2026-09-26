@@ -1,6 +1,7 @@
 package com.claudiordese.voice.infrastructure.controllers.voice;
 
-import com.claudiordese.voice.application.service.RoomService;
+import com.claudiordese.voice.application.service.CallPresenceService;
+import com.claudiordese.voice.application.service.ScreenShareEnforcementService;
 import com.claudiordese.voice.infrastructure.configurations.LiveKitProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,21 +19,31 @@ import org.springframework.web.server.ResponseStatusException;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.HexFormat;
 
-/** Receives LiveKit room presence changes and forwards fresh counts to chat. */
+/**
+ * Receives LiveKit room events for ALL rooms: presence changes (join, leave, room finished) and
+ * published tracks (screen-share resolution limits).
+ * Only the fact that "room X changed" is used: the full participant list of that one
+ * room is then read and sent to chat. Server-to-server only; the gateway must not
+ * route this path from outside.
+ */
 @RestController
 @RequestMapping("${url.api.base-path}/voice/livekit")
 public class LiveKitWebhookController {
 
-    private final RoomService roomService;
+    private final CallPresenceService callPresence;
+    private final ScreenShareEnforcementService screenShares;
     private final ObjectMapper objectMapper;
     private final String apiKey;
     private final SecretKey signingKey;
 
     public LiveKitWebhookController(
-            RoomService roomService, ObjectMapper objectMapper, LiveKitProperties properties) {
-        this.roomService = roomService;
+            CallPresenceService callPresence,
+            ScreenShareEnforcementService screenShares,
+            ObjectMapper objectMapper,
+            LiveKitProperties properties) {
+        this.callPresence = callPresence;
+        this.screenShares = screenShares;
         this.objectMapper = objectMapper;
         this.apiKey = properties.apiKey();
         this.signingKey = Keys.hmacShaKeyFor(
@@ -48,6 +59,16 @@ public class LiveKitWebhookController {
         try {
             JsonNode payload = objectMapper.readTree(body);
             String event = payload.path("event").asText();
+
+            if (event.equals("track_published")) {
+                // The track's size is re-read from LiveKit; only "who, where" comes from the payload.
+                String room = payload.path("room").path("name").asText();
+                String identity = payload.path("participant").path("identity").asText();
+
+                if (!room.isBlank() && !identity.isBlank()) screenShares.enforce(room, identity);
+                return;
+            }
+
             if (!event.equals("participant_joined")
                     && !event.equals("participant_left")
                     && !event.equals("room_finished")) {
@@ -61,9 +82,9 @@ public class LiveKitWebhookController {
 
             if (event.equals("room_finished")) {
                 // The room may already have disappeared from LiveKit.
-                roomService.publishEmptyStatus(room);
+                callPresence.publishEmpty(room);
             } else {
-                roomService.publishStatus(room);
+                callPresence.publish(room);
             }
         } catch (ResponseStatusException error) {
             throw error;
@@ -73,19 +94,24 @@ public class LiveKitWebhookController {
     }
 
     private Claims verifyWebhook(String authorization, String body) {
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
+        if (authorization == null || authorization.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing webhook signature");
         }
+
+        // LiveKit sends the bare JWT; tolerate a "Bearer " prefix too.
+        String token = authorization.startsWith("Bearer ")
+                ? authorization.substring("Bearer ".length())
+                : authorization;
 
         try {
             Claims claims = Jwts.parserBuilder()
                     .setSigningKey(signingKey)
                     .requireIssuer(apiKey)
                     .build()
-                    .parseClaimsJws(authorization.substring("Bearer ".length()))
+                    .parseClaimsJws(token)
                     .getBody();
             String expectedHash = claims.get("sha256", String.class);
-            String actualHash = HexFormat.of().formatHex(
+            String actualHash = java.util.Base64.getEncoder().encodeToString(
                     MessageDigest.getInstance("SHA-256").digest(body.getBytes(StandardCharsets.UTF_8)));
 
             if (expectedHash == null || !MessageDigest.isEqual(

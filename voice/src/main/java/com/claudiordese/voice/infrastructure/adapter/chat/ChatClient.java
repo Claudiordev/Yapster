@@ -4,8 +4,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.service.annotation.GetExchange;
+import org.springframework.web.service.annotation.PutExchange;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.service.annotation.PostExchange;
+import java.util.List;
 
 /**
  * Declarative HTTP client for the chat service, backed by a load-balanced
@@ -30,10 +31,15 @@ public interface ChatClient {
             @PathVariable String targetUserId,
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization);
 
-    @PostExchange("/chat/internal/status")
-    void publishCallStatus(
+    /**
+     * Reports the FULL current list of user ids in a conversation's call to chat
+     * (which stores it and tells the conversation's members). Empty list = no call.
+     */
+    @PutExchange("/internal/chat/conversations/{conversationId}/call-participants")
+    void publishCallParticipants(
+            @PathVariable String conversationId,
             @RequestHeader("X-Internal-Secret") String secret,
-            @RequestBody CallStatusPayload status);
+            @RequestBody CallParticipantsPayload payload);
 
-    record CallStatusPayload(String conversationId, boolean ongoing, int participantCount) {}
+    record CallParticipantsPayload(List<String> userIds) {}
 }

@@ -1,6 +1,5 @@
 package com.claudiordese.voice.application.service;
 
-import com.claudiordese.voice.infrastructure.configurations.InternalProperties;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -19,10 +18,7 @@ class RoomServiceTest {
                 (conversationId, targetUserId, authorization) ->
                         calls.add("authorize:" + conversationId + ":" + targetUserId + ":" + authorization),
                 (room, participantIdentity) ->
-                        calls.add("mute:" + room + ":" + participantIdentity),
-                room -> 0,
-                null,
-                new InternalProperties("secret"));
+                        calls.add("mute:" + room + ":" + participantIdentity));
 
         service.muteParticipant(" room-id ", " target-id ", "Bearer token");
 
