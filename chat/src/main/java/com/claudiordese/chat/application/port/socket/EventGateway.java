@@ -17,7 +17,6 @@ public interface EventGateway {
      */
     void send(String userId, ServerEvent event);
 
-
     boolean setStatus(String userId, UserStatusType status);
 
     UserStatusType statusOf(String userId);

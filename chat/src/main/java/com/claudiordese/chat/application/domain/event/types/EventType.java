@@ -6,5 +6,6 @@ public enum EventType {
     USER_STATUS_EVENT,
     CALL_STARTED,
     CALL_ENDED,
-    CALL_STATUS
+    CALL_PARTICIPANTS,
+    ROLES_CHANGED
 }

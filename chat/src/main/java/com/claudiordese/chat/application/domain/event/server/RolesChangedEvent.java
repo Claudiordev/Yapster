@@ -4,16 +4,16 @@ import com.claudiordese.chat.application.domain.event.types.EventType;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Value;
 
-/** Authoritative call state received from the voice service. */
+/**
+ * Sent to a single user when their roles were changed by an admin. Carries no
+ * roles on purpose: it is only a signal, the client re-reads its own account.
+ */
 @Value
-public final class CallStatusEvent implements ServerEvent {
-    String conversationId;
-    boolean ongoing;
-    int participantCount;
+public final class RolesChangedEvent implements ServerEvent {
 
     @Override
     @JsonProperty("type")
     public EventType type() {
-        return EventType.CALL_STATUS;
+        return EventType.ROLES_CHANGED;
     }
 }

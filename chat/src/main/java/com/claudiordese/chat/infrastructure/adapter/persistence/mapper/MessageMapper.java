@@ -18,7 +18,10 @@ public class MessageMapper {
                 e.getSenderId(),
                 e.getBody(),
                 e.getSentAt(),
-                e.getSeq());
+                e.getSeq(),
+                e.getType(),
+                e.getSystemEvent(),
+                e.getSubjectId());
     }
 
     public MessageEntity toEntity(Message m) {
@@ -28,6 +31,9 @@ public class MessageMapper {
         e.setSenderId(m.senderId());
         e.setBody(m.body());
         e.setSentAt(m.sentAt());
+        e.setType(m.type());
+        e.setSystemEvent(m.systemEvent());
+        e.setSubjectId(m.subjectId());
         // seq is DB-generated (@Generated(INSERT), insertable=false) — never set on write
         return e;
     }
