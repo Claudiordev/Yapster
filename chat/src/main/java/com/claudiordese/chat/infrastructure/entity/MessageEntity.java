@@ -1,7 +1,11 @@
 package com.claudiordese.chat.infrastructure.entity;
 
 import jakarta.persistence.Column;
+import com.claudiordese.chat.application.domain.chat.types.MessageType;
+import com.claudiordese.chat.application.domain.chat.types.SystemEvent;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
@@ -35,6 +39,17 @@ public class MessageEntity {
 
     @Column
     private String body;
+
+    @Enumerated(EnumType.STRING)
+    @Column
+    private MessageType type;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "system_event")
+    private SystemEvent systemEvent;
+
+    @Column(name = "subject_id")
+    private UUID subjectId;
 
     @Generated(event = EventType.INSERT)
     @Column(insertable = false, updatable = false)

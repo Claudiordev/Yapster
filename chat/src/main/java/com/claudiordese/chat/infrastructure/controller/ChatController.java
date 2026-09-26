@@ -1,13 +1,12 @@
 package com.claudiordese.chat.infrastructure.controller;
 
+import com.claudiordese.chat.application.service.CallPresenceService;
 import com.claudiordese.chat.application.service.ChatService;
-import com.claudiordese.chat.infrastructure.configuration.InternalProperties;
 import com.claudiordese.chat.infrastructure.controller.request.AddMemberRequest;
 import com.claudiordese.chat.infrastructure.controller.request.CreateGroupRequest;
 import com.claudiordese.chat.infrastructure.controller.request.MarkReadRequest;
 import com.claudiordese.chat.infrastructure.controller.request.SendMessageRequest;
 import com.claudiordese.chat.infrastructure.controller.request.StartDmRequest;
-import com.claudiordese.chat.infrastructure.controller.request.CallStatusRequest;
 import com.claudiordese.chat.infrastructure.controller.responses.*;
 import com.claudiordese.exceptions.InterdictedException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,13 +28,11 @@ import java.util.UUID;
 public class ChatController {
 
     private final ChatService chatService;
-    private final String internalSecret;
+    private final CallPresenceService callPresence;
 
-    public ChatController(
-            ChatService chatService,
-            InternalProperties internalProperties) {
+    public ChatController(ChatService chatService, CallPresenceService callPresence) {
         this.chatService = chatService;
-        this.internalSecret = internalProperties.secret();
+        this.callPresence = callPresence;
     }
 
     @PostMapping("/dm")
@@ -79,7 +76,11 @@ public class ChatController {
 
     @GetMapping("/conversations")
     public List<ConversationSummaryResponse> conversations(Authentication auth) {
-        return chatService.listConversationSummaries(loggedUser(auth)).stream().map(
+        var summaries = chatService.listConversationSummaries(loggedUser(auth));
+        // Only the caller's own conversations are looked up, so a non-member never gets a snapshot.
+        var calls = callPresence.snapshotsFor(summaries.stream().map(s -> s.conversation().id()).toList());
+
+        return summaries.stream().map(
                 conversationSummary -> {
                     return new ConversationSummaryResponse(
                             conversationSummary.conversation().id(),
@@ -91,9 +92,15 @@ public class ChatController {
                             conversationSummary.message().sentAt(),
                             conversationSummary.message().seq(),
                             conversationSummary.lastReadSeq(),
-                            conversationSummary.unreadCount());
+                            conversationSummary.unreadCount(),
+                            calls.getOrDefault(conversationSummary.conversation().id(), List.of()));
                 }
         ).toList();
+    }
+
+    @GetMapping("/{conversationId}/call-participants")
+    public List<UUID> callParticipants(@PathVariable UUID conversationId, Authentication auth) {
+        return callPresence.participantsOf(conversationId, loggedUser(auth));
     }
 
     @PostMapping("/{conversationId}/message")
@@ -156,24 +163,6 @@ public class ChatController {
                 targetUserId,
                 platformAdmin);
     }
-
-    /** Receives authoritative LiveKit presence from the voice service. */
-    @PostMapping("/internal/status")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void callStatus(
-            @RequestHeader("X-Internal-Secret") String secret,
-            @RequestBody CallStatusRequest request) {
-        if (internalSecret.isBlank() || !internalSecret.equals(secret)) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "Invalid voice service credentials");
-        }
-
-        chatService.sendCallStatus(
-                UUID.fromString(request.conversationId()),
-                request.ongoing(),
-                request.participantCount());
-    }
-
 
     @GetMapping("/monitor")
     @PreAuthorize("hasRole('ADMIN')")

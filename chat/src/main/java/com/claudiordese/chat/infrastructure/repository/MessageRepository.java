@@ -1,5 +1,6 @@
 package com.claudiordese.chat.infrastructure.repository;
 
+import com.claudiordese.chat.application.domain.chat.types.MessageType;
 import com.claudiordese.chat.infrastructure.entity.MessageEntity;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -21,7 +22,12 @@ public interface MessageRepository extends JpaRepository<MessageEntity, UUID> {
     Optional<MessageEntity> findFirstByConversationIdOrderBySeqDesc(UUID id);
 
     /**
+     * Latest message of a given type (previews skip SYSTEM messages)
+     */
+    Optional<MessageEntity> findFirstByConversationIdAndTypeOrderBySeqDesc(UUID id, MessageType type);
+
+    /**
      * Count unread by conversation ID and seq
      */
-    long countByConversationIdAndSeqGreaterThan(UUID conversationId, long lastReadSeq);
+    long countByConversationIdAndTypeAndSeqGreaterThan(UUID conversationId, MessageType type, long lastReadSeq);
 }

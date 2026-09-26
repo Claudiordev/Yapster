@@ -27,7 +27,14 @@ public interface MessageStore {
     Optional<Message> latest(UUID conversationId);
 
     /**
-     * Get count of messages since sequence
+     * Latest non-system message (conversation list preview)
+     * @param conversationId UUID id
+     * @return Message or empty
+     */
+    Optional<Message> latestUserMessage(UUID conversationId);
+
+    /**
+     * Get count of user messages since sequence (system messages never count as unread)
      * @param conversationId UUID id
      * @param lastReadSeq long seq
      * @return long count, used for unread count

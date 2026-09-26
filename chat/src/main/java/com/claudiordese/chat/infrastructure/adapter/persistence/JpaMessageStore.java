@@ -1,6 +1,7 @@
 package com.claudiordese.chat.infrastructure.adapter.persistence;
 
 import com.claudiordese.chat.application.domain.chat.Message;
+import com.claudiordese.chat.application.domain.chat.types.MessageType;
 import com.claudiordese.chat.application.port.persistence.MessageStore;
 import com.claudiordese.chat.infrastructure.adapter.persistence.mapper.MessageMapper;
 import com.claudiordese.chat.infrastructure.repository.MessageRepository;
@@ -40,7 +41,12 @@ public class JpaMessageStore implements MessageStore {
     }
 
     @Override
+    public Optional<Message> latestUserMessage(UUID conversationId) {
+        return repo.findFirstByConversationIdAndTypeOrderBySeqDesc(conversationId, MessageType.USER).map(mapper::toDomain);
+    }
+
+    @Override
     public long countSince(UUID conversationId, long lastReadSeq) {
-        return repo.countByConversationIdAndSeqGreaterThan(conversationId, lastReadSeq);
+        return repo.countByConversationIdAndTypeAndSeqGreaterThan(conversationId, MessageType.USER, lastReadSeq);
     }
 }

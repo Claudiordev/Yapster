@@ -5,11 +5,13 @@ import com.claudiordese.chat.application.domain.chat.Conversation;
 import com.claudiordese.chat.application.domain.chat.ConversationSummary;
 import com.claudiordese.chat.application.domain.chat.Message;
 import com.claudiordese.chat.application.domain.chat.types.ConversationType;
+import com.claudiordese.chat.application.domain.chat.types.MessageType;
+import com.claudiordese.chat.application.domain.chat.types.SystemEvent;
 import com.claudiordese.chat.application.domain.chat.types.UserStatusType;
 import com.claudiordese.chat.application.domain.event.server.CallEndedEvent;
-import com.claudiordese.chat.application.domain.event.server.CallStatusEvent;
 import com.claudiordese.chat.application.domain.event.server.CallStartedEvent;
 import com.claudiordese.chat.application.domain.event.server.MessageEvent;
+import com.claudiordese.chat.application.domain.event.server.RolesChangedEvent;
 import com.claudiordese.chat.application.domain.event.server.TypingEvent;
 import com.claudiordese.chat.application.domain.event.server.UserStatusEvent;
 import com.claudiordese.chat.application.port.socket.EventGateway;
@@ -26,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -111,6 +114,10 @@ public class ChatService {
         }
 
         conversations.addMember(conversationId, newMemberId);
+
+        List<UUID> recipients = new ArrayList<>(members);
+        recipients.add(newMemberId);
+        postSystemMessage(conversationId, SystemEvent.MEMBER_ADDED, newMemberId, recipients);
     }
 
     @Transactional
@@ -135,6 +142,22 @@ public class ChatService {
         }
 
         conversations.removeMember(conversationId, targetUserId);
+
+        // The removed user no longer belongs to the thread, so they don't get told in it.
+        postSystemMessage(conversationId, SystemEvent.MEMBER_REMOVED, targetUserId,
+                conversations.membersOf(conversationId));
+    }
+
+    /** Persists a message authored by the system (no sender, no rate limit) and pushes it to recipients. */
+    private void postSystemMessage(UUID conversationId, SystemEvent event, UUID subjectId, List<UUID> recipients) {
+        Message saved = messages.saveMessage(Message.system(conversationId, event, subjectId));
+
+        MessageEvent messageEvent = new MessageEvent(saved.id().toString(), saved.seq(), conversationId.toString(),
+                null, saved.body(), saved.sentAt(), MessageType.SYSTEM, event, subjectId.toString());
+
+        for (UUID m : recipients) {
+            events.send(m.toString(), messageEvent);
+        }
     }
 
     @Transactional
@@ -199,10 +222,10 @@ public class ChatService {
         }
 
         Message newMessage = messages.saveMessage(
-                new Message(UUID.randomUUID(), conversationId, senderId, body, Instant.now(), 0L)
+                Message.user(conversationId, senderId, body)
         );
 
-        MessageEvent messageEvent = new MessageEvent(newMessage.id().toString(), newMessage.seq(), conversationId.toString(), senderId.toString(), body, newMessage.sentAt());
+        MessageEvent messageEvent = new MessageEvent(newMessage.id().toString(), newMessage.seq(), conversationId.toString(), senderId.toString(), body, newMessage.sentAt(), MessageType.USER, null, null);
 
         for (UUID m : members) {
             events.send(m.toString(), messageEvent);
@@ -253,14 +276,8 @@ public class ChatService {
         }
     }
 
-    public void sendCallStatus(UUID conversationId, boolean ongoing, int participantCount) {
-        List<UUID> members = conversations.membersOf(conversationId);
-        CallStatusEvent event = new CallStatusEvent(
-                conversationId.toString(), ongoing, Math.max(0, participantCount));
-
-        for (UUID member : members) {
-            events.send(member.toString(), event);
-        }
+    public void sendRolesChanged(UUID userId) {
+        events.send(userId.toString(), new RolesChangedEvent());
     }
 
     public void sendUserStatus(UUID senderId, UserStatusType userStatusType) {
@@ -298,8 +315,8 @@ public class ChatService {
 
     public List<ConversationSummary> listConversationSummaries(UUID loggedUser) {
         return conversations.findForUser(loggedUser).stream().map( conversation -> {
-            Message message = messages.history(conversation.id(), Long.MAX_VALUE, 1).stream().findFirst().orElseGet(() ->
-                    new Message(UUID.randomUUID(), conversation.id(),loggedUser,"", Instant.now(), 0L)
+            Message message = messages.latestUserMessage(conversation.id()).orElseGet(() ->
+                    new Message(UUID.randomUUID(), conversation.id(), loggedUser, "", Instant.now(), 0L, MessageType.USER, null, null)
             );
 
             List<UUID> recipientsIds = conversations.membersOf(conversation.id()).stream().filter(member -> !member.equals(loggedUser)).toList();

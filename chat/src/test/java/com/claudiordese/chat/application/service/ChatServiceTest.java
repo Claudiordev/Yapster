@@ -5,6 +5,8 @@ import com.claudiordese.chat.application.domain.chat.Conversation;
 import com.claudiordese.chat.application.domain.chat.ConversationMember;
 import com.claudiordese.chat.application.domain.chat.Message;
 import com.claudiordese.chat.application.domain.chat.types.ConversationType;
+import com.claudiordese.chat.application.domain.chat.types.MessageType;
+import com.claudiordese.chat.application.domain.chat.types.SystemEvent;
 import com.claudiordese.chat.application.domain.chat.types.UserStatusType;
 import com.claudiordese.chat.application.domain.event.server.ServerEvent;
 import com.claudiordese.chat.application.port.persistence.ConversationStore;
@@ -23,22 +25,28 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ChatServiceTest {
 
     private InMemoryConversationStore conversations;
+    private InMemoryMessageStore messageStore;
+    private NoOpEventGateway gateway;
     private ChatService service;
 
     @BeforeEach
     void setUp() {
         conversations = new InMemoryConversationStore();
+        messageStore = new InMemoryMessageStore();
+        gateway = new NoOpEventGateway();
         service = new ChatService(
-                new InMemoryMessageStore(),
+                messageStore,
                 conversations,
-                new NoOpEventGateway(),
+                gateway,
                 new InMemoryRateLimitGuard(),
                 new MessageRateLimitPolicy(20, Duration.ofSeconds(10)));
     }
@@ -63,6 +71,54 @@ class ChatServiceTest {
         UUID anotherConversationId = UUID.randomUUID();
         assertThatCode(() -> service.sendMessage(anotherConversationId, senderId, "different conversation"))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void addMember_postsSystemMessageToEveryoneIncludingNewMember() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        UUID newMemberId = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId);
+
+        service.addMember(conversationId, creatorId, newMemberId);
+
+        assertThat(messageStore.messages).singleElement().satisfies(message -> {
+            assertThat(message.type()).isEqualTo(MessageType.SYSTEM);
+            assertThat(message.systemEvent()).isEqualTo(SystemEvent.MEMBER_ADDED);
+            assertThat(message.senderId()).isNull();
+            assertThat(message.subjectId()).isEqualTo(newMemberId);
+        });
+        assertThat(gateway.sentTo).containsExactlyInAnyOrder(creatorId.toString(), newMemberId.toString());
+    }
+
+    @Test
+    void removeMember_postsSystemMessageToRemainingMembersOnly() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId, targetId);
+
+        service.removeMember(conversationId, creatorId, targetId);
+
+        assertThat(messageStore.messages).singleElement().satisfies(message -> {
+            assertThat(message.type()).isEqualTo(MessageType.SYSTEM);
+            assertThat(message.systemEvent()).isEqualTo(SystemEvent.MEMBER_REMOVED);
+            assertThat(message.subjectId()).isEqualTo(targetId);
+        });
+        assertThat(gateway.sentTo).containsExactly(creatorId.toString());
+    }
+
+    @Test
+    void systemMessages_neverCountAsUnread() {
+        UUID conversationId = UUID.randomUUID();
+        messageStore.saveMessage(Message.system(conversationId, SystemEvent.MEMBER_ADDED, UUID.randomUUID()));
+        messageStore.saveMessage(Message.user(conversationId, UUID.randomUUID(), "hi"));
+
+        assertThat(messageStore.countSince(conversationId, -1)).isEqualTo(1);
+        assertThat(messageStore.latestUserMessage(conversationId)).get()
+                .extracting(Message::body).isEqualTo("hi");
     }
 
     @Test
@@ -157,9 +213,18 @@ class ChatServiceTest {
         }
 
         @Override
+        public Optional<Message> latestUserMessage(UUID conversationId) {
+            return messages.stream()
+                    .filter(message -> message.conversationId().equals(conversationId))
+                    .filter(message -> message.type() == MessageType.USER)
+                    .reduce((first, second) -> second);
+        }
+
+        @Override
         public long countSince(UUID conversationId, long lastReadSeq) {
             return messages.stream()
                     .filter(message -> message.conversationId().equals(conversationId))
+                    .filter(message -> message.type() == MessageType.USER)
                     .filter(message -> message.seq() > lastReadSeq)
                     .count();
         }
@@ -202,12 +267,13 @@ class ChatServiceTest {
 
         @Override
         public ConversationMember addMember(UUID conversationId, UUID userId) {
-            throw new UnsupportedOperationException();
+            members = Stream.concat(members.stream(), Stream.of(userId)).toList();
+            return null;
         }
 
         @Override
         public void removeMember(UUID conversationId, UUID userId) {
-            throw new UnsupportedOperationException();
+            members = members.stream().filter(member -> !member.equals(userId)).toList();
         }
 
         @Override
@@ -228,6 +294,8 @@ class ChatServiceTest {
 
     private static final class NoOpEventGateway implements EventGateway {
 
+        private final List<String> sentTo = new ArrayList<>();
+
         @Override
         public boolean isOnline(String userId) {
             return false;
@@ -235,6 +303,7 @@ class ChatServiceTest {
 
         @Override
         public void send(String userId, ServerEvent event) {
+            sentTo.add(userId);
         }
 
         @Override
