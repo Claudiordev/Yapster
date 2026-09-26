@@ -56,7 +56,11 @@ public class GlobalExceptionControllerAdvice {
                 .findFirst()
                 .orElse(HttpStatus.INTERNAL_SERVER_ERROR);
 
-        ProblemDetail problem = ProblemDetails.of(httpStatus, e.getCode(), e.getMessage(), request.getRequestURI());
+        ProblemDetail problem = ProblemDetails.of(
+                httpStatus,
+                e.getCode(),
+                e.getMessage(),
+                request.getRequestURI());
         return ResponseEntity.status(httpStatus).body(problem);
     }
 
