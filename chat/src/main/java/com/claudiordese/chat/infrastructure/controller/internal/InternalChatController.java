@@ -42,6 +42,13 @@ public class InternalChatController {
         callPresence.update(conversationId, request.userIds() == null ? List.of() : request.userIds());
     }
 
+    /** Session reports a profile picture or username change; everyone who shares a chat with them is told. */
+    @PostMapping("/users/{userId}/profile-changed")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void profileChanged(@PathVariable UUID userId) {
+        chatService.sendProfileChanged(userId);
+    }
+
     @PostMapping("/users/{userId}/roles-changed")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void rolesChanged(@PathVariable UUID userId) {

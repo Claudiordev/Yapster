@@ -10,6 +10,7 @@ import com.claudiordese.session.application.config.FileUploadRateLimitPolicy;
 import com.claudiordese.session.application.domain.User;
 import com.claudiordese.session.application.port.AvatarStorage;
 import com.claudiordese.session.application.port.PasswordHasher;
+import com.claudiordese.session.application.port.ProfileChangeNotifier;
 import com.claudiordese.session.application.port.RoleChangeNotifier;
 import com.claudiordese.session.application.port.RateLimitGuard;
 import com.claudiordese.session.application.port.UserStore;
@@ -46,6 +47,7 @@ public class UserService {
     private final RateLimitGuard rateLimitGuard;
     private final FileUploadRateLimitPolicy fileUploadRateLimitPolicy;
     private final List<RoleChangeNotifier> roleChangeNotifiers;
+    private final List<ProfileChangeNotifier> profileChangeNotifiers;
 
     public UserDto getUserById(UUID id) {
         User user = users.findById(id)
@@ -181,6 +183,7 @@ public class UserService {
 
         String url = avatarStorage.store(command.userId(), command.content(), command.contentType());
         users.update(user.withAvatarUrl(url));
+        notifyProfileChanged(command.userId());
     }
 
     /** Sets the user's "About me" text: trimmed, and a blank value clears it. */
@@ -209,6 +212,27 @@ public class UserService {
         }
 
         users.update(user.withUsername(command.newUsername()));
+        notifyProfileChanged(command.userId());
+    }
+
+    /**
+     * Tells the other services once the change is committed: they answer by reloading, and
+     * a reload that ran before the commit would read the old picture or name.
+     */
+    private void notifyProfileChanged(UUID userId) {
+        Runnable push = () -> profileChangeNotifiers.forEach(notifier -> notifier.profileChanged(userId));
+
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            push.run();
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                push.run();
+            }
+        });
     }
 
     @Transactional

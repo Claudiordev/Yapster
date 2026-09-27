@@ -77,6 +77,31 @@ export function useConversations(myUserId: string | null) {
   }, [subscribe]);
 
   // Live messages update the matching row in place: preview, ordering, and the
+  // Membership or a profile changed somewhere: reload the list, which is where names and
+  // pictures are resolved. Several events can land together (a new group tells every
+  // member, a picture change follows a rename), so they share one reload.
+  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const scheduleReload = () => {
+      if (reloadTimerRef.current) return;
+
+      reloadTimerRef.current = setTimeout(() => {
+        reloadTimerRef.current = null;
+        refresh();
+      }, 300);
+    };
+    const stopMembers = subscribe("MEMBERS_CHANGED", scheduleReload);
+    const stopProfile = subscribe("PROFILE_CHANGED", scheduleReload);
+
+    return () => {
+      stopMembers();
+      stopProfile();
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+      reloadTimerRef.current = null;
+    };
+  }, [subscribe, refresh]);
+
   // unread count bumped in realtime (only for messages from others; my own
   // sends aren't unread). An unknown conversation → pull it (with its count).
   useEffect(() => {
@@ -111,11 +136,16 @@ export function useConversations(myUserId: string | null) {
   }, [subscribe, refresh]);
 
   /** Replaces who is in a conversation's call. */
-  const setCallParticipants = useCallback((conversationId: string, userIds: string[]) => {
-    setConversations((prev) =>
-      prev.map((c) => (c.id === conversationId ? { ...c, callParticipants: userIds } : c)),
-    );
-  }, []);
+  const setCallParticipants = useCallback(
+    (conversationId: string, userIds: string[]) => {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId ? { ...c, callParticipants: userIds } : c,
+        ),
+      );
+    },
+    [],
+  );
 
   // The chat service pushes the FULL participant list whenever it changes (only for
   // small conversations); just replace what we hold.
@@ -129,11 +159,15 @@ export function useConversations(myUserId: string | null) {
   const refreshCallParticipants = useCallback(
     async (conversationId: string) => {
       try {
-        const res = await fetch(`/api/chat/${encodeURIComponent(conversationId)}/call-participants`, {
-          cache: "no-store",
-        });
+        const res = await fetch(
+          `/api/chat/${encodeURIComponent(conversationId)}/call-participants`,
+          {
+            cache: "no-store",
+          },
+        );
 
-        if (res.ok) setCallParticipants(conversationId, (await res.json()) as string[]);
+        if (res.ok)
+          setCallParticipants(conversationId, (await res.json()) as string[]);
       } catch {
         // keep what we have
       }
@@ -213,14 +247,16 @@ export function useConversations(myUserId: string | null) {
 
     setConversations((prev) =>
       prev.map((c) =>
-        c.id === conversationId ? { ...c, lastReadSeq: seq, unreadCount: 0 } : c,
+        c.id === conversationId
+          ? { ...c, lastReadSeq: seq, unreadCount: 0 }
+          : c,
       ),
     );
 
     fetch(`/api/chat/${conversationId}/read`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({ seq }),
     }).catch(() => {});

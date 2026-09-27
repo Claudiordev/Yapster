@@ -14,6 +14,7 @@ import type { ThreadMessage } from "@/types/chat";
 import { formatClock } from "@/app/(protected)/message/_Components/_Chat/utils/dateTime";
 
 import { MessageContextMenu } from "./MessageContextMenu";
+import { MembersPanel, type PanelMember } from "./MembersPanel";
 import { UserProfileModal } from "./UserProfileModal";
 import type { UserProfile } from "@/types/user";
 
@@ -37,6 +38,17 @@ interface ChatThreadProps {
   typingNames: string[];
   onType: () => void;
   /** Shows the "Add member" action in the header when set (group conversations only). */
+  /** Everyone in the conversation; enables the members side tab. */
+  members?: PanelMember[];
+  /** Right-click actions in the members tab. */
+  memberActions?: {
+    myUserId: string | null;
+    creatorId: string | null;
+    canRemove: boolean;
+    onMessage: (member: PanelMember) => void;
+    onCall: (member: PanelMember) => void;
+    onRemove: (member: PanelMember) => void;
+  };
   onAddMember?: () => void;
   /** Shows the "Manage group" action in the header when set (creator only). */
   onManageGroup?: () => void;
@@ -82,6 +94,8 @@ export function ChatThread({
   onSend,
   typingNames,
   onType,
+  members,
+  memberActions,
   onAddMember,
   onManageGroup,
   onStartCall,
@@ -99,6 +113,7 @@ export function ChatThread({
   } | null>(null);
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [showMembers, setShowMembers] = useState(false);
 
   function handleMessageContextMenu(
     event: ReactMouseEvent<HTMLDivElement>,
@@ -147,7 +162,7 @@ export function ChatThread({
   }, [messages, isLoading, isLoadingMore, hasMore, onLoadMore]);
 
   return (
-    <div className="flex-grow flex flex-col min-h-0 bg-background dark:bg-surface-chat text-foreground">
+    <div className="flex-grow flex flex-col min-h-0 min-w-0 bg-background dark:bg-surface-chat text-foreground">
       <div className="flex-shrink-0 flex items-center gap-2 px-4 h-14 border-b border-divider shadow-sm">
         <Avatar
           className="bg-brand/10 text-brand flex-shrink-0 ring-1 ring-brand/20"
@@ -167,6 +182,19 @@ export function ChatThread({
               onPress={onStartCall}
             >
               <Icon name="phone" size={18} />
+            </Button>
+          )}
+          {members && (
+            <Button
+              isIconOnly
+              aria-label={showMembers ? "Hide members" : "Show members"}
+              aria-pressed={showMembers}
+              className={`chat-profile-action min-w-9 ${showMembers ? "chat-profile-action--send" : "chat-profile-settings"}`}
+              size="sm"
+              variant="light"
+              onPress={() => setShowMembers((open) => !open)}
+            >
+              <Icon name="users" size={18} />
             </Button>
           )}
           {onAddMember && (
@@ -198,161 +226,185 @@ export function ChatThread({
 
       {headerExtra}
 
-      <div
-        ref={scrollRef}
-        className="flex-grow overflow-y-auto flex flex-col p-4 min-h-0"
-        onScroll={handleScroll}
-      >
-        {isLoading ? (
-          <ThreadSkeleton />
-        ) : messages.length === 0 ? (
-          <p className="text-default-400 text-sm text-center py-8">
-            No messages yet, say hi!
-          </p>
-        ) : (
-          <>
-            {isLoadingMore && (
-              <p className="text-tiny text-default-400 text-center py-1 animate-pulse">
-                Loading earlier messages…
+      {/* The members tab sits beside the messages and composer only, never the header. */}
+      <div className="flex flex-grow min-h-0 min-w-0">
+        <div className="flex-grow flex flex-col min-h-0 min-w-0">
+          <div
+            ref={scrollRef}
+            className="flex-grow overflow-y-auto flex flex-col p-4 min-h-0"
+            onScroll={handleScroll}
+          >
+            {isLoading ? (
+              <ThreadSkeleton />
+            ) : messages.length === 0 ? (
+              <p className="text-default-400 text-sm text-center py-8">
+                No messages yet, say hi!
               </p>
-            )}
-            {messages.map((m, i) => {
-              const prev = messages[i - 1];
-
-              if (m.system) {
-                const subject = senders[m.system.subjectId]?.name ?? "A member";
-                const text =
-                  m.system.event === "MEMBER_ADDED"
-                    ? `${subject} was added to the chat`
-                    : `${subject} was removed from the chat`;
-
-                return (
-                  <p
-                    key={m.id}
-                    className="my-3 first:mt-0 text-center text-tiny text-default-400"
-                  >
-                    {text}
+            ) : (
+              <>
+                {isLoadingMore && (
+                  <p className="text-tiny text-default-400 text-center py-1 animate-pulse">
+                    Loading earlier messages…
                   </p>
-                );
-              }
+                )}
+                {messages.map((m, i) => {
+                  const prev = messages[i - 1];
 
-              const startsGroup =
-                !prev ||
-                prev.system ||
-                prev.senderId !== m.senderId ||
-                m.sentAt - prev.sentAt > GROUP_WINDOW_MS;
+                  if (m.system) {
+                    const subject =
+                      senders[m.system.subjectId]?.name ?? "A member";
+                    const text =
+                      m.system.event === "MEMBER_ADDED"
+                        ? `${subject} was added to the chat`
+                        : m.system.event === "MEMBER_LEFT"
+                          ? `${subject} left the chat`
+                          : `${subject} was removed from the chat`;
 
-              const sender = senders[m.senderId];
-              const name = sender?.name ?? (m.fromMe ? "You" : "User");
-              const avatarUrl = sender?.avatarUrl ?? undefined;
-
-              const openProfile = () =>
-                setProfile({
-                  id: m.senderId,
-                  name,
-                  avatarUrl: avatarUrl ?? null,
-                  roles: sender?.roles ?? [],
-                  status: sender?.status,
-                });
-
-              return (
-                <div
-                  key={m.id}
-                  className={`flex gap-3 -mx-4 px-4 py-0.5 rounded-medium hover:bg-content2/60 ${
-                    startsGroup ? "mt-4 first:mt-0" : "mt-0.5"
-                  }`}
-                  onContextMenu={(event) =>
-                    handleMessageContextMenu(event, m.body)
+                    return (
+                      <p
+                        key={m.id}
+                        className="my-3 first:mt-0 text-center text-tiny text-default-400"
+                      >
+                        {text}
+                      </p>
+                    );
                   }
-                >
-                  {startsGroup ? (
-                    <button
-                      aria-label={`${name}'s profile`}
-                      className="flex-shrink-0 mt-0.5 rounded-full"
-                      type="button"
-                      onClick={openProfile}
-                    >
-                      <Avatar
-                        className="bg-default-200 text-brand"
-                        name={name.charAt(0).toUpperCase()}
-                        size="sm"
-                        src={avatarUrl}
-                      />
-                    </button>
-                  ) : (
-                    <div aria-hidden className="w-8 flex-shrink-0" />
-                  )}
 
-                  <div className="min-w-0 flex-grow">
-                    {startsGroup && (
-                      <div className="flex items-baseline gap-2">
+                  const startsGroup =
+                    !prev ||
+                    prev.system ||
+                    prev.senderId !== m.senderId ||
+                    m.sentAt - prev.sentAt > GROUP_WINDOW_MS;
+
+                  const sender = senders[m.senderId];
+                  const name = sender?.name ?? (m.fromMe ? "You" : "User");
+                  const avatarUrl = sender?.avatarUrl ?? undefined;
+
+                  const openProfile = () =>
+                    setProfile({
+                      id: m.senderId,
+                      name,
+                      avatarUrl: avatarUrl ?? null,
+                      roles: sender?.roles ?? [],
+                      status: sender?.status,
+                    });
+
+                  return (
+                    <div
+                      key={m.id}
+                      className={`flex gap-3 -mx-4 px-4 py-0.5 rounded-medium hover:bg-content2/60 ${
+                        startsGroup ? "mt-4 first:mt-0" : "mt-0.5"
+                      }`}
+                      onContextMenu={(event) =>
+                        handleMessageContextMenu(event, m.body)
+                      }
+                    >
+                      {startsGroup ? (
                         <button
-                          className="font-semibold text-sm text-foreground hover:underline"
+                          aria-label={`${name}'s profile`}
+                          className="flex-shrink-0 mt-0.5 rounded-full"
                           type="button"
                           onClick={openProfile}
                         >
-                          {name}
+                          <Avatar
+                            className="bg-default-200 text-brand"
+                            name={name.charAt(0).toUpperCase()}
+                            size="sm"
+                            src={avatarUrl}
+                          />
                         </button>
-                        <span className="text-[10px] text-default-400">
-                          {formatClock(m.sentAt)}
-                        </span>
-                      </div>
-                    )}
-                    {/* A GIF/image-only message shows just the picture, not its link. */}
-                    {!isImageOnlyBody(m.body) && (
-                      <p
-                        className={`text-sm text-foreground whitespace-pre-wrap [overflow-wrap:anywhere] ${
-                          m.pending ? "opacity-60" : ""
-                        }`}
-                      >
-                        {linkifyBody(m.body).map((part, index) =>
-                          part.href ? (
-                            <a
-                              key={index}
-                              className="underline-offset-2 hover:underline"
-                              href={part.href}
-                              rel="noopener noreferrer"
-                              target="_blank"
+                      ) : (
+                        <div aria-hidden className="w-8 flex-shrink-0" />
+                      )}
+
+                      <div className="min-w-0 flex-grow">
+                        {startsGroup && (
+                          <div className="flex items-baseline gap-2">
+                            <button
+                              className="font-semibold text-sm text-foreground hover:underline"
+                              type="button"
+                              onClick={openProfile}
                             >
-                              {part.text}
-                            </a>
-                          ) : (
-                            part.text
-                          ),
+                              {name}
+                            </button>
+                            <span className="text-[10px] text-default-400">
+                              {formatClock(m.sentAt)}
+                            </span>
+                          </div>
                         )}
-                      </p>
-                    )}
-                    {(!m.pending || isImageOnlyBody(m.body)) && (
-                      <MessageEmbeds body={m.body} />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </>
+                        {/* A GIF/image-only message shows just the picture, not its link. */}
+                        {!isImageOnlyBody(m.body) && (
+                          <p
+                            className={`text-sm text-foreground whitespace-pre-wrap [overflow-wrap:anywhere] ${
+                              m.pending ? "opacity-60" : ""
+                            }`}
+                          >
+                            {linkifyBody(m.body).map((part, index) =>
+                              part.href ? (
+                                <a
+                                  key={index}
+                                  className="underline-offset-2 hover:underline"
+                                  href={part.href}
+                                  rel="noopener noreferrer"
+                                  target="_blank"
+                                >
+                                  {part.text}
+                                </a>
+                              ) : (
+                                part.text
+                              ),
+                            )}
+                          </p>
+                        )}
+                        {(!m.pending || isImageOnlyBody(m.body)) && (
+                          <MessageEmbeds body={m.body} />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+
+          <TypingIndicator names={typingNames} />
+
+          <MessageComposer
+            isDisabled={false}
+            isSending={isSending}
+            placeholder={`Message ${title}`}
+            onSend={onSend}
+            onType={onType}
+          />
+
+          {messageMenu && (
+            <MessageContextMenu
+              body={messageMenu.body}
+              x={messageMenu.x}
+              y={messageMenu.y}
+              onClose={() => setMessageMenu(null)}
+            />
+          )}
+
+          <UserProfileModal
+            profile={profile}
+            onClose={() => setProfile(null)}
+          />
+        </div>
+
+        {members && showMembers && (
+          <MembersPanel
+            canRemove={memberActions?.canRemove ?? false}
+            members={members}
+            creatorId={memberActions?.creatorId}
+            myUserId={memberActions?.myUserId}
+            onCall={(member) => memberActions?.onCall(member)}
+            onMessage={(member) => memberActions?.onMessage(member)}
+            onRemove={(member) => memberActions?.onRemove(member)}
+            onSelect={(member) => setProfile(member)}
+          />
         )}
       </div>
-
-      <TypingIndicator names={typingNames} />
-
-      <MessageComposer
-        isDisabled={false}
-        isSending={isSending}
-        placeholder={`Message ${title}`}
-        onSend={onSend}
-        onType={onType}
-      />
-
-      {messageMenu && (
-        <MessageContextMenu
-          body={messageMenu.body}
-          x={messageMenu.x}
-          y={messageMenu.y}
-          onClose={() => setMessageMenu(null)}
-        />
-      )}
-
-      <UserProfileModal profile={profile} onClose={() => setProfile(null)} />
     </div>
   );
 }

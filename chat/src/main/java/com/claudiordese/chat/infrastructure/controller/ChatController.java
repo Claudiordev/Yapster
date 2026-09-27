@@ -68,6 +68,13 @@ public class ChatController {
         chatService.removeMember(conversationId, loggedUser(auth), memberId);
     }
 
+    /** The caller leaves a group (not the creator, who deletes it instead). */
+    @PostMapping("/{conversationId}/leave")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void leaveGroup(@PathVariable UUID conversationId, Authentication auth) {
+        chatService.leaveGroup(conversationId, loggedUser(auth));
+    }
+
     @DeleteMapping("/{conversationId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteGroup(@PathVariable UUID conversationId, Authentication auth) {

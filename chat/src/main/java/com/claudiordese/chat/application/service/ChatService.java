@@ -10,7 +10,9 @@ import com.claudiordese.chat.application.domain.chat.types.SystemEvent;
 import com.claudiordese.chat.application.domain.chat.types.UserStatusType;
 import com.claudiordese.chat.application.domain.event.server.CallEndedEvent;
 import com.claudiordese.chat.application.domain.event.server.CallStartedEvent;
+import com.claudiordese.chat.application.domain.event.server.MembersChangedEvent;
 import com.claudiordese.chat.application.domain.event.server.MessageEvent;
+import com.claudiordese.chat.application.domain.event.server.ProfileChangedEvent;
 import com.claudiordese.chat.application.domain.event.server.RolesChangedEvent;
 import com.claudiordese.chat.application.domain.event.server.TypingEvent;
 import com.claudiordese.chat.application.domain.event.server.UserStatusEvent;
@@ -26,14 +28,18 @@ import com.claudiordese.exceptions.TooManyRequestsException;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @AllArgsConstructor
@@ -87,6 +93,10 @@ public class ChatService {
             conversations.addMember(groupConversation.id(), member);
         }
 
+        List<UUID> everyone = new ArrayList<>(members);
+        everyone.add(creator);
+        notifyMembersChanged(groupConversation.id(), everyone);
+
         return groupConversation;
     }
 
@@ -118,6 +128,7 @@ public class ChatService {
         List<UUID> recipients = new ArrayList<>(members);
         recipients.add(newMemberId);
         postSystemMessage(conversationId, SystemEvent.MEMBER_ADDED, newMemberId, recipients);
+        notifyMembersChanged(conversationId, recipients);
     }
 
     @Transactional
@@ -144,8 +155,47 @@ public class ChatService {
         conversations.removeMember(conversationId, targetUserId);
 
         // The removed user no longer belongs to the thread, so they don't get told in it.
-        postSystemMessage(conversationId, SystemEvent.MEMBER_REMOVED, targetUserId,
-                conversations.membersOf(conversationId));
+        List<UUID> remaining = conversations.membersOf(conversationId);
+
+        postSystemMessage(conversationId, SystemEvent.MEMBER_REMOVED, targetUserId, remaining);
+
+        // The removed user isn't told in the thread, but their client must still drop the group.
+        List<UUID> affected = new ArrayList<>(remaining);
+        affected.add(targetUserId);
+        notifyMembersChanged(conversationId, affected);
+    }
+
+    /**
+     * A member leaves a group themselves. The creator can't: the group has no owner without them,
+     * so they delete it instead.
+     */
+    @Transactional
+    public void leaveGroup(UUID conversationId, UUID userId) {
+        Conversation conversation = conversations.findById(conversationId)
+                .orElseThrow(() -> new NotFound("not_found", "Conversation not found"));
+
+        if (conversation.type() != ConversationType.GROUP) {
+            throw new BadRequestException("not_a_group", "Only group conversations can be left");
+        }
+
+        if (!conversations.isMember(conversationId, userId)) {
+            throw new NotFound("not_a_member", "You are not a member of this group");
+        }
+
+        if (userId.equals(conversation.creatorId())) {
+            throw new BadRequestException("creator_cannot_leave", "The creator can't leave the group -- delete it instead");
+        }
+
+        conversations.removeMember(conversationId, userId);
+
+        List<UUID> remaining = conversations.membersOf(conversationId);
+
+        postSystemMessage(conversationId, SystemEvent.MEMBER_LEFT, userId, remaining);
+
+        // Their own client drops the group too (and any other device of theirs).
+        List<UUID> affected = new ArrayList<>(remaining);
+        affected.add(userId);
+        notifyMembersChanged(conversationId, affected);
     }
 
     /** Persists a message authored by the system (no sender, no rate limit) and pushes it to recipients. */
@@ -173,7 +223,10 @@ public class ChatService {
             throw new InterdictedException("not_creator", "Only the creator of this group can delete it");
         }
 
+        List<UUID> members = conversations.membersOf(conversationId);
+
         conversations.delete(conversationId);
+        notifyMembersChanged(conversationId, members);
     }
 
     public void verifyCanModerateCall(
@@ -274,6 +327,43 @@ public class ChatService {
         for (UUID m : members) {
             if (!m.equals(senderId)) events.send(m.toString(), event);
         }
+    }
+
+    /** Tells these users a conversation's membership changed, once the change is committed. */
+    private void notifyMembersChanged(UUID conversationId, Collection<UUID> recipients) {
+        MembersChangedEvent event = new MembersChangedEvent(conversationId.toString());
+
+        afterCommit(() -> recipients.stream().distinct().forEach(user -> events.send(user.toString(), event)));
+    }
+
+    /**
+     * Runs after the surrounding transaction commits, so a client that reacts to the event by
+     * reloading reads the committed data, not the state from before it.
+     */
+    private void afterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                action.run();
+            }
+        });
+    }
+
+    /** A user changed their picture or name: tell everyone who shares a conversation with them. */
+    public void sendProfileChanged(UUID userId) {
+        ProfileChangedEvent event = new ProfileChangedEvent(userId.toString());
+
+        Stream.concat(
+                        conversations.findForUser(userId).stream()
+                                .flatMap(c -> conversations.membersOf(c.id()).stream()),
+                        Stream.of(userId))
+                .distinct()
+                .forEach(user -> events.send(user.toString(), event));
     }
 
     public void sendRolesChanged(UUID userId) {

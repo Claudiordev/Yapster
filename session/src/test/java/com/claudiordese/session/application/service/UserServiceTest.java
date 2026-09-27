@@ -33,6 +33,7 @@ class UserServiceTest {
     private RateLimitGuard rateLimitGuard;
     private UserService service;
     private final List<java.util.UUID> notified = new ArrayList<>();
+    private final List<java.util.UUID> profileNotified = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -45,8 +46,10 @@ class UserServiceTest {
                 new FakeAvatarStorage(),
                 rateLimitGuard,
                 new FileUploadRateLimitPolicy(10, Duration.ofHours(1)),
-                List.of(notified::add));
+                List.of(notified::add),
+                List.of(profileNotified::add));
         notified.clear();
+        profileNotified.clear();
     }
 
     @Test
@@ -94,6 +97,34 @@ class UserServiceTest {
         String expected = "https://cdn.test/avatars/" + alice.id() + ".png";
         assertThat(users.findById(alice.id()).orElseThrow().avatarUrl()).contains(expected);
         assertThat(service.getUserById(alice.id()).avatarUrl()).isEqualTo(expected);
+    }
+
+    @Test
+    void updateAvatar_tellsChatSoOthersSeeTheNewPicture() {
+        User alice = users.create("alice", "alice@example.com", "hash");
+
+        service.updateAvatar(new UpdateAvatarCommand(alice.id(), new byte[]{1, 2, 3}, "image/png"));
+
+        assertThat(profileNotified).containsExactly(alice.id());
+    }
+
+    @Test
+    void updateUsername_tellsChatSoOthersSeeTheNewName() {
+        User alice = users.create("alice", "alice@example.com", "hash");
+
+        service.updateUsername(new com.claudiordese.session.application.service.commands.UpdateUsernameCommand(
+                alice.id(), "alice2"));
+
+        assertThat(profileNotified).containsExactly(alice.id());
+    }
+
+    @Test
+    void updateBio_doesNotPushAProfileChange() {
+        User alice = users.create("alice", "alice@example.com", "hash");
+
+        service.updateBio(new UpdateBioCommand(alice.id(), "hello"));
+
+        assertThat(profileNotified).isEmpty();
     }
 
     @Test
