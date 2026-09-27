@@ -47,7 +47,7 @@ export interface ChatMessageDto {
 
 /** USER = written by a member; SYSTEM = announced by the chat itself (no sender). */
 export type MessageKind = "USER" | "SYSTEM";
-export type SystemEventCode = "MEMBER_ADDED" | "MEMBER_REMOVED";
+export type SystemEventCode = "MEMBER_ADDED" | "MEMBER_REMOVED" | "MEMBER_LEFT";
 
 export type EventType =
   | "MESSAGE"
@@ -57,7 +57,9 @@ export type EventType =
   | "CALL_ENDED"
   | "CALL_REGION_CHANGED"
   | "CALL_PARTICIPANTS"
-  | "ROLES_CHANGED";
+  | "ROLES_CHANGED"
+  | "MEMBERS_CHANGED"
+  | "PROFILE_CHANGED";
 
 /** Pushed when a new message lands — matches the backend MessageEvent. */
 export interface MessageEvent {
@@ -145,6 +147,25 @@ export interface RolesChangedEvent {
   type: "ROLES_CHANGED";
 }
 
+/**
+ * A conversation's membership changed (group created, someone added or removed, group
+ * deleted) — matches the backend MembersChangedEvent. A pure signal: the client reloads
+ * its conversation list, which is where member names and pictures are resolved.
+ */
+export interface MembersChangedEvent {
+  type: "MEMBERS_CHANGED";
+  conversationId: string;
+}
+
+/**
+ * Someone who shares a conversation with you changed their picture or username —
+ * matches the backend ProfileChangedEvent. Also a signal: reload to pick up the change.
+ */
+export interface ProfileChangedEvent {
+  type: "PROFILE_CHANGED";
+  userId: string;
+}
+
 /** Any event the server can push over the socket. */
 export type ServerEvent =
   | MessageEvent
@@ -154,7 +175,9 @@ export type ServerEvent =
   | CallEndedEvent
   | CallRegionChangedEvent
   | CallParticipantsEvent
-  | RolesChangedEvent;
+  | RolesChangedEvent
+  | MembersChangedEvent
+  | ProfileChangedEvent;
 
 /**
  * Anything the client may send UP the socket — mirrors the backend's

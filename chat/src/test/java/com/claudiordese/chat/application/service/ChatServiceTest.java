@@ -8,6 +8,9 @@ import com.claudiordese.chat.application.domain.chat.types.ConversationType;
 import com.claudiordese.chat.application.domain.chat.types.MessageType;
 import com.claudiordese.chat.application.domain.chat.types.SystemEvent;
 import com.claudiordese.chat.application.domain.chat.types.UserStatusType;
+import com.claudiordese.chat.application.domain.event.server.MembersChangedEvent;
+import com.claudiordese.chat.application.domain.event.server.MessageEvent;
+import com.claudiordese.chat.application.domain.event.server.ProfileChangedEvent;
 import com.claudiordese.chat.application.domain.event.server.ServerEvent;
 import com.claudiordese.chat.application.port.persistence.ConversationStore;
 import com.claudiordese.chat.application.port.persistence.MessageStore;
@@ -89,7 +92,8 @@ class ChatServiceTest {
             assertThat(message.senderId()).isNull();
             assertThat(message.subjectId()).isEqualTo(newMemberId);
         });
-        assertThat(gateway.sentTo).containsExactlyInAnyOrder(creatorId.toString(), newMemberId.toString());
+        assertThat(gateway.recipientsOf(MessageEvent.class))
+                .containsExactlyInAnyOrder(creatorId.toString(), newMemberId.toString());
     }
 
     @Test
@@ -107,7 +111,147 @@ class ChatServiceTest {
             assertThat(message.systemEvent()).isEqualTo(SystemEvent.MEMBER_REMOVED);
             assertThat(message.subjectId()).isEqualTo(targetId);
         });
-        assertThat(gateway.sentTo).containsExactly(creatorId.toString());
+        assertThat(gateway.recipientsOf(MessageEvent.class)).containsExactly(creatorId.toString());
+    }
+
+    @Test
+    void addMember_tellsEveryoneTheMembersChanged() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        UUID newMemberId = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId);
+
+        service.addMember(conversationId, creatorId, newMemberId);
+
+        assertThat(gateway.recipientsOf(MembersChangedEvent.class))
+                .containsExactlyInAnyOrder(creatorId.toString(), newMemberId.toString());
+        assertThat(gateway.events).filteredOn(MembersChangedEvent.class::isInstance)
+                .allSatisfy(event -> assertThat(((MembersChangedEvent) event).getConversationId())
+                        .isEqualTo(conversationId.toString()));
+    }
+
+    @Test
+    void removeMember_tellsTheRemovedUserToo_soTheirClientDropsTheGroup() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId, targetId);
+
+        service.removeMember(conversationId, creatorId, targetId);
+
+        assertThat(gateway.recipientsOf(MembersChangedEvent.class))
+                .containsExactlyInAnyOrder(creatorId.toString(), targetId.toString());
+        // ...but they are not told inside the thread.
+        assertThat(gateway.recipientsOf(MessageEvent.class)).containsExactly(creatorId.toString());
+    }
+
+    @Test
+    void leaveGroup_removesTheMember_tellsTheOthersInTheThread_andTheirOwnClientToo() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        UUID leaverId = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId, leaverId);
+
+        service.leaveGroup(conversationId, leaverId);
+
+        assertThat(conversations.members).containsExactly(creatorId);
+        assertThat(messageStore.messages).singleElement().satisfies(message -> {
+            assertThat(message.type()).isEqualTo(MessageType.SYSTEM);
+            assertThat(message.systemEvent()).isEqualTo(SystemEvent.MEMBER_LEFT);
+            assertThat(message.subjectId()).isEqualTo(leaverId);
+        });
+        assertThat(gateway.recipientsOf(MessageEvent.class)).containsExactly(creatorId.toString());
+        assertThat(gateway.recipientsOf(MembersChangedEvent.class))
+                .containsExactlyInAnyOrder(creatorId.toString(), leaverId.toString());
+    }
+
+    @Test
+    void leaveGroup_rejectsTheCreator_whoShouldDeleteInstead() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId, UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.leaveGroup(conversationId, creatorId))
+                .isInstanceOf(com.claudiordese.exceptions.BadRequestException.class);
+        assertThat(conversations.members).contains(creatorId);
+    }
+
+    @Test
+    void leaveGroup_rejectsANonMember() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId);
+
+        assertThatThrownBy(() -> service.leaveGroup(conversationId, UUID.randomUUID()))
+                .isInstanceOf(NotFound.class);
+    }
+
+    @Test
+    void leaveGroup_rejectsADirectMessage() {
+        UUID conversationId = UUID.randomUUID();
+        UUID a = UUID.randomUUID();
+        conversations.conversation = Optional.of(new Conversation(
+                conversationId, ConversationType.DM, null, "k", Instant.now(), null));
+        conversations.members = List.of(a, UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.leaveGroup(conversationId, a))
+                .isInstanceOf(com.claudiordese.exceptions.BadRequestException.class);
+    }
+
+    @Test
+    void createGroup_tellsEveryoneIncludingTheCreator() {
+        UUID creatorId = UUID.randomUUID();
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+
+        service.createGroup(creatorId, "Friends", java.util.Set.of(first, second));
+
+        assertThat(gateway.recipientsOf(MembersChangedEvent.class))
+                .containsExactlyInAnyOrder(creatorId.toString(), first.toString(), second.toString());
+    }
+
+    @Test
+    void deleteGroup_tellsTheMembersItIsGone() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId, other);
+
+        service.deleteGroup(conversationId, creatorId);
+
+        assertThat(gateway.recipientsOf(MembersChangedEvent.class))
+                .containsExactlyInAnyOrder(creatorId.toString(), other.toString());
+    }
+
+    @Test
+    void sendProfileChanged_reachesEveryoneWhoSharesAChatWithTheUser_andTheirOtherDevices() {
+        UUID conversationId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID friend = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, userId));
+        conversations.members = List.of(userId, friend);
+
+        service.sendProfileChanged(userId);
+
+        assertThat(gateway.recipientsOf(ProfileChangedEvent.class))
+                .containsExactlyInAnyOrder(userId.toString(), friend.toString());
+        assertThat(gateway.events).allSatisfy(event ->
+                assertThat(((ProfileChangedEvent) event).getUserId()).isEqualTo(userId.toString()));
+    }
+
+    @Test
+    void sendProfileChanged_forSomeoneInNoConversationsOnlyTellsThemselves() {
+        UUID userId = UUID.randomUUID();
+
+        service.sendProfileChanged(userId);
+
+        assertThat(gateway.recipientsOf(ProfileChangedEvent.class)).containsExactly(userId.toString());
     }
 
     @Test
@@ -247,7 +391,8 @@ class ChatServiceTest {
 
         @Override
         public Conversation create(Conversation conversation) {
-            throw new UnsupportedOperationException();
+            this.conversation = Optional.of(conversation);
+            return conversation;
         }
 
         @Override
@@ -262,7 +407,7 @@ class ChatServiceTest {
 
         @Override
         public List<Conversation> findForUser(UUID userId) {
-            return List.of();
+            return members.contains(userId) ? conversation.stream().toList() : List.of();
         }
 
         @Override
@@ -278,7 +423,8 @@ class ChatServiceTest {
 
         @Override
         public void delete(UUID conversationId) {
-            throw new UnsupportedOperationException();
+            conversation = Optional.empty();
+            members = List.of();
         }
 
         @Override
@@ -295,6 +441,19 @@ class ChatServiceTest {
     private static final class NoOpEventGateway implements EventGateway {
 
         private final List<String> sentTo = new ArrayList<>();
+        private final List<ServerEvent> events = new ArrayList<>();
+        private final List<String> eventRecipients = new ArrayList<>();
+
+        /** Who got an event of this type. */
+        List<String> recipientsOf(Class<? extends ServerEvent> type) {
+            List<String> result = new ArrayList<>();
+
+            for (int i = 0; i < events.size(); i++) {
+                if (type.isInstance(events.get(i))) result.add(eventRecipients.get(i));
+            }
+
+            return result;
+        }
 
         @Override
         public boolean isOnline(String userId) {
@@ -304,6 +463,8 @@ class ChatServiceTest {
         @Override
         public void send(String userId, ServerEvent event) {
             sentTo.add(userId);
+            events.add(event);
+            eventRecipients.add(userId);
         }
 
         @Override

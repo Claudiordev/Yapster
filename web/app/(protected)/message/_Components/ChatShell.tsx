@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { addToast } from "@heroui/toast";
 
 import { ChatList } from "./_Chat/ChatList";
 import { ChatNav } from "./_Chat/ChatNav";
@@ -20,7 +21,24 @@ import { type PanelKey } from "./_Panels/utils/panels";
 export function ChatShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const params = useParams<{ conversationId?: string }>();
-  const { conversations, isLoading } = useChat();
+  const {
+    conversations,
+    isLoading,
+    markRead,
+    leaveGroup,
+    deleteGroup,
+    account,
+  } = useChat();
+
+  const report = async (action: Promise<{ ok: boolean; detail?: string }>) => {
+    const result = await action;
+
+    if (!result.ok)
+      addToast({
+        title: result.detail ?? "Something went wrong",
+        color: "danger",
+      });
+  };
   const [activePanel, setActivePanel] = useState<PanelKey | null>(null);
 
   return (
@@ -33,7 +51,11 @@ export function ChatShell({ children }: { children: ReactNode }) {
         <ChatList
           activeConversationId={params.conversationId ?? null}
           conversations={conversations}
+          currentUserId={account.userId}
           isLoading={isLoading}
+          onDeleteGroup={(id) => void report(deleteGroup(id))}
+          onLeaveGroup={(id) => void report(leaveGroup(id))}
+          onMarkRead={markRead}
           onNewChat={() => router.push("/message")}
           onSelect={(id) => router.push(`/message/${id}`)}
         />

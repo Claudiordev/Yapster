@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Avatar } from "@heroui/avatar";
 import { Button } from "@heroui/button";
 import { Skeleton } from "@heroui/skeleton";
@@ -7,16 +8,22 @@ import { Skeleton } from "@heroui/skeleton";
 import { StatusDot } from "@/components/StatusDot/StatusDot";
 
 import { Icon } from "@/components/Icon/Icon";
-import { conversationName, isUnread } from "@/lib/chat";
+import { conversationName, isGroupCreator, isUnread } from "@/lib/chat";
 import type { Conversation } from "@/types/chat";
 import { isImageOnlyBody } from "../_Message/utils/embeds";
+import { ConversationContextMenu } from "./ConversationContextMenu";
 
 interface ChatListProps {
   conversations: Conversation[];
   activeConversationId: string | null;
   isLoading: boolean;
+  /** The signed-in user, to know which groups they own. */
+  currentUserId: string | null;
   onSelect: (conversationId: string) => void;
   onNewChat: () => void;
+  onMarkRead: (conversationId: string) => void;
+  onLeaveGroup: (conversationId: string) => void;
+  onDeleteGroup: (conversationId: string) => void;
 }
 
 /** Placeholder rows shown while the conversations request is in flight. */
@@ -50,9 +57,23 @@ export function ChatList({
   conversations,
   activeConversationId,
   isLoading,
+  currentUserId,
   onSelect,
   onNewChat,
+  onMarkRead,
+  onLeaveGroup,
+  onDeleteGroup,
 }: ChatListProps) {
+  // The row that was right-clicked, and where.
+  const [menu, setMenu] = useState<{
+    conversationId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const menuConversation = menu
+    ? (conversations.find((c) => c.id === menu.conversationId) ?? null)
+    : null;
+
   return (
     <aside className="flex-grow flex flex-col gap-3 min-h-0 p-3">
       <div className="flex items-center justify-between px-2 pt-1">
@@ -91,7 +112,8 @@ export function ChatList({
               : (conversation.members[0]?.avatarUrl ?? undefined);
             const unread = !isActive && isUnread(conversation);
             const preview =
-              (conversation.lastMessage && isImageOnlyBody(conversation.lastMessage)
+              (conversation.lastMessage &&
+              isImageOnlyBody(conversation.lastMessage)
                 ? "GIF"
                 : conversation.lastMessage) ??
               (conversation.type === "GROUP" ? "Group" : "No messages yet");
@@ -107,6 +129,14 @@ export function ChatList({
                 }`}
                 type="button"
                 onClick={() => onSelect(conversation.id)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setMenu({
+                    conversationId: conversation.id,
+                    x: event.clientX,
+                    y: event.clientY,
+                  });
+                }}
               >
                 <div className="relative flex-shrink-0">
                   <Avatar
@@ -168,6 +198,24 @@ export function ChatList({
           })
         )}
       </div>
+
+      {menu && menuConversation && (
+        <ConversationContextMenu
+          canDelete={isGroupCreator(menuConversation, currentUserId)}
+          canLeave={
+            menuConversation.type === "GROUP" &&
+            !isGroupCreator(menuConversation, currentUserId)
+          }
+          hasUnread={isUnread(menuConversation)}
+          name={conversationName(menuConversation)}
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          onDelete={() => onDeleteGroup(menuConversation.id)}
+          onLeave={() => onLeaveGroup(menuConversation.id)}
+          onMarkRead={() => onMarkRead(menuConversation.id)}
+        />
+      )}
     </aside>
   );
 }

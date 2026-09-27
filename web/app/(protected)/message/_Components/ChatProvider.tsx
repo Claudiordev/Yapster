@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { addToast } from "@heroui/toast";
 
 import { useConversations } from "../_Actions/useConversations";
@@ -31,7 +31,11 @@ interface ChatContextValue {
   markRead: (conversationId: string) => void;
   /** Re-reads who is in a conversation's call (used when its view opens). */
   refreshCallParticipants: (conversationId: string) => Promise<void>;
-  startConversation: (user: PlatformUser) => Promise<void>;
+  /** Opens (or creates) the DM with the user; `call` also starts a call there. */
+  startConversation: (
+    user: PlatformUser,
+    options?: { call?: boolean },
+  ) => Promise<void>;
   /** Creates a group (name + up to 14 other members) and navigates to it. */
   createGroup: (
     name: string,
@@ -47,8 +51,10 @@ interface ChatContextValue {
     conversationId: string,
     userId: string,
   ) => Promise<ChatMutationResult>;
-  /** Creator-only: deletes a group entirely and navigates back to /message. */
+  /** Creator-only: deletes a group entirely (and leaves /message/<id> if that chat was open). */
   deleteGroup: (conversationId: string) => Promise<ChatMutationResult>;
+  /** Leaves a group you don't own (and leaves /message/<id> if that chat was open). */
+  leaveGroup: (conversationId: string) => Promise<ChatMutationResult>;
   /**
    * Conversation whose call this user is currently in, if any. Set by
    * ConversationView so the incoming-call prompt can skip anyone already
@@ -73,6 +79,7 @@ const ChatContext = createContext<ChatContextValue | null>(null);
  */
 export function ChatProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { subscribe } = useRealtime();
   const { userId, username, avatarUrl, roles } = useAccount();
   const {
@@ -138,7 +145,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     : undefined;
 
   const startConversation = useCallback(
-    async (user: PlatformUser) => {
+    async (user: PlatformUser, options?: { call?: boolean }) => {
       try {
         const res = await fetch("/api/chat/dm", {
           method: "POST",
@@ -168,7 +175,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             },
           ],
         });
-        router.push(`/message/${conversation.id}`);
+        // ?call=1 makes ConversationView join the call as soon as it opens.
+        router.push(
+          `/message/${conversation.id}${options?.call ? "?call=1" : ""}`,
+        );
       } catch {
         addToast({ title: "Could not start conversation", color: "danger" });
       }
@@ -286,14 +296,38 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           };
         }
         removeConversation(conversationId);
-        router.push("/message");
+        if (pathname === `/message/${conversationId}`) router.push("/message");
 
         return { ok: true as const };
       } catch {
         return { ok: false as const, detail: "Could not delete group" };
       }
     },
-    [removeConversation, router],
+    [removeConversation, router, pathname],
+  );
+
+  const leaveGroup = useCallback(
+    async (conversationId: string) => {
+      try {
+        const res = await fetch(`/api/chat/${conversationId}/leave`, {
+          method: "POST",
+        });
+
+        if (!res.ok) {
+          return {
+            ok: false as const,
+            detail: await readProblemDetail(res, "Could not leave group"),
+          };
+        }
+        removeConversation(conversationId);
+        if (pathname === `/message/${conversationId}`) router.push("/message");
+
+        return { ok: true as const };
+      } catch {
+        return { ok: false as const, detail: "Could not leave group" };
+      }
+    },
+    [removeConversation, router, pathname],
   );
 
   const value = useMemo<ChatContextValue>(
@@ -307,6 +341,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       addMember,
       removeMember,
       deleteGroup,
+      leaveGroup,
       setActiveCall,
       account: { userId, username, avatarUrl, roles },
     }),
@@ -319,6 +354,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       addMember,
       removeMember,
       deleteGroup,
+      leaveGroup,
       setActiveCall,
       refreshCallParticipants,
       userId,
