@@ -15,6 +15,16 @@ rtc:
   # participant over it).
   udp_port: 7882
   use_external_ip: false
+  # Floor for the server's estimate of a viewer's bandwidth (bits per second). The
+  # allocator uses max(its own estimate, this floor) for the whole session, not just at
+  # the start: it stops a new screen share waiting to probe before it is forwarded at
+  # full quality, but it also means a viewer on a slower link is never throttled below
+  # it. Keep it just above the biggest stream one viewer receives (screen share
+  # target 7.5 Mbps -> 8 Mbps); much higher only makes the server less careful.
+  congestion_control:
+    enabled: true
+    stream_allocator:
+      min_channel_capacity: 8000000
   # node_ip is NOT set here — it comes from the NODE_IP env var in
   # docker-compose.yaml, because the right value depends on how you reach the
   # app and can't be committed.
