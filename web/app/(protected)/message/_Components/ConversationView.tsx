@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { addToast } from "@heroui/toast";
 
 import { AddMemberModal } from "./_Chat/AddMemberModal";
 import { CallPresenceStrip } from "./_Chat/CallPresenceStrip";
@@ -30,6 +31,7 @@ export function ConversationView({
     account,
     addMember,
     removeMember,
+    startConversation,
     deleteGroup,
     refreshCallParticipants,
   } = useChat();
@@ -76,6 +78,31 @@ export function ConversationView({
   const { typingIds, notifyTyping } = useTyping(conversationId, account.userId);
 
   const active = conversations.find((c) => c.id === conversationId);
+
+  // Was this chat in our list, then gone? We were removed from it (or it was deleted):
+  // leave instead of sitting in a thread that can no longer be written to.
+  const wasListed = useRef(false);
+
+  useEffect(() => {
+    wasListed.current = false;
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (active) {
+      wasListed.current = true;
+
+      return;
+    }
+
+    if (wasListed.current) {
+      wasListed.current = false;
+      addToast({
+        title: "You no longer have access to this conversation",
+        color: "default",
+      });
+      router.replace("/message");
+    }
+  }, [active, router]);
   const title = active ? conversationName(active) : "Direct message";
 
   // Clear unread on open and whenever a new message arrives while it's open.
@@ -129,6 +156,11 @@ export function ConversationView({
     [account.userId, active],
   );
 
+  // Everyone in the conversation (you first), for the members side tab.
+  const panelMembers = memberIds.flatMap((id) =>
+    senders[id] ? [{ id, ...senders[id] }] : [],
+  );
+
   async function addGroupMember(user: Parameters<typeof addMember>[1]) {
     // The chat service announces the addition itself (SYSTEM message).
     return addMember(conversationId, user);
@@ -161,6 +193,34 @@ export function ConversationView({
         messages={messages}
         senders={senders}
         title={title}
+        memberActions={{
+          myUserId: account.userId ?? null,
+          creatorId: active?.creatorId ?? null,
+          canRemove: isGroup && amCreator,
+          onMessage: (member) =>
+            void startConversation({
+              id: member.id,
+              username: member.name,
+              avatarUrl: member.avatarUrl,
+              roles: member.roles,
+            }),
+          onCall: (member) =>
+            void startConversation(
+              {
+                id: member.id,
+                username: member.name,
+                avatarUrl: member.avatarUrl,
+                roles: member.roles,
+              },
+              { call: true },
+            ),
+          onRemove: async (member) => {
+            const result = await removeGroupMember(member.id);
+
+            if (!result.ok) addToast({ title: result.detail, color: "danger" });
+          },
+        }}
+        members={isGroup ? panelMembers : undefined}
         onAddMember={isGroup ? () => setAddMemberOpen(true) : undefined}
         onLoadMore={loadMore}
         onManageGroup={amCreator ? () => setManageOpen(true) : undefined}
