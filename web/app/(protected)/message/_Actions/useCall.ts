@@ -23,6 +23,11 @@ import type { AdaptiveResolutionTier } from "@/types/media";
 import { readProblemDetail } from "@/lib/problemDetails";
 import { useRealtime } from "@/lib/hooks/useRealtime";
 import type { CallParticipant, ScreenShare } from "@/types/call";
+import {
+  clearStartBitrateTarget,
+  installStartBitrateOverride,
+  setStartBitrateTarget,
+} from "./utils/startBitrateOverride";
 
 /**
  * The slice of a raw WebRTC stats report the screen-share logging reads.
@@ -132,17 +137,6 @@ function clearMediaSession() {
 }
 
 // ── Adaptive screen-share quality ───────────────────────────────────────────
-//
-// The static ceiling set at share-start (see toggleScreenShare) is a MAX, not
-// a floor. "motion" keeps the game/video encoder path while
-// maintain-framerate protects motion smoothness when bandwidth is constrained.
-// This closed loop remains available to step both resolution and bitrate down
-// only when the configured tier is genuinely not sustainable, then step back
-// up once things look clear again.
-// Modeled on fluxerapp/fluxer's
-// AdaptiveScreenShareEngine, trimmed down: one resolution ladder (no separate
-// frame-rate ladder -- 30/60 is the whole choice here) and no per-mode
-// (gaming vs. screenshare) branching.
 const ADAPTIVE_POLL_INTERVAL_MS = 3000; // matches startSenderStatsLogging's own interval
 const ADAPTIVE_STEP_DOWN_STREAK = 4; // ~4 bad polls before acting -- ignore one-off blips
 const ADAPTIVE_STEP_UP_STREAK = 3; // ~3 clean polls before trying to recover
@@ -151,12 +145,6 @@ const ADAPTIVE_STEP_UP_BASE_COOLDOWN_MS = 5_000;
 const ADAPTIVE_STEP_UP_MAX_COOLDOWN_MS = 30_000; // doubles each step-up, caps here
 const ADAPTIVE_BANDWIDTH_BITRATE_STEP_FACTOR = 0.6; // first move on a bandwidth limit: cut bitrate, not resolution
 
-// Static screen captures may leave the viewer looking at the first, heavily
-// compressed keyframe because no changing pixels arrive after WebRTC's startup
-// bandwidth estimate rises. Ask Chromium for a few bounded refresh keyframes
-// during that ramp. Moving content already produces replacement frames, while
-// documents gain a clean full-detail frame without continuously wasting the
-// configured 13 Mbps ceiling on identical pixels.
 const SCREEN_SHARE_STARTUP_KEYFRAME_DELAYS_MS = [500, 1_500, 3_000] as const;
 
 // High-quality-first by default. WebRTC reports a transient "bandwidth"
@@ -244,13 +232,13 @@ async function applyAdaptiveScreenShareTier(
     // Best-effort -- scaleResolutionDownBy + maxFramerate below still apply.
   }
   if (typeof track.setDegradationPreference === "function") {
-    await track.setDegradationPreference("maintain-framerate");
+    await track.setDegradationPreference("maintain-resolution");
   }
 
   const parameters = sender.getParameters();
   const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
 
-  parameters.degradationPreference = "maintain-framerate";
+  parameters.degradationPreference = "maintain-resolution";
   parameters.encodings = encodings.map((encoding) => ({
     ...encoding,
     ...(scaleResolutionDownBy !== undefined ? { scaleResolutionDownBy } : {}),
@@ -295,7 +283,7 @@ async function restoreConfiguredScreenShare(
   });
 
   if (typeof track.setDegradationPreference === "function") {
-    await track.setDegradationPreference("maintain-framerate");
+    await track.setDegradationPreference("maintain-resolution");
   }
 
   await enforceConfiguredScreenShareSender(track);
@@ -314,7 +302,7 @@ async function enforceConfiguredScreenShareSender(
   const parameters = sender.getParameters();
   const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
 
-  parameters.degradationPreference = "maintain-framerate";
+  parameters.degradationPreference = "maintain-resolution";
   parameters.encodings = encodings.map((encoding) => {
     const restored = {
       ...encoding,
@@ -1396,6 +1384,15 @@ export function useCall(conversationId: string | null): UseCallState {
           }
         : null;
 
+      // The track (and its id) is gone once disabled, so grab it first if we'll need
+      // to clear its forced start-bitrate target below.
+      const outgoingTrackId = enabled
+        ? undefined
+        : (
+            room.localParticipant.getTrackPublication(Track.Source.ScreenShare)
+              ?.track as LocalVideoTrack | undefined
+          )?.mediaStreamTrack.id;
+
       await room.localParticipant.setScreenShareEnabled(
         enabled,
         {
@@ -1436,12 +1433,35 @@ export function useCall(conversationId: string | null): UseCallState {
           // Keep screen video and screen audio in the same MediaStream for
           // better A/V synchronization on subscribers.
           stream: "screen-share",
-          videoCodec: "h264",
+          // VP8: unlike H264, Chrome negotiates it as one payload type per m= section
+          // (no profile-level-id/packetization-mode fragmentation), so the start-bitrate
+          // hint can't land on an unused sibling payload the way it did with H264.
+          videoCodec: "vp8",
           backupCodec: false,
           simulcast: false,
-          degradationPreference: "maintain-framerate",
+          // Matches the fix in LiveKit's own SDKs (client-sdk-swift #1050/#1121): under
+          // constraint, prefer dropping frames over resolution, so shared text/UI stays
+          // sharp instead of blurring. The reviewer noted this mattered more than the
+          // start-bitrate hint for their reported case.
+          degradationPreference: "maintain-resolution",
         },
       );
+
+      // livekit-client already hints ~90% of maxBitrate as the WebRTC start bitrate;
+      // this forces the full target instead. Still only a hint -- Chromium's own
+      // congestion controller can lower the actual send rate if the network can't
+      // sustain it (see startBitrateOverride.ts for the mechanism and its limits).
+      const screenTrack = room.localParticipant.getTrackPublication(
+        Track.Source.ScreenShare,
+      )?.track as LocalVideoTrack | undefined;
+
+      if (enabled && screenTrack) {
+        // "vp8" here matches the videoCodec passed to setScreenShareEnabled above --
+        // must stay in sync so the right SDP payload types get the hint.
+        setStartBitrateTarget(screenTrack.mediaStreamTrack.id, "vp8", maxBitrate / 1000);
+      } else if (outgoingTrackId) {
+        clearStartBitrateTarget(outgoingTrackId);
+      }
     },
     [],
   );
@@ -1704,6 +1724,11 @@ export function useCall(conversationId: string | null): UseCallState {
         serverUrl: string;
         token: string;
       };
+
+      // No-op after the first call; patches RTCPeerConnection.setLocalDescription
+      // for the whole page so a forced screen-share start bitrate can be applied
+      // once setConfiguredScreenShareEnabled registers one below.
+      installStartBitrateOverride();
 
       const room = new Room({ webAudioMix: true });
 
