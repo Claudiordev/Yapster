@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 
 const POLL_MS = 5_000;
 
-const GOOD_MS = 80;
-const OK_MS = 150;
+const GOOD_MS = 120;
+const OK_MS = 250;
 
 type Quality = "good" | "ok" | "poor" | "unknown";
 
