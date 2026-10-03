@@ -7,6 +7,7 @@ import { addToast } from "@heroui/toast";
 import { AddMemberModal } from "./_Chat/AddMemberModal";
 import { CallPresenceStrip } from "./_Chat/CallPresenceStrip";
 import { ChatThread } from "./_Chat/ChatThread";
+import type { UserStatus } from "@/types/chat";
 import type { UserIdentity } from "@/types/user";
 import { ManageGroupModal } from "./_Chat/ManageGroupModal";
 import { useCallSession } from "./CallProvider";
@@ -33,6 +34,8 @@ export function ConversationView({
     removeMember,
     startConversation,
     deleteGroup,
+    myStatus,
+    isConnected,
     refreshCallParticipants,
   } = useChat();
   const { callConversationId, startCall, participantRoles } = useCallSession();
@@ -120,6 +123,7 @@ export function ConversationView({
     if (account.userId) {
       map[account.userId] = {
         name: account.username ?? "You",
+        status: isConnected ? (myStatus.toLowerCase() as UserStatus) : "offline",
         avatarUrl: account.avatarUrl,
         roles: account.roles,
       };
@@ -138,7 +142,7 @@ export function ConversationView({
     seenIdentities.current = map;
 
     return map;
-  }, [account, active, liveRoles]);
+  }, [account, active, liveRoles, myStatus, isConnected]);
 
   // Resolve the typing senderIds to display names via the same member map.
   const typingNames = useMemo(

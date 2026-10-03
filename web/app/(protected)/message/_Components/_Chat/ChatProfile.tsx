@@ -10,7 +10,6 @@ import {
   DropdownTrigger,
 } from "@heroui/dropdown";
 
-import { useMyStatus } from "@/app/(protected)/message/_Actions/useMyStatus";
 import { ProfileModal } from "./ProfileModal";
 
 import { Icon } from "@/components/Icon/Icon";
@@ -18,6 +17,7 @@ import { SettingsModal } from "@/components/SettingsModal/SettingsModal";
 import type { SelectableStatus } from "@/types/chat";
 import { POPUP_MOTION_PROPS } from "@/lib/popupMotion";
 import { useCallSession } from "../CallProvider";
+import { useChat } from "../ChatProvider";
 import { useAccount } from "@/lib/hooks/useAccount";
 
 /** The statuses a user may pick. OFFLINE is derived from the socket, never chosen. */
@@ -32,7 +32,7 @@ const DISCONNECTED = { dot: "bg-default-300", label: "Offline" };
 
 export function ChatProfile() {
   const { username, avatarUrl, logout } = useAccount();
-  const { myStatus, choose, isConnected } = useMyStatus();
+  const { myStatus, chooseStatus: choose, isConnected } = useChat();
   const { callConversationId, leaveCall } = useCallSession();
   const [profileOpen, setProfileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
