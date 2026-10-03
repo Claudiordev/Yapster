@@ -102,6 +102,9 @@ export function ChatThread({
   // Scroll height captured right before a load-more, so we can keep the
   // viewport anchored to the same message after older ones are prepended.
   const anchorRef = useRef<number | null>(null);
+  // Whether the viewer is pinned to the latest message. GIFs/images grow the thread
+  // after they load, so we re-pin then instead of only when `messages` changes.
+  const stickRef = useRef(true);
 
   const [messageMenu, setMessageMenu] = useState<{
     body: string;
@@ -132,13 +135,25 @@ export function ChatThread({
     } else {
       // Initial load / new message — stick to the bottom.
       el.scrollTop = el.scrollHeight;
+      stickRef.current = true;
     }
   }, [messages]);
+
+  /** An image/GIF finished loading and changed the thread's height. */
+  function handleMediaLoad() {
+    const el = scrollRef.current;
+
+    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
+  }
 
   function handleScroll() {
     const el = scrollRef.current;
 
-    if (!el || !hasMore || isLoadingMore) return;
+    if (!el) return;
+
+    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+
+    if (!hasMore || isLoadingMore) return;
 
     if (el.scrollTop <= 60) {
       anchorRef.current = el.scrollHeight;
@@ -217,6 +232,7 @@ export function ChatThread({
           <div
             ref={scrollRef}
             className="flex-grow overflow-y-auto flex flex-col p-4 min-h-0"
+            onLoadCapture={handleMediaLoad}
             onScroll={handleScroll}
           >
             {isLoading ? (
