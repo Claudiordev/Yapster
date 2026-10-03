@@ -95,7 +95,15 @@ services:
       - "5010:5005"
 
   router:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
+      # The gateway's rate limiter uses Redis; without this it looks for a host named
+      # "redis" (not started in cluster mode) and every request waits on a DNS timeout.
+      - SPRING_DATA_REDIS_HOST=host.docker.internal
+      - SPRING_DATA_REDIS_PORT=${CLUSTER_PF_REDIS_PORT:-16379}
+      - SPRING_DATA_REDIS_PASSWORD=${CLUSTER_REDIS_PASSWORD}
+      - SPRING_DATA_REDIS_DATABASE=${CLUSTER_REDIS_DB:-7}
       # no Jaeger locally; JDWP so an IDE can attach (host port 5014); DEBUG logs for our code
       - MANAGEMENT_TRACING_ENABLED=false
       - MANAGEMENT_OTLP_TRACING_EXPORT_ENABLED=false
