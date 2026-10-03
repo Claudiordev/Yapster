@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Button } from "@heroui/button";
 
+import { Icon } from "@/components/Icon/Icon";
+
 import { NewGroupModal } from "./_Chat/NewGroupModal";
 import { UserSearch } from "./_Chat/UserSearch";
 import { useChat } from "./ChatProvider";
@@ -18,21 +20,33 @@ export function MainPage() {
         <h2 className="font-semibold text-foreground">Main</h2>
       </div>
 
-      <div className="flex-grow overflow-y-auto flex flex-col items-center justify-center gap-4 p-6">
-        <div className="w-full max-w-md">
-          <UserSearch onStartConversation={startConversation} />
-        </div>
-        <p className="text-default-400 text-sm text-center">
-          Search for someone above to start a conversation.
-        </p>
+      <div className="flex-grow overflow-y-auto flex flex-col items-center justify-center p-6">
+        <div className="start-card w-full max-w-[470px] px-6 py-8 text-center sm:px-9">
+          <h1 className="mb-7 text-[27px] font-bold leading-tight tracking-tight text-foreground">
+            Start a conversation.
+          </h1>
 
-        <Button
-          size="sm"
-          variant="flat"
-          onPress={() => setGroupModalOpen(true)}
-        >
-          New group
-        </Button>
+          <UserSearch onStartConversation={startConversation} />
+
+          <div className="my-5 flex items-center gap-3 text-xs text-default-400">
+            <span className="h-px flex-1 bg-white/10" />
+            or
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+
+          <Button
+            className="btn-coral min-h-[45px] w-full rounded-[10px] text-sm font-bold"
+            startContent={<Icon name="users" size={16} />}
+            onPress={() => setGroupModalOpen(true)}
+          >
+            Create a group
+          </Button>
+        </div>
+
+        <p className="mt-7 text-sm text-default-400">
+          Your people. Your space.{" "}
+          <span className="text-default-600">Your voice.</span>
+        </p>
       </div>
 
       <NewGroupModal
