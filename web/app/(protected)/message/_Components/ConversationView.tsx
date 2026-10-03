@@ -9,7 +9,6 @@ import { CallPresenceStrip } from "./_Chat/CallPresenceStrip";
 import { ChatThread } from "./_Chat/ChatThread";
 import type { UserStatus } from "@/types/chat";
 import type { UserIdentity } from "@/types/user";
-import { ManageGroupModal } from "./_Chat/ManageGroupModal";
 import { useCallSession } from "./CallProvider";
 import { CallPanel } from "./_Call/CallPanel";
 import { useChat } from "./ChatProvider";
@@ -34,15 +33,14 @@ export function ConversationView({
     removeMember,
     startConversation,
     deleteGroup,
+    refreshCallParticipants,
     myStatus,
     isConnected,
-    refreshCallParticipants,
   } = useChat();
   const { callConversationId, startCall, participantRoles } = useCallSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [addMemberOpen, setAddMemberOpen] = useState(false);
-  const [manageOpen, setManageOpen] = useState(false);
 
   // The call belongs to the provider, not to this view: navigating between
   // chats no longer ends it. This chat shows the panel only while it's THE call.
@@ -123,9 +121,9 @@ export function ConversationView({
     if (account.userId) {
       map[account.userId] = {
         name: account.username ?? "You",
-        status: isConnected ? (myStatus.toLowerCase() as UserStatus) : "offline",
         avatarUrl: account.avatarUrl,
         roles: account.roles,
+        status: isConnected ? (myStatus.toLowerCase() as UserStatus) : "offline",
       };
     }
 
@@ -227,7 +225,6 @@ export function ConversationView({
         members={isGroup ? panelMembers : undefined}
         onAddMember={isGroup ? () => setAddMemberOpen(true) : undefined}
         onLoadMore={loadMore}
-        onManageGroup={amCreator ? () => setManageOpen(true) : undefined}
         onStartCall={() => startCall(conversationId)}
         typingNames={typingNames}
         onSend={sendMessage}
@@ -240,18 +237,6 @@ export function ConversationView({
           isOpen={addMemberOpen}
           onAdd={addGroupMember}
           onClose={() => setAddMemberOpen(false)}
-        />
-      )}
-
-      {isGroup && active && amCreator && account.userId && (
-        <ManageGroupModal
-          conversation={active}
-          isOpen={manageOpen}
-          myUserId={account.userId}
-          myUsername={account.username}
-          onClose={() => setManageOpen(false)}
-          onDeleteGroup={() => deleteGroup(conversationId)}
-          onRemoveMember={removeGroupMember}
         />
       )}
     </>
