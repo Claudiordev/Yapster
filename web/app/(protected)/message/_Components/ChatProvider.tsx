@@ -14,11 +14,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { addToast } from "@heroui/toast";
 
 import { useConversations } from "../_Actions/useConversations";
+import { useMyStatus } from "../_Actions/useMyStatus";
 import { IncomingCallModal } from "./_Call/IncomingCallModal";
 
 import { useAccount } from "@/lib/hooks/useAccount";
 import { conversationName } from "@/lib/chat";
-import type { Conversation } from "@/types/chat";
+import type { Conversation, SelectableStatus } from "@/types/chat";
 import { readProblemDetail } from "@/lib/problemDetails";
 import { useRealtime } from "@/lib/hooks/useRealtime";
 import type { PlatformUser } from "@/types/user";
@@ -62,6 +63,11 @@ interface ChatContextValue {
    * already on every time another member joins).
    */
   setActiveCall: (conversationId: string | null) => void;
+  /** Your own effective status (manual choice + auto-idle), shared app-wide. */
+  myStatus: SelectableStatus;
+  chooseStatus: (status: SelectableStatus) => void;
+  /** False while the realtime socket is down, i.e. we are effectively offline. */
+  isConnected: boolean;
   account: {
     userId: string | null;
     username: string | null;
@@ -82,6 +88,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { subscribe } = useRealtime();
   const { userId, username, avatarUrl, roles } = useAccount();
+  const { myStatus, choose: chooseStatus, isConnected } = useMyStatus();
   const {
     conversations,
     isLoading,
@@ -343,6 +350,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       deleteGroup,
       leaveGroup,
       setActiveCall,
+      myStatus,
+      chooseStatus,
+      isConnected,
       account: { userId, username, avatarUrl, roles },
     }),
     [
@@ -357,6 +367,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       leaveGroup,
       setActiveCall,
       refreshCallParticipants,
+      myStatus,
+      chooseStatus,
+      isConnected,
       userId,
       username,
       avatarUrl,
