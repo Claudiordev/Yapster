@@ -50,8 +50,6 @@ interface ChatThreadProps {
     onRemove: (member: PanelMember) => void;
   };
   onAddMember?: () => void;
-  /** Shows the "Manage group" action in the header when set (creator only). */
-  onManageGroup?: () => void;
   /** Starts a voice call in this conversation. */
   onStartCall?: () => void;
   /** True while a call panel is already open for this conversation. */
@@ -97,7 +95,6 @@ export function ChatThread({
   members,
   memberActions,
   onAddMember,
-  onManageGroup,
   onStartCall,
   inCall,
 }: ChatThreadProps) {
@@ -207,18 +204,6 @@ export function ChatThread({
               onPress={onAddMember}
             >
               <Icon name="plus" size={18} />
-            </Button>
-          )}
-          {onManageGroup && (
-            <Button
-              isIconOnly
-              aria-label="Manage group"
-              className="chat-profile-action chat-profile-settings min-w-9"
-              size="sm"
-              variant="light"
-              onPress={onManageGroup}
-            >
-              <Icon name="settings" size={18} />
             </Button>
           )}
         </div>
