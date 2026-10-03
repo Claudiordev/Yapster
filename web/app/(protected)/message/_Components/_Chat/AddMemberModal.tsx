@@ -2,8 +2,15 @@
 
 import { useState } from "react";
 import { Avatar } from "@heroui/avatar";
+import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
-import { Modal, ModalBody, ModalContent, ModalHeader } from "@heroui/modal";
+import {
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from "@heroui/modal";
 import { addToast } from "@heroui/toast";
 
 import { useUserSearch } from "@/app/(protected)/message/_Actions/useUserSearch";
@@ -53,10 +60,24 @@ export function AddMemberModal({
   }
 
   return (
-    <Modal backdrop="blur" isOpen={isOpen} size="md" onClose={handleClose}>
+    <Modal
+      backdrop="blur"
+      classNames={{
+        backdrop: "bg-black/70 backdrop-blur-2xl backdrop-saturate-50",
+        base: "start-card",
+        closeButton: "right-4 top-4 rounded-full border border-white/15",
+      }}
+      isOpen={isOpen}
+      size="md"
+      onClose={handleClose}
+    >
       <ModalContent>
-        <ModalHeader>Add member</ModalHeader>
-        <ModalBody className="gap-3 pb-6">
+        <ModalHeader className="flex-col items-center gap-0 px-7 pt-7 pb-0 text-center">
+          <h2 className="text-[25px] font-bold tracking-tight text-foreground">
+            Add a member
+          </h2>
+        </ModalHeader>
+        <ModalBody className="gap-4 px-7 pt-4">
           {full ? (
             <p className="text-small text-default-400">
               This group already has the maximum of {MAX_MEMBERS} members.
@@ -65,6 +86,9 @@ export function AddMemberModal({
             <>
               <Input
                 aria-label="Search users to add"
+                classNames={{
+                  inputWrapper: "h-11 border border-[#424147] bg-[#18191d]",
+                }}
                 placeholder="Search users to add"
                 startContent={
                   <Icon
@@ -78,7 +102,7 @@ export function AddMemberModal({
                 onValueChange={setQuery}
               />
 
-              <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+              <div className="flex max-h-56 flex-col gap-1 overflow-y-auto">
                 {loading && (
                   <p className="py-2 text-center text-tiny text-default-400">
                     Searching…
@@ -102,7 +126,7 @@ export function AddMemberModal({
                       {user.username}
                     </p>
                     <Icon
-                      className="text-default-400 flex-shrink-0"
+                      className="text-brand flex-shrink-0"
                       name="plus"
                       size={16}
                     />
@@ -112,6 +136,21 @@ export function AddMemberModal({
             </>
           )}
         </ModalBody>
+        <ModalFooter className="mx-7 mb-2 flex-col items-stretch gap-4 border-t border-white/10 px-0 pt-4">
+          <p className="text-tiny leading-relaxed text-default-400">
+            Pick someone to add to this group.
+            <span className="ml-2 text-default-500">
+              {existingMemberIds.length}/{MAX_MEMBERS} members
+            </span>
+          </p>
+          <Button
+            className="min-h-11 rounded-[10px] border border-[#4b4652] bg-[#34343b] text-sm font-bold shadow-[0_3px_0_#1a191f]"
+            variant="flat"
+            onPress={handleClose}
+          >
+            Cancel
+          </Button>
+        </ModalFooter>
       </ModalContent>
     </Modal>
   );

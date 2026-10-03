@@ -18,6 +18,7 @@ import { useUserSearch } from "@/app/(protected)/message/_Actions/useUserSearch"
 import { Icon } from "@/components/Icon/Icon";
 import type { PlatformUser } from "@/types/user";
 import type { ChatMutationResult } from "../ChatProvider";
+import { VoiceOrbit } from "./VoiceOrbit";
 
 /** Creator + this many others — mirrors the chat service's MAX_GROUP_SIZE. */
 const MAX_OTHER_MEMBERS = 14;
@@ -87,14 +88,36 @@ export function NewGroupModal({
   }
 
   return (
-    <Modal backdrop="blur" isOpen={isOpen} size="md" onClose={handleClose}>
+    <Modal
+      backdrop="blur"
+      classNames={{
+        backdrop: "bg-black/70 backdrop-blur-2xl backdrop-saturate-50",
+        base: "start-card",
+        closeButton: "right-4 top-4 rounded-full border border-white/15",
+      }}
+      isOpen={isOpen}
+      size="md"
+      onClose={handleClose}
+    >
       <ModalContent>
-        <ModalHeader>New group</ModalHeader>
-        <ModalBody className="gap-4">
+        <ModalHeader className="flex-col items-center gap-0 px-7 pt-7 pb-0 text-center">
+          <VoiceOrbit small>
+            <Icon className="text-brand" name="users" size={30} />
+          </VoiceOrbit>
+          <h2 className="mt-4 text-[25px] font-bold tracking-tight text-foreground">
+            Invite your friends
+          </h2>
+        </ModalHeader>
+        <ModalBody className="gap-4 px-7 pt-4">
           <Input
+            classNames={{
+              label: "!text-sm !font-semibold !text-foreground",
+              inputWrapper: "h-11 border-[#46424d] bg-[#18191d]",
+            }}
             label="Group name"
             labelPlacement="outside"
-            placeholder="What's this group called?"
+            maxLength={48}
+            placeholder="e.g. The late-night crew"
             value={name}
             variant="bordered"
             onValueChange={setName}
@@ -111,6 +134,7 @@ export function NewGroupModal({
                       src={user.avatarUrl ?? undefined}
                     />
                   }
+                  classNames={{ base: "border border-brand/40 bg-brand/10" }}
                   variant="flat"
                   onClose={() => toggle(user)}
                 >
@@ -135,6 +159,9 @@ export function NewGroupModal({
                 size={18}
               />
             }
+            classNames={{
+              inputWrapper: "h-11 border border-[#424147] bg-[#18191d]",
+            }}
             value={query}
             variant="flat"
             onValueChange={setQuery}
@@ -182,21 +209,30 @@ export function NewGroupModal({
 
           {error && <p className="text-small text-danger">{error}</p>}
         </ModalBody>
-        <ModalFooter>
-          <span className="mr-auto self-center text-tiny text-default-400">
-            {selected.length}/{MAX_OTHER_MEMBERS} members
-          </span>
-          <Button variant="flat" onPress={handleClose}>
-            Cancel
-          </Button>
-          <Button
-            className="bg-brand text-white hover:bg-brand-hover"
-            isDisabled={!name.trim() || selected.length === 0}
-            isLoading={creating}
-            onPress={handleCreate}
-          >
-            Create group
-          </Button>
+        <ModalFooter className="mx-7 mb-2 flex-col items-stretch gap-4 border-t border-white/10 px-0 pt-4">
+          <p className="text-tiny leading-relaxed text-default-400">
+            You’re included automatically. Choose at least one person.
+            <span className="ml-2 text-default-500">
+              {selected.length}/{MAX_OTHER_MEMBERS} selected
+            </span>
+          </p>
+          <div className="grid grid-cols-[1fr_1.4fr] gap-2.5">
+            <Button
+              className="min-h-11 rounded-[10px] border border-[#4b4652] bg-[#34343b] text-sm font-bold shadow-[0_3px_0_#1a191f]"
+              variant="flat"
+              onPress={handleClose}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="btn-coral min-h-11 rounded-[10px] text-sm font-bold"
+              isDisabled={!name.trim() || selected.length === 0}
+              isLoading={creating}
+              onPress={handleCreate}
+            >
+              Create group
+            </Button>
+          </div>
         </ModalFooter>
       </ModalContent>
     </Modal>

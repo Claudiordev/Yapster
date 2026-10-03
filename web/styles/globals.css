@@ -993,3 +993,122 @@
     animation: none;
   }
 }
+
+/* Start-conversation card: circular voice motif with breathing bars. */
+.voice-orbit {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 59, 88, 0.38);
+  border-radius: 9999px;
+}
+
+.voice-orbit::before,
+.voice-orbit::after {
+  content: "";
+  position: absolute;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 59, 88, 0.19);
+  inset: 13px;
+}
+
+.voice-orbit::after {
+  inset: 26px;
+  background: radial-gradient(circle, rgba(255, 59, 88, 0.05), transparent);
+}
+
+.voice-orbit--small {
+  width: 83px;
+  height: 83px;
+}
+
+.voice-orbit--small::before {
+  inset: 11px;
+}
+
+.voice-orbit--small::after {
+  display: none;
+}
+
+.voice-bars {
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 47px;
+}
+
+.voice-bars i {
+  display: block;
+  width: 5px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--color-brand);
+  animation: voice-breathe 2.4s ease-in-out infinite;
+}
+
+.voice-bars i:nth-child(2),
+.voice-bars i:nth-child(6) {
+  height: 30px;
+  animation-delay: -0.4s;
+}
+
+.voice-bars i:nth-child(3),
+.voice-bars i:nth-child(5) {
+  height: 43px;
+  animation-delay: -0.8s;
+}
+
+.voice-bars i:nth-child(4) {
+  height: 34px;
+  animation-delay: -1.2s;
+}
+
+@keyframes voice-breathe {
+  50% {
+    transform: scaleY(0.72);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-bars i {
+    animation: none;
+  }
+}
+
+/* Raised charcoal card shared by the start card and the group modal. */
+.start-card {
+  border: 1px solid #454348;
+  border-radius: 22px;
+  background: linear-gradient(145deg, #2d2d32, #252629);
+  box-shadow:
+    0 5px 0 #19191e,
+    0 24px 85px rgba(0, 0, 0, 0.33),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* Coral button with the hard bottom edge from the design. */
+.btn-coral {
+  color: #fff;
+  background: var(--color-brand);
+  border: 1px solid rgba(255, 113, 133, 0.4);
+  box-shadow: 0 4px 0 var(--color-brand-deep);
+  transition:
+    background 0.15s,
+    transform 0.15s;
+}
+
+.btn-coral:hover {
+  background: var(--color-brand-hover);
+}
+
+.btn-coral:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+.btn-coral:disabled,
+.btn-coral[data-disabled="true"] {
+  opacity: 0.5;
+  box-shadow: none;
+}
