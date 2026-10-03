@@ -30,6 +30,7 @@ export type IconName =
   | "card"
   | "folder"
   | "users"
+  | "user"
   | "mic"
   | "mic-off"
   | "headphones"
