@@ -44,7 +44,12 @@ const PLANS: Plan[] = [
     price: "8.99",
     yearlyPrice: "89.99",
     intro: "Everything in Premium, plus",
-    features: ["1GB uploads", "2160p video streaming", "1 big game server", "Premium+ badge"],
+    features: [
+      "1GB uploads",
+      "2160p video streaming",
+      "1 big game server",
+      "Premium+ badge",
+    ],
     highlight: true,
   },
 ];
@@ -74,7 +79,7 @@ function BillingOption({
   return (
     <button
       aria-checked={selected}
-      className={`flex w-full items-center justify-between rounded-large border px-5 py-4 text-left transition-colors ${
+      className={`flex w-full items-center justify-between rounded-large border px-4 py-2 text-left transition-colors ${
         selected
           ? highlight
             ? "border-brand/70 bg-white/[0.04]"
@@ -98,7 +103,9 @@ function BillingOption({
           <span className="flex items-center gap-2 text-small font-bold text-white">
             {label}
           </span>
-          {detail && <span className="text-tiny text-default-400">{detail}</span>}
+          {detail && (
+            <span className="text-tiny text-default-400">{detail}</span>
+          )}
         </div>
       </div>
       {children}
@@ -118,29 +125,38 @@ function PlanCard({ plan }: { plan: Plan }) {
           : "border-white/10 bg-[#2a2b30]"
       }`}
     >
-      <div className="flex min-h-[340px] flex-1 flex-col gap-5 p-9">
-        <h3 className="text-[34px] font-black uppercase italic leading-none tracking-tight text-white">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-6">
+        <h3 className="text-[28px] font-black uppercase italic leading-none tracking-tight text-white">
           {plan.name}
         </h3>
 
-        {plan.intro && <p className="text-small font-bold text-white">{plan.intro}</p>}
+        {plan.intro && (
+          <p className="text-base font-bold text-white">{plan.intro}</p>
+        )}
 
         {plan.features.length > 0 ? (
-          <ul className="flex flex-col gap-4">
+          <ul className="flex flex-col gap-3">
             {plan.features.map((feature) => (
-              <li key={feature} className="flex items-center gap-3 text-base font-medium text-white">
-                <Icon className="text-white" name="check" size={16} />
+              <li
+                key={feature}
+                className="flex items-center gap-3 text-base font-semibold text-white"
+              >
+                <Icon className="text-white" name="check" size={20} />
                 {feature}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-small text-default-400">Features coming soon.</p>
+          <p className="text-base text-default-400">Features coming soon.</p>
         )}
       </div>
 
-      <div className="border-t border-white/10 p-7">
-        <div aria-label="Billing" className="flex flex-col gap-2" role="radiogroup">
+      <div className="border-t border-white/10 p-5">
+        <div
+          aria-label="Billing"
+          className="flex flex-col gap-2"
+          role="radiogroup"
+        >
           <BillingOption
             detail={`€${perMonth(plan.yearlyPrice)}/month billed annually`}
             highlight={!!plan.highlight}
@@ -148,7 +164,9 @@ function PlanCard({ plan }: { plan: Plan }) {
             selected={billing === "yearly"}
             onSelect={() => setBilling("yearly")}
           >
-            <span className="text-lg font-extrabold text-white">€{plan.yearlyPrice}</span>
+            <span className="text-lg font-extrabold text-white">
+              €{plan.yearlyPrice}
+            </span>
           </BillingOption>
 
           <BillingOption
@@ -157,15 +175,15 @@ function PlanCard({ plan }: { plan: Plan }) {
             selected={billing === "monthly"}
             onSelect={() => setBilling("monthly")}
           >
-            <span className="text-lg font-extrabold text-white">€{plan.price}</span>
+            <span className="text-lg font-extrabold text-white">
+              €{plan.price}
+            </span>
           </BillingOption>
         </div>
 
         {/* No payment flow yet: Subscribe does nothing until billing exists. */}
         <Button
-          className={`mt-5 h-12 w-full rounded-medium text-base font-bold ${
-            plan.highlight ? "bg-white text-black" : "bg-white/10 text-default-300"
-          }`}
+          className={`mt-3 h-11 w-full rounded-medium text-base font-bold bg-white text-black`}
           radius="none"
           startContent={<Icon name="star" size={16} />}
           variant="light"
@@ -266,22 +284,24 @@ export default function PremiumPage({ onClose }: { onClose?: () => void }) {
         </button>
       )}
 
-      <div className="premium-scroll relative z-[1] h-full overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1500px] px-10 pb-16 pt-12">
-          <h2 className="mb-10 text-center text-[34px] font-black uppercase italic tracking-tight text-white">
+      <div className="relative z-[1] flex h-full flex-col overflow-hidden">
+        <div className="mx-auto flex min-h-0 w-full max-w-[1500px] flex-1 flex-col px-10 pt-6">
+          <div className="flex min-h-0 basis-[80%] flex-col">
+          <h2 className="mb-4 flex-shrink-0 text-center text-[30px] font-black uppercase italic tracking-tight text-white">
             Pick your plan
           </h2>
 
-          <div className="grid grid-cols-1 items-stretch gap-8 md:grid-cols-2">
+          <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-6 md:grid-cols-2">
             {PLANS.map((plan) => (
               <PlanCard key={plan.id} plan={plan} />
             ))}
           </div>
+          </div>
 
           {/* The sky sits behind the closing line: same center, drawn underneath. */}
-          <div className="relative mt-2 flex min-h-[230px] items-center justify-center">
+          <div className="relative flex basis-[20%] items-center justify-center">
             <PremiumSky />
-            <p className="relative z-[1] text-center text-[56px] font-black uppercase italic leading-[1.05] tracking-tight text-white">
+            <p className="relative z-[1] text-center text-[34px] font-black uppercase italic leading-[1.05] tracking-tight text-white">
               What are you
               <br />
               waiting for?
