@@ -17,6 +17,7 @@ const FEATURE_LABELS: Record<string, string> = {
   events: "Events",
   premium: "Premium",
   gif: "GIF button",
+  emojis: "Emoji button",
 };
 
 interface FeatureFlagsModalProps {

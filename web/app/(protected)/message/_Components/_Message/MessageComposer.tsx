@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@heroui/button";
 import { Form } from "@heroui/form";
 import { Textarea } from "@heroui/input";
@@ -8,6 +8,7 @@ import { Textarea } from "@heroui/input";
 import { Icon } from "@/components/Icon/Icon";
 import { useAccount } from "@/lib/hooks/useAccount";
 
+import { EmojiPicker } from "./EmojiPicker";
 import { GifPicker } from "./GifPicker";
 
 /** Max characters allowed in a single message. Must match the chat service's
@@ -21,6 +22,7 @@ export const MAX_MESSAGE_LENGTH = 5000;
 export const COMPOSER_ACTION_BUTTON_CLASS =
   "chat-profile-action chat-profile-settings min-w-9 flex-shrink-0";
 export const COMPOSER_SEND_BUTTON_COLOR_CLASS = "chat-profile-action--send";
+/** Blue; shared by the GIF and emoji pickers, which open a popup from the button. */
 export const COMPOSER_GIF_BUTTON_COLOR_CLASS = "chat-profile-action--gif";
 
 interface MessageComposerProps {
@@ -45,6 +47,7 @@ export function MessageComposer({
 }: MessageComposerProps) {
   const { isFeatureEnabled } = useAccount();
   const [text, setText] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const count = text.length;
   const over = count > MAX_MESSAGE_LENGTH;
@@ -56,6 +59,22 @@ export function MessageComposer({
     // trim() only strips the ends; line breaks inside the message are kept.
     onSend(text.trim());
     setText("");
+  }
+
+  // Insert at the caret (replacing any selection) the same native way as the
+  // Ctrl+Enter break above, so undo and the caret position keep working.
+  function insertEmoji(emoji: string) {
+    const el = inputRef.current;
+
+    if (!el) {
+      setText((t) => t + emoji);
+
+      return;
+    }
+
+    el.focus();
+    el.setRangeText(emoji, el.selectionStart ?? el.value.length, el.selectionEnd ?? el.value.length, "end");
+    el.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -109,6 +128,7 @@ export function MessageComposer({
           maxRows={8}
           minRows={1}
           name="message"
+          ref={inputRef}
           placeholder={placeholder}
           spellCheck="true"
           value={text}
@@ -128,6 +148,12 @@ export function MessageComposer({
         >
           {count}/{MAX_MESSAGE_LENGTH}
         </span>
+
+        <EmojiPicker
+          isDisabled={isDisabled || !isFeatureEnabled("emojis")}
+          triggerClassName={`${COMPOSER_ACTION_BUTTON_CLASS} ${COMPOSER_GIF_BUTTON_COLOR_CLASS}`}
+          onSelect={insertEmoji}
+        />
 
         <GifPicker
           isDisabled={isDisabled || !isFeatureEnabled("gif")}

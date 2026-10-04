@@ -10,6 +10,7 @@ export type IconName =
   | "edit"
   | "send"
   | "gif"
+  | "smile"
   | "copy"
   | "github"
   | "discord"

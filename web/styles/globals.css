@@ -502,7 +502,7 @@
     0 4px 10px rgba(0, 0, 0, 0.25);
 }
 
-/* The GIF popup is anchored to this button. The base action style lifts it on
+/* The GIF and emoji popups are anchored to this button. The base action style lifts it on
    hover and drops it on press; the popup measures its position at open time
    and then the button springs back, so the popup visibly jumps. Keep the
    shadow feedback, but never move the anchor. */
