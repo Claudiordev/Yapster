@@ -1,9 +1,11 @@
 package com.claudiordese.session.infrastructure.persistence;
 
+import com.claudiordese.session.application.domain.LinkedProvider;
 import com.claudiordese.session.application.port.UserProviderStore;
 import com.claudiordese.session.infrastructure.entity.UserProviderEntity;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,5 +33,17 @@ public class JpaUserProviderStore implements UserProviderStore {
         entity.setSubject(subject);
         entity.setEmail(email);
         repo.save(entity);
+    }
+
+    @Override
+    public List<LinkedProvider> findByUser(UUID userId) {
+        return repo.findByUserIdOrderByCreatedAtAsc(userId).stream()
+                .map(entity -> new LinkedProvider(entity.getProvider(), entity.getEmail(), entity.getCreatedAt()))
+                .toList();
+    }
+
+    @Override
+    public boolean unlink(UUID userId, String provider) {
+        return repo.deleteByUserIdAndProvider(userId, provider) > 0;
     }
 }
