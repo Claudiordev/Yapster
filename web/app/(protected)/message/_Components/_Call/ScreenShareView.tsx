@@ -116,8 +116,9 @@ export function ScreenShareAudio({
       el.muted = true;
       track.setVolume(enabledRef.current ? volumeRef.current / 100 : 0);
     } else {
-      // Local preview audio does not need amplification.
-      el.muted = !enabledRef.current;
+      // Your own share's audio is never played back to you: it is already coming out
+      // of your speakers, so hearing it again is an echo (and can feed back into the share).
+      el.muted = true;
     }
 
     const logPlaybackState = (event: string) => {
@@ -195,7 +196,10 @@ export function ScreenShareAudio({
       el.muted = true;
       track.setVolume(enabled ? volume / 100 : 0);
     } else {
-      el.muted = !enabled;
+      // Local track (you are the sharer): see the note above, never audible.
+      el.muted = true;
+
+      return;
     }
     // eslint-disable-next-line no-console
     console.info("[screen-share-audio] watch-state-changed", {
