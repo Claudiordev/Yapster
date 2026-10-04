@@ -31,9 +31,17 @@ const CHOICES: { key: SelectableStatus; dot: string; label: string }[] = [
 const DISCONNECTED = { dot: "bg-default-300", label: "Offline" };
 
 export function ChatProfile() {
-  const { username, avatarUrl, logout } = useAccount();
+  const { username, avatarUrl } = useAccount();
   const { myStatus, chooseStatus: choose, isConnected } = useChat();
-  const { callConversationId, leaveCall } = useCallSession();
+  const {
+    callConversationId,
+    leaveCall,
+    connected,
+    muted,
+    deafened,
+    toggleMute,
+    toggleDeafen,
+  } = useCallSession();
   const [profileOpen, setProfileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -99,7 +107,7 @@ export function ChatProfile() {
 
       <div className="flex-grow" />
 
-      {/* While in a call: an end-call key styled like its neighbours (same grey key, red-tinted icon) — leave from anywhere. */}
+      {/* While in a call: an end-call key, ahead of the voice keys, styled like its neighbours (same grey key, red-tinted icon) — leave from anywhere. */}
       {callConversationId && (
         <Button
           isIconOnly
@@ -111,9 +119,44 @@ export function ChatProfile() {
           variant="light"
           onPress={leaveCall}
         >
-          <Icon className="rotate-[135deg]" name="phone" size={18} />
+          <Icon className="rotate-[135deg]" name="phone" size={16} />
         </Button>
       )}
+
+      {/* Mic and deafen, app-wide: they carry into calls and mirror the call while in one.
+          Grey normally, red-tinted when on. */}
+      <Button
+        isIconOnly
+        aria-label={muted ? "Unmute" : "Mute"}
+        aria-pressed={muted}
+        className={`chat-profile-action min-w-9 ${
+          muted ? "chat-profile-logout" : "chat-profile-settings"
+        }`}
+        disableAnimation
+        isDisabled={callConversationId !== null && !connected}
+        radius="none"
+        title={muted ? "Unmute" : "Mute"}
+        variant="light"
+        onPress={toggleMute}
+      >
+        <Icon name={muted ? "mic-off" : "mic"} size={16} />
+      </Button>
+      <Button
+        isIconOnly
+        aria-label={deafened ? "Undeafen" : "Deafen (stop all sound)"}
+        aria-pressed={deafened}
+        className={`chat-profile-action min-w-9 ${
+          deafened ? "chat-profile-logout" : "chat-profile-settings"
+        }`}
+        disableAnimation
+        isDisabled={callConversationId !== null && !connected}
+        radius="none"
+        title={deafened ? "Undeafen" : "Deafen: stop all sound"}
+        variant="light"
+        onPress={toggleDeafen}
+      >
+        <Icon name={deafened ? "headphones-off" : "headphones"} size={16} />
+      </Button>
 
       <Button
         isIconOnly
@@ -123,18 +166,7 @@ export function ChatProfile() {
         variant="light"
         onPress={() => setSettingsOpen(true)}
       >
-        <Icon name="settings" size={18} />
-      </Button>
-
-      <Button
-        isIconOnly
-        aria-label="Logout"
-        className="chat-profile-action chat-profile-logout min-w-9"
-        size="sm"
-        variant="light"
-        onPress={logout}
-      >
-        <Icon name="logout" size={18} />
+        <Icon name="settings" size={16} />
       </Button>
 
       <ProfileModal
