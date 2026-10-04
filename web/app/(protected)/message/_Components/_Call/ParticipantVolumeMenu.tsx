@@ -17,11 +17,11 @@ interface ParticipantVolumeMenuProps {
   onChange: (volume: number) => void;
   onToggleMute: () => void;
   onMuteForEveryone: () => void;
+  onOpenProfile: () => void;
   onClose: () => void;
 }
 
 const MENU_WIDTH = 240;
-const MENU_HEIGHT = 156;
 
 export function ParticipantVolumeMenu({
   name,
@@ -34,12 +34,17 @@ export function ParticipantVolumeMenu({
   onChange,
   onToggleMute,
   onMuteForEveryone,
+  onOpenProfile,
   onClose,
 }: ParticipantVolumeMenuProps) {
+  // Profile row always; volume and mute-for-everyone only where the caller allows them.
+  const height =
+    52 + (showLocalControls ? 112 : 0) + (canMuteForEveryone ? 44 : 0);
+
   return (
     <FloatingMenu
       className="w-60 p-3"
-      height={MENU_HEIGHT}
+      height={height}
       label={`Call controls for ${name}`}
       width={MENU_WIDTH}
       x={x}
@@ -69,9 +74,7 @@ export function ParticipantVolumeMenu({
             {volume === 0 ? "Muted" : "Unmuted"}
           </Button>
         </>
-      ) : (
-        <p className="mb-2 truncate text-sm font-medium text-foreground">{name}</p>
-      )}
+      ) : null}
       {canMuteForEveryone && (
         <Button
           aria-label={`Mute ${name} for everyone`}
@@ -86,6 +89,14 @@ export function ParticipantVolumeMenu({
           {isMutedForEveryone ? "Muted for everyone" : "Mute for everyone"}
         </Button>
       )}
+      <button
+        className={`${showLocalControls || canMuteForEveryone ? "mt-2" : ""} flex w-full items-center gap-2 rounded-small px-2 py-1.5 text-left text-sm text-foreground hover:bg-content2`}
+        type="button"
+        onClick={onOpenProfile}
+      >
+        <Icon className="text-default-400" name="user" size={14} />
+        Profile
+      </button>
     </FloatingMenu>
   );
 }
