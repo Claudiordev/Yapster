@@ -5,6 +5,8 @@ export interface CallParticipant {
   isLocal: boolean;
   isSpeaking: boolean;
   isMuted: boolean;
+  /** Deafened (hears nothing, mic muted); shared by each client as a LiveKit attribute. */
+  isDeafened: boolean;
   volume: number;
 }
 

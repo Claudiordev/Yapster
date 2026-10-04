@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ConnectionState,
   AudioPresets,
+  type LocalAudioTrack,
   type LocalTrack,
   type LocalVideoTrack,
   ParticipantEvent,
@@ -16,6 +17,14 @@ import {
 } from "livekit-client";
 
 import { addToast } from "@heroui/toast";
+import {
+  onAudioSettingsChanged,
+  readInputDevice,
+  readInputVolume,
+  readOutputDevice,
+  readOutputVolume,
+} from "@/lib/audioSettings";
+import { MicGainProcessor } from "@/lib/micGainProcessor";
 import { useSound } from "react-sounds";
 
 import { ADAPTIVE_RESOLUTION_LADDER, ADAPTIVE_RESOLUTIONS, DEFAULT_SCREEN_SHARE_AUDIO, readAudioProcessingPrefs, readScreenShareAudioPref, readVideoPrefs, videoCaptureSettings } from "@/lib/mediaPrefs";
@@ -75,6 +84,9 @@ const SPEAKING_RMS_THRESHOLD = 0.015;
 const SPEAKING_HOLD_MS = 250;
 
 /** localhost, loopback, or RFC1918 — addresses that only mean "this network". */
+/** Participant attribute each client sets while it is deafened, so others can show it. */
+const DEAFENED_ATTRIBUTE = "deafened";
+
 function isLocalAddress(hostname: string): boolean {
   return (
     hostname === "localhost" ||
@@ -640,8 +652,10 @@ export function useCall(conversationId: string | null): UseCallState {
   // capture the first render's play functions.
   const { play: playJoin } = useSound("ui/pop_open");
   const { play: playLeave } = useSound("ui/pop_close");
+  const { play: playShareStart } = useSound("ui/success_blip", { volume: 0.5 });
   const playJoinRef = useRef(playJoin);
   const playLeaveRef = useRef(playLeave);
+  const playShareStartRef = useRef(playShareStart);
 
   useEffect(() => {
     playJoinRef.current = playJoin;
@@ -649,6 +663,24 @@ export function useCall(conversationId: string | null): UseCallState {
   useEffect(() => {
     playLeaveRef.current = playLeave;
   }, [playLeave]);
+  useEffect(() => {
+    playShareStartRef.current = playShareStart;
+  }, [playShareStart]);
+
+  // Who already got a "screen share started" blip, so a re-subscribe (reconnect,
+  // renegotiation) doesn't repeat it. Shares already running when we (re)connect
+  // are recorded here silently; only ones that start while we're in the call blip.
+  const announcedSharesRef = useRef(new Set<string>());
+  const connectedAtRef = useRef(0);
+  const announceScreenShare = useCallback((identity: string, local: boolean) => {
+    if (announcedSharesRef.current.has(identity)) return;
+
+    announcedSharesRef.current.add(identity);
+
+    const alreadyRunning = !local && Date.now() - connectedAtRef.current < 3000;
+
+    if (!alreadyRunning) playShareStartRef.current().catch(() => {});
+  }, []);
 
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -677,7 +709,15 @@ export function useCall(conversationId: string | null): UseCallState {
   // announce CALL_ENDED / CALL_STARTED (that would ring everyone again) or play
   // the leave sound — from everyone else's side the call just carries on.
   const silentReconnectRef = useRef(false);
-  const gain = (volume: number) => (deafenedRef.current ? 0 : volume);
+  // Settings > Speaker volume: a master level on everything we hear, on top of each
+  // person's own volume. Only changes our playback, never what others receive.
+  const outputMasterRef = useRef(1);
+  const gain = (volume: number) =>
+    deafenedRef.current ? 0 : volume * outputMasterRef.current;
+
+  useEffect(() => {
+    outputMasterRef.current = readOutputVolume() / 100;
+  }, []);
 
   const participantVolume = useCallback((identity: string) => {
     const existing = participantVolumesRef.current.get(identity);
@@ -982,6 +1022,7 @@ export function useCall(conversationId: string | null): UseCallState {
           isLocal: true,
           isSpeaking: false, // ours is filled in from the analyser on the way out
           isMuted: !local.isMicrophoneEnabled,
+          isDeafened: deafenedRef.current,
           volume: 100,
         },
         ...Array.from(room.remoteParticipants.values()).map((p) => ({
@@ -989,12 +1030,104 @@ export function useCall(conversationId: string | null): UseCallState {
           isLocal: false,
           isSpeaking: p.isSpeaking,
           isMuted: !p.isMicrophoneEnabled,
+          isDeafened: p.attributes[DEAFENED_ATTRIBUTE] === "true",
           volume: participantVolume(p.identity),
         })),
       ]);
     },
     [participantVolume],
   );
+
+  // ── Settings > audio applied to the call ───────────────────────────────────
+  // Microphone volume rides on a LiveKit processor; devices go through LiveKit's own
+  // switchActiveDevice. All of it re-applies live when Settings changes.
+  const micGainRef = useRef<MicGainProcessor | null>(null);
+  const appliedDevicesRef = useRef<{ input?: string; output?: string }>({});
+
+  const attachMicGain = useCallback(async (track: LocalAudioTrack) => {
+    const volume = readInputVolume() / 100;
+
+    // At 100% (the default) the mic goes out untouched, with no processing in the way.
+    if (volume === 1 && !micGainRef.current) return;
+
+    try {
+      const ctx =
+        audioCtxRef.current ?? (audioCtxRef.current = new AudioContext());
+
+      if (ctx.state === "suspended") await ctx.resume().catch(() => {});
+
+      track.setAudioContext(ctx);
+
+      const processor = new MicGainProcessor(volume);
+
+      await track.setProcessor(processor);
+      micGainRef.current = processor;
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn("Could not apply the microphone volume", error);
+    }
+  }, []);
+
+  const applyAudioSettings = useCallback(
+    (room: Room, initial = false) => {
+      outputMasterRef.current = readOutputVolume() / 100;
+      applyOutputVolumes(room);
+
+      const output = readOutputDevice();
+
+      if (output !== (appliedDevicesRef.current.output ?? "default")) {
+        appliedDevicesRef.current.output = output;
+        void room.switchActiveDevice("audiooutput", output).catch(() => {});
+      }
+
+      // On join the mic is published with the saved device and volume already.
+      if (initial) return;
+
+      const input = readInputDevice();
+
+      if (input !== (appliedDevicesRef.current.input ?? "default")) {
+        appliedDevicesRef.current.input = input;
+        void room.switchActiveDevice("audioinput", input).catch(() => {});
+      }
+
+      const volume = readInputVolume() / 100;
+
+      if (micGainRef.current) {
+        micGainRef.current.setGain(volume);
+      } else if (volume !== 1) {
+        const track = room.localParticipant.getTrackPublication(
+          Track.Source.Microphone,
+        )?.track as LocalAudioTrack | undefined;
+
+        if (track) void attachMicGain(track);
+      }
+    },
+    [applyOutputVolumes, attachMicGain],
+  );
+
+  useEffect(
+    () =>
+      onAudioSettingsChanged(() => {
+        const room = roomRef.current;
+
+        if (room) applyAudioSettings(room);
+        else outputMasterRef.current = readOutputVolume() / 100;
+      }),
+    [applyAudioSettings],
+  );
+
+  // Tell the room whether we're deafened (an empty value clears the attribute).
+  // Needs the token's canUpdateOwnMetadata grant; without it others just don't see it.
+  useEffect(() => {
+    const room = roomRef.current;
+
+    if (!room || !connected) return;
+
+    room.localParticipant
+      .setAttributes({ [DEAFENED_ATTRIBUTE]: deafened ? "true" : "" })
+      .catch(() => {});
+    refreshParticipants(room);
+  }, [deafened, connected, refreshParticipants]);
 
   // Keyed by identity: one share per participant, and re-sharing replaces the
   // previous entry rather than stacking up.
@@ -1041,6 +1174,7 @@ export function useCall(conversationId: string | null): UseCallState {
   }, []);
 
   const removeScreenShare = useCallback((identity: string) => {
+    announcedSharesRef.current.delete(identity);
     pendingScreenShareAudioTracksRef.current.delete(identity);
     setScreenShares((prev) => prev.filter((s) => s.identity !== identity));
   }, []);
@@ -1526,6 +1660,8 @@ export function useCall(conversationId: string | null): UseCallState {
     analysersRef.current.clear();
     audioCtxRef.current?.close().catch(() => {});
     audioCtxRef.current = null;
+    micGainRef.current = null;
+    appliedDevicesRef.current = {};
   }, []);
 
   /**
@@ -1539,11 +1675,16 @@ export function useCall(conversationId: string | null): UseCallState {
    */
   const publishMic = useCallback(async (room: Room) => {
     const prefs = readAudioProcessingPrefs();
+    const savedDevice = readInputDevice();
     const options = {
       noiseSuppression: prefs.noiseSuppression,
       echoCancellation: prefs.echoCancellation,
       autoGainControl: true,
+      // `ideal`, so a device that's gone falls back to the default instead of failing.
+      ...(savedDevice !== "default" ? { deviceId: { ideal: savedDevice } } : {}),
     };
+
+    appliedDevicesRef.current.input = savedDevice;
 
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) {
@@ -1755,6 +1896,10 @@ export function useCall(conversationId: string | null): UseCallState {
         refreshParticipants(room);
         playJoinRef.current().catch(() => {});
       });
+      // Someone (un)deafened: their attribute changed.
+      room.on(RoomEvent.ParticipantAttributesChanged, (changed) => {
+        if (DEAFENED_ATTRIBUTE in changed) refreshParticipants(room);
+      });
       room.on(RoomEvent.ParticipantDisconnected, (p) => {
         removeScreenShare(p.identity);
         refreshParticipants(room);
@@ -1804,6 +1949,8 @@ export function useCall(conversationId: string | null): UseCallState {
       // decoupled from the rest of join() so a later failure (e.g. the mic
       // permission prompt) can't silently swallow the notification.
       room.on(RoomEvent.Connected, () => {
+        applyAudioSettings(room, true);
+        connectedAtRef.current = Date.now();
         if (conversationId && !silentReconnectRef.current) {
           send({ type: "CALL_STARTED", conversationId });
         }
@@ -1842,6 +1989,7 @@ export function useCall(conversationId: string | null): UseCallState {
         }
         if (publication.source === Track.Source.ScreenShare) {
           addScreenShare(participant.identity, track);
+          announceScreenShare(participant.identity, false);
           startReceiverStatsLogging(
             track as RemoteVideoTrack,
             participant.identity,
@@ -1873,6 +2021,7 @@ export function useCall(conversationId: string | null): UseCallState {
           publication.track
         ) {
           addScreenShare(participant.identity, publication.track);
+          announceScreenShare(participant.identity, true);
           startSenderStatsLogging(publication.track as LocalVideoTrack);
         }
         // Unmuting republishes the mic as a NEW capture track, so the old
@@ -1882,6 +2031,7 @@ export function useCall(conversationId: string | null): UseCallState {
           publication.track
         ) {
           addAnalyser(participant.identity, publication.track.mediaStreamTrack);
+          void attachMicGain(publication.track as LocalAudioTrack);
         }
         if (
           publication.source === Track.Source.ScreenShareAudio &&
@@ -1928,6 +2078,7 @@ export function useCall(conversationId: string | null): UseCallState {
         setParticipants([]);
         setScreenShares([]);
         pendingScreenShareAudioTracksRef.current.clear();
+        announcedSharesRef.current.clear();
         stopAllScreenShareStatsLogging();
         clearMediaSession();
       });
@@ -2034,6 +2185,9 @@ export function useCall(conversationId: string | null): UseCallState {
     addAnalyser,
     addScreenShare,
     addScreenShareAudio,
+    announceScreenShare,
+    applyAudioSettings,
+    attachMicGain,
     removeScreenShare,
     removeScreenShareAudio,
     setConfiguredScreenShareEnabled,
