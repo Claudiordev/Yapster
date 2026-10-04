@@ -3,21 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-interface YouTubeOEmbed {
-  title: string;
-  author_name: string;
-  thumbnail_url: string;
-}
-
-async function fetchOEmbed(url: string): Promise<YouTubeOEmbed> {
-  const res = await fetch(
-    `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
-  );
-
-  if (!res.ok) throw new Error("oembed failed");
-
-  return res.json();
-}
+import { youTubeOEmbedQuery } from "@/app/(protected)/message/_Actions/useEmbedReady";
 
 /**
  * YouTube link preview — thumbnail + title card that swaps to an inline
@@ -34,12 +20,7 @@ export function YouTubeEmbed({
 }) {
   const [playing, setPlaying] = useState(false);
 
-  const { data, isError } = useQuery({
-    queryKey: ["youtube-oembed", videoId],
-    queryFn: () => fetchOEmbed(url),
-    staleTime: Infinity,
-    retry: 1,
-  });
+  const { data, isError } = useQuery(youTubeOEmbedQuery(url, videoId));
 
   if (isError) return null;
 

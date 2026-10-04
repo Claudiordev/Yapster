@@ -18,6 +18,7 @@ interface KlipyFormat {
 
 interface KlipyItem {
   id: number | string;
+  slug?: string;
   title?: string;
   file?: Record<string, Record<string, KlipyFormat | undefined> | undefined>;
 }
@@ -46,6 +47,7 @@ function toGif(item: KlipyItem): Gif | null {
 
   return {
     id: String(item.id),
+    slug: item.slug,
     title: item.title ?? "GIF",
     previewUrl: preview.url,
     url: full.url,
@@ -107,4 +109,60 @@ export function trendingGifs(page: number): Promise<GifPage> {
 
 export function searchGifs(query: string, page: number): Promise<GifPage> {
   return fetchPage("search", { q: query, page: String(page) }, SEARCH_TTL_MS);
+}
+
+const GIF_PAGE_PATH = /^\/gifs?\/([a-z0-9][a-z0-9-]{0,150})\/?$/i;
+
+/** The slug of a klipy.com/gifs/<slug> page link, or null for any other URL. */
+export function klipySlugFromUrl(raw: string): string | null {
+  try {
+    const url = new URL(raw);
+
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    if (url.hostname !== "klipy.com" && url.hostname !== "www.klipy.com") return null;
+
+    return GIF_PAGE_PATH.exec(url.pathname)?.[1].toLowerCase() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const slugCache = new Map<string, { expires: number; gif: Gif | null }>();
+const SLUG_TTL_MS = 60 * 60_000;
+const SLUG_MISS_TTL_MS = 10 * 60_000;
+
+const slugify = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+/**
+ * The GIF behind a klipy.com page link. The page itself is behind a Cloudflare bot check, so we
+ * look the slug up through the API instead. Only an exact slug (or identical title) match counts:
+ * showing some other GIF would be worse than showing none.
+ */
+export async function gifBySlug(slug: string): Promise<Gif | null> {
+  const hit = slugCache.get(slug);
+
+  if (hit && hit.expires > Date.now()) return hit.gif;
+
+  const { gifs } = await searchGifs(slug.replace(/-/g, " "), 1);
+  // The API's slugs end in "--<token>" that differs per request; the page URL has just the name.
+  const gif =
+    gifs.find(
+      (candidate) => candidate.slug?.split("--")[0].toLowerCase() === slug,
+    ) ??
+    gifs.find((candidate) => slugify(candidate.title) === slug) ??
+    null;
+
+  if (slugCache.size >= MAX_CACHE_ENTRIES) {
+    slugCache.delete(slugCache.keys().next().value as string);
+  }
+  slugCache.set(slug, {
+    expires: Date.now() + (gif ? SLUG_TTL_MS : SLUG_MISS_TTL_MS),
+    gif,
+  });
+
+  return gif;
 }

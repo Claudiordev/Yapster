@@ -41,7 +41,7 @@ const IMAGE_EXTENSIONS = /\.(gif|png|jpe?g|webp|avif)(\?.*)?$/i;
 export type EmbedKind =
   | { type: "image"; url: string }
   | { type: "youtube"; url: string; videoId: string }
-  | { type: "linkCard"; url: string; provider: "tiktok" | "twitter" };
+  | { type: "linkCard"; url: string; provider: "tiktok" | "twitter" | "site" };
 
 /** All URLs found in a message body, in order, de-duplicated. */
 export function extractUrls(body: string): string[] {
@@ -86,7 +86,9 @@ export function classifyEmbedUrl(raw: string): EmbedKind | null {
 
   if (provider) return { type: "linkCard", url: raw, provider };
 
-  return null;
+  // Any other web link: the server reads its Open Graph tags (or finds it's an image).
+  // Links with nothing to preview render no card.
+  return { type: "linkCard", url: raw, provider: "site" };
 }
 
 /** Embeddable links in a message body, capped so one message can't flood the thread. */
