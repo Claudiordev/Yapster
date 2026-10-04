@@ -8,7 +8,8 @@ import { Skeleton } from "@heroui/skeleton";
 
 import { MessageComposer } from "../_Message/MessageComposer";
 import { MessageEmbeds } from "../_Message/MessageEmbeds";
-import { isImageOnlyBody, linkifyBody } from "../_Message/utils/embeds";
+import { MessageText } from "../_Message/MessageText";
+import { isImageOnlyBody } from "../_Message/utils/embeds";
 import { TypingIndicator } from "../_Message/TypingIndicator";
 import type { ThreadMessage } from "@/types/chat";
 import { formatClock } from "@/app/(protected)/message/_Components/_Chat/utils/dateTime";
@@ -333,30 +334,7 @@ export function ChatThread({
                             </span>
                           </div>
                         )}
-                        {/* A GIF/image-only message shows just the picture, not its link. */}
-                        {!isImageOnlyBody(m.body) && (
-                          <p
-                            className={`text-sm text-foreground whitespace-pre-wrap [overflow-wrap:anywhere] ${
-                              m.pending ? "opacity-60" : ""
-                            }`}
-                          >
-                            {linkifyBody(m.body).map((part, index) =>
-                              part.href ? (
-                                <a
-                                  key={index}
-                                  className="underline-offset-2 hover:underline"
-                                  href={part.href}
-                                  rel="noopener noreferrer"
-                                  target="_blank"
-                                >
-                                  {part.text}
-                                </a>
-                              ) : (
-                                part.text
-                              ),
-                            )}
-                          </p>
-                        )}
+                        <MessageText body={m.body} pending={m.pending} />
                         {(!m.pending || isImageOnlyBody(m.body)) && (
                           <MessageEmbeds body={m.body} />
                         )}
