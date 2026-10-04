@@ -48,3 +48,10 @@ export interface UserIdentity {
 export interface UserProfile extends UserIdentity {
   id: string;
 }
+
+/** A login provider (e.g. Google) linked to the current user. */
+export interface LinkedProvider {
+  provider: string;
+  email: string | null;
+  linkedAt: string;
+}

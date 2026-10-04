@@ -5,7 +5,7 @@ import { AUTH_COOKIE_OPTIONS } from "@/lib/constants";
 /** Server-only helpers for the "Sign in with Google" redirect flow (authorization code + PKCE). */
 
 export const GOOGLE_COOKIE_PATH = "/api/auth/google";
-export const GOOGLE_COOKIES = ["g_state", "g_nonce", "g_verifier", "g_next"] as const;
+export const GOOGLE_COOKIES = ["g_state", "g_nonce", "g_verifier", "g_next", "g_mode"] as const;
 
 /** The flow must finish within this many seconds. */
 export const GOOGLE_FLOW_SECONDS = 600;

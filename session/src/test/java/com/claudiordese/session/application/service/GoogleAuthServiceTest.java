@@ -3,10 +3,12 @@ package com.claudiordese.session.application.service;
 import com.claudiordese.exceptions.BadRequestException;
 import com.claudiordese.exceptions.ConflictException;
 import com.claudiordese.exceptions.InvalidAuthorizationException;
+import com.claudiordese.exceptions.NotFoundException;
 import com.claudiordese.exceptions.ServiceUnavailableException;
 import com.claudiordese.session.application.config.LoginRateLimitPolicy;
 import com.claudiordese.session.application.config.RegisterRateLimitPolicy;
 import com.claudiordese.session.application.domain.GoogleIdentity;
+import com.claudiordese.session.application.domain.LinkedProvider;
 import com.claudiordese.session.application.domain.User;
 import com.claudiordese.session.application.port.GoogleIdentityClient;
 import com.claudiordese.session.application.service.commands.GoogleLoginCommand;
@@ -25,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -148,5 +151,89 @@ class GoogleAuthServiceTest {
 
         assertThatThrownBy(() -> auth.login(new LoginCommand("user", "")))
                 .isInstanceOf(InvalidAuthorizationException.class);
+    }
+
+    @Test
+    void linkingAddsGoogleToTheSignedInUser_withoutCreatingAnyone() {
+        User alice = users.create("alice", "alice@example.com", hasher.hash("secret123"));
+
+        LinkedProvider linked = service.link(alice.id(), command());
+
+        assertThat(linked.provider()).isEqualTo("google");
+        assertThat(linked.email()).isEqualTo("user@gmail.com");
+        assertThat(providers.findUserId("google", "g-1")).contains(alice.id());
+        assertThat(users.findByEmail("user@gmail.com")).isEmpty();
+        assertThat(service.linkedProviders(alice.id())).hasSize(1);
+    }
+
+    @Test
+    void linkingDoesNotMergeByEmail_theUserPicksTheAccount() {
+        User alice = users.create("alice", "user@gmail.com", hasher.hash("secret123"));
+        User bob = users.create("bob", "bob@example.com", hasher.hash("secret123"));
+
+        // Bob links a Google account whose email is Alice's: it becomes Bob's, Alice is untouched.
+        service.link(bob.id(), command());
+
+        assertThat(providers.findUserId("google", "g-1")).contains(bob.id());
+        assertThat(service.linkedProviders(alice.id())).isEmpty();
+    }
+
+    @Test
+    void aGoogleAccountLinkedToSomeoneElseCannotBeLinked() {
+        User alice = users.create("alice", "alice@example.com", hasher.hash("secret123"));
+        User bob = users.create("bob", "bob@example.com", hasher.hash("secret123"));
+
+        service.link(alice.id(), command());
+
+        assertThatThrownBy(() -> service.link(bob.id(), command())).isInstanceOf(ConflictException.class);
+        assertThat(service.linkedProviders(bob.id())).isEmpty();
+    }
+
+    @Test
+    void linkingTheSameAccountTwiceIsHarmless() {
+        User alice = users.create("alice", "alice@example.com", hasher.hash("secret123"));
+
+        service.link(alice.id(), command());
+        service.link(alice.id(), command());
+
+        assertThat(service.linkedProviders(alice.id())).hasSize(1);
+    }
+
+    @Test
+    void aSecondDifferentGoogleAccountIsRefusedUntilTheFirstIsUnlinked() {
+        User alice = users.create("alice", "alice@example.com", hasher.hash("secret123"));
+
+        service.link(alice.id(), command());
+        identity = new GoogleIdentity("g-2", "other@gmail.com", true, "Other", null);
+
+        assertThatThrownBy(() -> service.link(alice.id(), command())).isInstanceOf(ConflictException.class);
+    }
+
+    @Test
+    void unlinkingRemovesGoogle_whenThereIsAPassword() {
+        User alice = users.create("alice", "alice@example.com", hasher.hash("secret123"));
+
+        service.link(alice.id(), command());
+        service.unlink(alice.id(), "google");
+
+        assertThat(service.linkedProviders(alice.id())).isEmpty();
+        assertThat(providers.findUserId("google", "g-1")).isEmpty();
+    }
+
+    @Test
+    void unlinkingIsRefusedWhenGoogleIsTheOnlyWayToSignIn() {
+        service.login(command());
+        UUID id = users.findByEmail("user@gmail.com").orElseThrow().id();
+
+        assertThatThrownBy(() -> service.unlink(id, "google")).isInstanceOf(ConflictException.class);
+        assertThat(service.linkedProviders(id)).hasSize(1);
+    }
+
+    @Test
+    void unlinkingSomethingNotLinkedIsNotFound() {
+        User alice = users.create("alice", "alice@example.com", hasher.hash("secret123"));
+
+        assertThatThrownBy(() -> service.unlink(alice.id(), "google")).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> service.unlink(alice.id(), "github")).isInstanceOf(BadRequestException.class);
     }
 }

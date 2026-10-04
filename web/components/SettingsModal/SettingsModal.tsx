@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import {
@@ -14,8 +14,10 @@ import { addToast } from "@heroui/toast";
 
 import { SettingsPanel } from "@/app/(protected)/settings/_Components/SettingsPanel";
 import { Icon } from "@/components/Icon/Icon";
+import { FEATURE_OAUTH2_LOGIN } from "@/lib/constants";
 import { useAccount } from "@/lib/hooks/useAccount";
 import { readProblemDetail } from "@/lib/problemDetails";
+import type { LinkedProvider } from "@/types/user";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -250,14 +252,146 @@ function AccountTab() {
 }
 
 function LinkedAccountsTab() {
+  const [providers, setProviders] = useState<LinkedProvider[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
+  const google = providers?.find((entry) => entry.provider === "google");
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/user/providers", { cache: "no-store" });
+
+      if (!res.ok) throw new Error("load failed");
+
+      setProviders((await res.json()) as LinkedProvider[]);
+      setFailed(false);
+    } catch {
+      setFailed(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function unlink() {
+    setUnlinking(true);
+
+    try {
+      const res = await fetch("/api/user/providers/google", { method: "DELETE" });
+
+      if (!res.ok) {
+        addToast({
+          title: await readProblemDetail(res, "Could not unlink Google."),
+          color: "danger",
+        });
+
+        return;
+      }
+
+      addToast({ title: "Google account unlinked" });
+      setConfirmOpen(false);
+      await load();
+    } catch {
+      addToast({ title: "Could not unlink Google.", color: "danger" });
+    } finally {
+      setUnlinking(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-medium font-semibold text-foreground">
         Linked Accounts
       </h2>
-      <p className="rounded-large bg-content2 p-4 text-sm text-default-500">
-        No linked accounts yet.
-      </p>
+
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img alt="" className="flex-shrink-0" height={24} src="/icons/google.svg" width={24} />
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-foreground">Google</h3>
+            <p className="truncate text-tiny text-default-500">
+              {failed
+                ? "Couldn't load your linked accounts."
+                : providers === null
+                  ? "Loading…"
+                  : google
+                    ? `Linked${google.email ? ` as ${google.email}` : ""}`
+                    : "Sign in with your Google account."}
+            </p>
+          </div>
+        </div>
+
+        {failed ? (
+          <Button className="flex-shrink-0" size="sm" variant="flat" onPress={() => void load()}>
+            Retry
+          </Button>
+        ) : google ? (
+          <Button
+            className="flex-shrink-0"
+            color="danger"
+            size="sm"
+            variant="flat"
+            onPress={() => setConfirmOpen(true)}
+          >
+            Unlink
+          </Button>
+        ) : providers !== null && FEATURE_OAUTH2_LOGIN ? (
+          <Button
+            as="a"
+            className="flex-shrink-0"
+            href={`/api/auth/google/start?link=1&next=${encodeURIComponent("/message")}`}
+            size="sm"
+            variant="flat"
+          >
+            Link
+          </Button>
+        ) : null}
+      </div>
+
+      <Modal
+        backdrop="blur"
+        classNames={{
+          backdrop: "bg-black/70 backdrop-blur-2xl backdrop-saturate-50",
+          base: "start-card",
+          closeButton: "right-4 top-4 rounded-full border border-white/15",
+        }}
+        isOpen={confirmOpen}
+        size="sm"
+        onClose={() => setConfirmOpen(false)}
+      >
+        <ModalContent>
+          <ModalHeader className="flex-col items-center gap-0 px-7 pt-7 pb-0 text-center">
+            <h2 className="text-[25px] font-bold tracking-tight text-foreground">
+              Unlink Google?
+            </h2>
+            <p className="mt-2 text-sm font-normal text-default-500">
+              You won&apos;t be able to sign in with Google until you link it again.
+            </p>
+          </ModalHeader>
+          <ModalFooter className="mx-7 mb-2 mt-4 flex-col items-stretch gap-4 border-t border-white/10 px-0 pt-4">
+            <div className="grid grid-cols-[1fr_1.4fr] gap-2.5">
+              <Button
+                autoFocus
+                className="min-h-11 rounded-[10px] border border-[#4b4652] bg-[#34343b] text-sm font-bold shadow-[0_3px_0_#1a191f]"
+                variant="flat"
+                onPress={() => setConfirmOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="btn-coral min-h-11 rounded-[10px] text-sm font-bold"
+                isLoading={unlinking}
+                onPress={unlink}
+              >
+                Unlink
+              </Button>
+            </div>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

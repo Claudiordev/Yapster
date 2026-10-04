@@ -2,8 +2,11 @@ package com.claudiordese.session.infrastructure.persistence;
 
 import com.claudiordese.session.infrastructure.entity.UserProviderEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -11,4 +14,10 @@ import java.util.UUID;
 interface UserProviderRepository extends JpaRepository<UserProviderEntity, UUID> {
 
     Optional<UserProviderEntity> findByProviderAndSubject(String provider, String subject);
+
+    List<UserProviderEntity> findByUserIdOrderByCreatedAtAsc(UUID userId);
+
+    @Modifying
+    @Transactional
+    long deleteByUserIdAndProvider(UUID userId, String provider);
 }

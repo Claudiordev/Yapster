@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { getAuthToken } from "@/lib/auth";
+
 import {
   GOOGLE_COOKIE_OPTIONS,
   googleRedirectUri,
@@ -24,7 +26,14 @@ export async function GET(request: Request) {
   const state = randomToken();
   const nonce = randomToken();
   const verifier = randomToken(64); // 86 chars, within PKCE's 43-128
-  const next = safeNext(new URL(request.url).searchParams.get("next"));
+  const params = new URL(request.url).searchParams;
+  const next = safeNext(params.get("next"));
+  // "link" = attach Google to the account already signed in, instead of signing in with it.
+  const linking = params.get("link") === "1";
+
+  if (linking && !(await getAuthToken())) {
+    return NextResponse.redirect(`${origin}/login`);
+  }
 
   const authorizeUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
 
@@ -46,6 +55,7 @@ export async function GET(request: Request) {
   response.cookies.set("g_nonce", nonce, GOOGLE_COOKIE_OPTIONS);
   response.cookies.set("g_verifier", verifier, GOOGLE_COOKIE_OPTIONS);
   response.cookies.set("g_next", next, GOOGLE_COOKIE_OPTIONS);
+  if (linking) response.cookies.set("g_mode", "link", GOOGLE_COOKIE_OPTIONS);
 
   return response;
 }
