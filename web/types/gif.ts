@@ -1,5 +1,7 @@
 export interface Gif {
   id: string;
+  /** KLIPY's page slug (klipy.com/gifs/<slug>), when the API gives one. */
+  slug?: string;
   title: string;
   /** Small animated preview for the picker grid. */
   previewUrl: string;
