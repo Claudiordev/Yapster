@@ -54,7 +54,10 @@ public class LiveKitAccessProvider implements RoomAccessProvider {
                 "roomJoin", true,
                 "canPublish", true,
                 "canSubscribe", true,
-                "canPublishData", true
+                "canPublishData", true,
+                // Lets each client publish its own attributes (e.g. "deafened") so everyone
+                // in the call can show it; LiveKit replicates them to late joiners too.
+                "canUpdateOwnMetadata", true
         );
 
         String token = Jwts.builder()

@@ -15,6 +15,16 @@ import { siteConfig } from "@/config/site";
 import { POPUP_MOTION_PROPS } from "@/lib/popupMotion";
 import { useAccount } from "@/lib/hooks/useAccount";
 import { clampResolution, DEFAULT_VIDEO_PREFS, isResolutionAllowed, DEFAULT_SCREEN_SHARE_AUDIO, ECHO_CANCELLATION_KEY, NOISE_SUPPRESSION_KEY, readAudioProcessingPrefs, readVideoPrefs, readScreenShareAudioPref, VIDEO_RESOLUTION_KEY, VIDEO_RESOLUTIONS, writeAudioProcessingPref, writeScreenShareAudioPref } from "@/lib/mediaPrefs";
+import {
+  INPUT_DEVICE_KEY,
+  INPUT_VOLUME_KEY,
+  MAX_VOLUME,
+  notifyAudioSettingsChanged,
+  OUTPUT_DEVICE_KEY,
+  OUTPUT_VOLUME_KEY,
+  readInputVolume,
+  readOutputVolume,
+} from "@/lib/audioSettings";
 import type { VideoResolution } from "@/types/media";
 
 interface AudioDevice {
@@ -22,10 +32,10 @@ interface AudioDevice {
   label: string;
 }
 
-const INPUT_KEY = "audio-input-device";
-const OUTPUT_KEY = "audio-output-device";
-const INPUT_VOL_KEY = "audio-input-volume";
-const OUTPUT_VOL_KEY = "audio-output-volume";
+const INPUT_KEY = INPUT_DEVICE_KEY;
+const OUTPUT_KEY = OUTPUT_DEVICE_KEY;
+const INPUT_VOL_KEY = INPUT_VOLUME_KEY;
+const OUTPUT_VOL_KEY = OUTPUT_VOLUME_KEY;
 
 function VolumeBar({
   value,
@@ -43,7 +53,7 @@ function VolumeBar({
       <input
         aria-label="Volume"
         className="volume-bar"
-        max={100}
+        max={MAX_VOLUME}
         min={0}
         type="range"
         value={value}
@@ -83,8 +93,8 @@ export function SettingsPanel() {
   useEffect(() => {
     setInput(localStorage.getItem(INPUT_KEY) ?? "default");
     setOutput(localStorage.getItem(OUTPUT_KEY) ?? "default");
-    setInputVolume(Number(localStorage.getItem(INPUT_VOL_KEY) ?? 100));
-    setOutputVolume(Number(localStorage.getItem(OUTPUT_VOL_KEY) ?? 100));
+    setInputVolume(readInputVolume());
+    setOutputVolume(readOutputVolume());
 
     const audioPrefs = readAudioProcessingPrefs();
 
@@ -125,8 +135,36 @@ export function SettingsPanel() {
               label: d.label || `${prefix} ${i + 1}`,
             }));
 
-        setInputs(pick("audioinput", "Microphone"));
-        setOutputs(pick("audiooutput", "Speaker"));
+        const mics = pick("audioinput", "Microphone");
+        const speakers = pick("audiooutput", "Speaker");
+
+        setInputs(mics);
+        setOutputs(speakers);
+
+        // A saved device that no longer exists (other machine, browser profile, unplugged)
+        // would make every mic request fail, so fall back to the system default. Skipped
+        // while the list is empty: before any permission the browser hides device ids.
+        const resetIfMissing = (
+          key: string,
+          devices: AudioDevice[],
+          apply: (id: string) => void,
+        ) => {
+          const saved = localStorage.getItem(key);
+
+          if (
+            devices.length > 0 &&
+            saved &&
+            saved !== "default" &&
+            !devices.some((device) => device.id === saved)
+          ) {
+            localStorage.setItem(key, "default");
+            notifyAudioSettingsChanged();
+            apply("default");
+          }
+        };
+
+        resetIfMissing(INPUT_KEY, mics, setInput);
+        resetIfMissing(OUTPUT_KEY, speakers, setOutput);
       })
       .catch(() => setAvailable(false));
 
@@ -138,11 +176,13 @@ export function SettingsPanel() {
   function changeInputVolume(v: number) {
     setInputVolume(v);
     localStorage.setItem(INPUT_VOL_KEY, String(v));
+    notifyAudioSettingsChanged();
   }
 
   function changeOutputVolume(v: number) {
     setOutputVolume(v);
     localStorage.setItem(OUTPUT_VOL_KEY, String(v));
+    notifyAudioSettingsChanged();
   }
 
   const inputOptions = [{ id: "default", label: "System default" }, ...inputs];
@@ -174,6 +214,7 @@ export function SettingsPanel() {
 
               setInput(id);
               localStorage.setItem(INPUT_KEY, id);
+              notifyAudioSettingsChanged();
             }}
           >
             {inputOptions.map((d) => (
@@ -195,6 +236,7 @@ export function SettingsPanel() {
 
               setOutput(id);
               localStorage.setItem(OUTPUT_KEY, id);
+              notifyAudioSettingsChanged();
             }}
           >
             {outputOptions.map((d) => (
@@ -312,7 +354,12 @@ export function SettingsPanel() {
 
       <div className="h-px bg-divider" />
 
-      <MicTest deviceId={input} />
+      <MicTest
+        deviceId={input}
+        inputVolume={inputVolume}
+        outputId={output}
+        outputVolume={outputVolume}
+      />
 
       {!available && (
         <p className="text-tiny text-default-400">
