@@ -2,7 +2,7 @@
 
 import { useEmbedReady } from "@/app/(protected)/message/_Actions/useEmbedReady";
 
-import { isImageOnlyBody, linkifyBody } from "./utils/embeds";
+import { isEmojiOnlyBody, isImageOnlyBody, linkifyBody } from "./utils/embeds";
 
 /**
  * The text of a message, with its links clickable. Nothing is drawn when the
@@ -21,9 +21,12 @@ export function MessageText({
 
   if (isImageOnlyBody(body) || previewShowing) return null;
 
+  // Emoji-only messages are shown large, like Discord; any text keeps the normal size.
+  const size = isEmojiOnlyBody(body) ? "text-4xl leading-tight" : "text-sm";
+
   return (
     <p
-      className={`text-sm text-foreground whitespace-pre-wrap [overflow-wrap:anywhere] ${
+      className={`${size} text-foreground whitespace-pre-wrap [overflow-wrap:anywhere] ${
         pending ? "opacity-60" : ""
       }`}
     >

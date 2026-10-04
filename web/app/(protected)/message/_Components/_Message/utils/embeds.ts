@@ -129,3 +129,40 @@ export function linkifyBody(body: string): BodyPart[] {
 
   return parts;
 }
+
+/** Past this many emoji a message is a wall of them, so it stays at normal size. */
+const MAX_JUMBO_EMOJI = 27;
+
+// Built with RegExp(): the project's TS target predates the `u` flag in literals.
+const KEYCAP = new RegExp("^[0-9#*]\\uFE0F?\\u20E3$", "u");
+const FLAG = new RegExp("^\\p{Regional_Indicator}{2}$", "u");
+const PICTOGRAPH = new RegExp("^\\p{Extended_Pictographic}", "u");
+
+function isEmojiGrapheme(grapheme: string): boolean {
+  // Above Latin-1, so (c) / (r) are not mistaken for emoji.
+  const pictograph =
+    (grapheme.codePointAt(0) ?? 0) > 0xff && PICTOGRAPH.test(grapheme);
+
+  return pictograph || FLAG.test(grapheme) || KEYCAP.test(grapheme);
+}
+
+/**
+ * True when the message is nothing but emoji (spaces and line breaks between
+ * them are fine), so it can be shown large. A single word or letter anywhere
+ * keeps the whole message at normal size.
+ */
+export function isEmojiOnlyBody(body: string): boolean {
+  const trimmed = body.trim();
+
+  if (!trimmed) return false;
+
+  let count = 0;
+
+  for (const { segment } of Array.from(new Intl.Segmenter().segment(trimmed))) {
+    if (/^\s+$/.test(segment)) continue;
+    if (!isEmojiGrapheme(segment)) return false;
+    if (++count > MAX_JUMBO_EMOJI) return false;
+  }
+
+  return count > 0;
+}
