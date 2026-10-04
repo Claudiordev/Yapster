@@ -446,6 +446,15 @@
     0 4px 10px rgba(0, 0, 0, 0.25);
 }
 
+/* Slightly smaller keys inside the profile bar; the same class elsewhere (composer,
+   thread header) keeps the full 36px size. */
+.chat-profile-card .chat-profile-action {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+
 .chat-profile-settings {
   color: #b5bac1;
 }

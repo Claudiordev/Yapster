@@ -40,6 +40,36 @@ interface CallSession extends CallState {
 
 const CallContext = createContext<CallSession | null>(null);
 
+interface VoicePrefs {
+  muted: boolean;
+  deafened: boolean;
+}
+
+const DEFAULT_VOICE_PREFS: VoicePrefs = { muted: false, deafened: false };
+const VOICE_PREFS_KEY = "voice-prefs";
+
+function readVoicePrefs(): VoicePrefs {
+  try {
+    const raw = JSON.parse(localStorage.getItem(VOICE_PREFS_KEY) ?? "null");
+
+    if (raw && typeof raw === "object") {
+      return { muted: raw.muted === true, deafened: raw.deafened === true };
+    }
+  } catch {
+    // Unreadable or blocked storage: start unmuted.
+  }
+
+  return DEFAULT_VOICE_PREFS;
+}
+
+function writeVoicePrefs(prefs: VoicePrefs): void {
+  try {
+    localStorage.setItem(VOICE_PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    // Not persisted; the in-memory value still applies.
+  }
+}
+
 /**
  * Owns THE call for the whole /message area. It lives in the layout, so opening
  * another chat doesn't unmount it: the LiveKit room, mute/deafen state, timer and
@@ -57,6 +87,23 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const [watching, setWatching] = useState<string | null>(null);
   const [callStartedAt, setCallStartedAt] = useState<number | null>(null);
 
+  // Mic/deafen as the user last set them, app-wide. Outside a call these are the
+  // source of truth; on joining they are applied to the call; during a call the
+  // call's own state wins and is mirrored back here, so the two never disagree.
+  const [voicePrefs, setVoicePrefs] = useState<VoicePrefs>(DEFAULT_VOICE_PREFS);
+  const [prefsSynced, setPrefsSynced] = useState(false);
+  const appliedForRef = useRef<string | null>(null);
+  const mutedBeforeDeafenRef = useRef(false);
+
+  useEffect(() => {
+    setVoicePrefs(readVoicePrefs());
+  }, []);
+
+  const updateVoicePrefs = useCallback((next: VoicePrefs) => {
+    setVoicePrefs(next);
+    writeVoicePrefs(next);
+  }, []);
+
   // Always call the latest leave() from the unmount/pagehide handlers below.
   const leaveRef = useRef(call.leave);
 
@@ -68,6 +115,66 @@ export function CallProvider({ children }: { children: ReactNode }) {
     if (callConversationId) void call.join();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callConversationId]);
+
+  // New call: make it match the app-wide mic/deafen first, then start mirroring.
+  useEffect(() => {
+    if (!callConversationId) {
+      appliedForRef.current = null;
+      setPrefsSynced(false);
+
+      return;
+    }
+    if (!call.connected || appliedForRef.current === callConversationId) return;
+
+    appliedForRef.current = callConversationId;
+    setPrefsSynced(false);
+
+    void (async () => {
+      if (voicePrefs.deafened && !call.deafened) await call.toggleDeafen();
+      else if (voicePrefs.muted && !call.muted) await call.toggleMute();
+
+      if (appliedForRef.current === callConversationId) setPrefsSynced(true);
+    })();
+    // Applied once per call; later changes flow the other way (call -> prefs).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callConversationId, call.connected]);
+
+  // In a call, whatever the call says (mute button, a mic that failed to start, ...)
+  // becomes the app-wide value.
+  useEffect(() => {
+    if (!callConversationId || !prefsSynced) return;
+    if (call.muted === voicePrefs.muted && call.deafened === voicePrefs.deafened) {
+      return;
+    }
+
+    updateVoicePrefs({ muted: call.muted, deafened: call.deafened });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [call.muted, call.deafened, callConversationId, prefsSynced]);
+
+  const inSyncedCall = callConversationId !== null && prefsSynced;
+
+  const toggleMute = useCallback(async () => {
+    if (inSyncedCall) return call.toggleMute();
+
+    // Not in a call (or still applying): just flip the app-wide value. Unmuting
+    // while deafened also undeafens, as in a call.
+    updateVoicePrefs(
+      voicePrefs.muted
+        ? { muted: false, deafened: false }
+        : { ...voicePrefs, muted: true },
+    );
+  }, [inSyncedCall, call, voicePrefs, updateVoicePrefs]);
+
+  const toggleDeafen = useCallback(async () => {
+    if (inSyncedCall) return call.toggleDeafen();
+
+    if (!voicePrefs.deafened) {
+      mutedBeforeDeafenRef.current = voicePrefs.muted;
+      updateVoicePrefs({ muted: true, deafened: true });
+    } else {
+      updateVoicePrefs({ muted: mutedBeforeDeafenRef.current, deafened: false });
+    }
+  }, [inSyncedCall, call, voicePrefs, updateVoicePrefs]);
 
   // Leaving /message (the provider unmounts) or closing the tab ends the call.
   useEffect(() => {
@@ -141,6 +248,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
     <CallContext.Provider
       value={{
         ...call,
+        muted: inSyncedCall ? call.muted : voicePrefs.muted,
+        deafened: inSyncedCall ? call.deafened : voicePrefs.deafened,
+        toggleMute,
+        toggleDeafen,
         callConversationId,
         callStartedAt,
         watching,
