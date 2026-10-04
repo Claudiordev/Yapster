@@ -14,6 +14,7 @@ import { addToast } from "@heroui/toast";
 
 import { SettingsPanel } from "@/app/(protected)/settings/_Components/SettingsPanel";
 import { Icon } from "@/components/Icon/Icon";
+import { useAccount } from "@/lib/hooks/useAccount";
 import { readProblemDetail } from "@/lib/problemDetails";
 
 interface SettingsModalProps {
@@ -162,6 +163,65 @@ function PasswordModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
   );
 }
 
+function LogoutModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const { logout } = useAccount();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function confirm() {
+    setLoggingOut(true);
+
+    try {
+      await logout();
+    } finally {
+      setLoggingOut(false);
+    }
+  }
+
+  return (
+    <Modal
+      backdrop="blur"
+      classNames={{
+        backdrop: "bg-black/70 backdrop-blur-2xl backdrop-saturate-50",
+        base: "start-card",
+        closeButton: "right-4 top-4 rounded-full border border-white/15",
+      }}
+      isOpen={isOpen}
+      size="sm"
+      onClose={onClose}
+    >
+      <ModalContent>
+        <ModalHeader className="flex-col items-center gap-0 px-7 pt-7 pb-0 text-center">
+          <h2 className="text-[25px] font-bold tracking-tight text-foreground">
+            Log out?
+          </h2>
+          <p className="mt-2 text-sm font-normal text-default-500">
+            Are you sure you want to be logged out?
+          </p>
+        </ModalHeader>
+        <ModalFooter className="mx-7 mb-2 mt-4 flex-col items-stretch gap-4 border-t border-white/10 px-0 pt-4">
+          <div className="grid grid-cols-[1fr_1.4fr] gap-2.5">
+            <Button
+              autoFocus
+              className="min-h-11 rounded-[10px] border border-[#4b4652] bg-[#34343b] text-sm font-bold shadow-[0_3px_0_#1a191f]"
+              variant="flat"
+              onPress={onClose}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="btn-coral min-h-11 rounded-[10px] text-sm font-bold"
+              isLoading={loggingOut}
+              onPress={confirm}
+            >
+              Log out
+            </Button>
+          </div>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
 function AccountTab() {
   const [open, setOpen] = useState(false);
 
@@ -204,6 +264,7 @@ function LinkedAccountsTab() {
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [tab, setTab] = useState<TabId>("general");
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   return (
     <Modal
@@ -240,6 +301,16 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 {label}
               </button>
             ))}
+
+            {/* Not a tab: opens a confirmation. Same red as the old profile-bar logout key. */}
+            <button
+              className="chat-profile-logout mt-auto flex items-center gap-2.5 rounded-medium px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-default-100"
+              type="button"
+              onClick={() => setLogoutOpen(true)}
+            >
+              <Icon name="logout" size={16} />
+              Log out
+            </button>
           </nav>
 
           <ModalBody className="min-h-0 flex-1 overflow-y-auto py-6">
@@ -248,6 +319,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             {tab === "linked" && <LinkedAccountsTab />}
           </ModalBody>
         </div>
+        <LogoutModal isOpen={logoutOpen} onClose={() => setLogoutOpen(false)} />
       </ModalContent>
     </Modal>
   );
