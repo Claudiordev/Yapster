@@ -22,7 +22,8 @@ import { RoleBadge } from "@/components/RoleBadge/RoleBadge";
 import { SettingsModal } from "@/components/SettingsModal/SettingsModal";
 import { badgesForRoles } from "@/lib/roleBadges";
 import { useAccount } from "@/lib/hooks/useAccount";
-import type { UserIdentity } from "@/types/user";
+import { UserProfileModal } from "../_Chat/UserProfileModal";
+import type { UserIdentity, UserProfile } from "@/types/user";
 
 interface CallPanelProps {
   /** identity (userId) -> display name/avatar, same map ChatThread uses for senders. */
@@ -76,6 +77,7 @@ export function CallPanel({
 
   const [now, setNow] = useState(() => Date.now());
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [participantMenu, setParticipantMenu] = useState<{
     identity: string;
     x: number;
@@ -98,12 +100,10 @@ export function CallPanel({
         (participant) => participant.identity === participantMenu.identity,
       )
     : undefined;
+  // Volume and mute controls are never offered on an admin (anyone, admins included).
   const canAdjustMenuParticipant =
     menuParticipant != null &&
-    (currentUserIsAdmin ||
-      !senders[menuParticipant.identity]?.roles.includes("ADMIN"));
-  const canOpenMenuParticipant =
-    menuParticipant != null && (canAdjustMenuParticipant || canModerateCall);
+    !senders[menuParticipant.identity]?.roles.includes("ADMIN");
 
   const canAdjustUserVolume = (identity: string) =>
     currentUserIsAdmin || !senders[identity]?.roles.includes("ADMIN");
@@ -232,10 +232,9 @@ export function CallPanel({
 
     const sender = senders[p.identity];
     const name = p.isLocal ? "You" : (sender?.name ?? "Unknown");
-    const isAdmin = sender?.roles.includes("ADMIN") ?? false;
     const roleBadges = badgesForRoles(sender?.roles);
-    const canAdjustVolume = !p.isLocal && (currentUserIsAdmin || !isAdmin);
-    const canOpenMenu = !p.isLocal && (canAdjustVolume || canModerateCall);
+    // Everyone's tile has a menu, so the browser's own never shows. Admins (and you) get Profile only.
+    const canOpenMenu = true;
 
     return (
       <div
@@ -253,11 +252,8 @@ export function CallPanel({
         }`}
         role={canOpenMenu ? "button" : undefined}
         tabIndex={canOpenMenu ? 0 : undefined}
-        onContextMenu={
-          p.isLocal
-            ? undefined
-            : (event) =>
-                handleParticipantContextMenu(event, p.identity, canOpenMenu)
+        onContextMenu={(event) =>
+          handleParticipantContextMenu(event, p.identity, canOpenMenu)
         }
         onKeyDown={
           canOpenMenu
@@ -298,10 +294,23 @@ export function CallPanel({
               size={avatarSize}
               src={sender?.avatarUrl ?? undefined}
             />
+            {/* Top right: deafened (red headphones) wins over muted (red mic); deafening mutes too. */}
+            {(p.isDeafened || p.isMuted) && (
+              <span
+                aria-label={`${name} is ${p.isDeafened ? "deafened" : "muted"}`}
+                className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-danger text-white ring-2 ring-content1"
+                title={p.isDeafened ? "Deafened" : "Muted"}
+              >
+                <Icon
+                  name={p.isDeafened ? "headphones-off" : "mic-off"}
+                  size={11}
+                />
+              </span>
+            )}
             {!p.isLocal && p.volume === 0 && (
               <span
                 aria-label={`${name} is muted locally`}
-                className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-danger text-white ring-2 ring-content1"
+                className="absolute -left-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-danger text-white ring-2 ring-content1"
                 title="Muted for you"
               >
                 <Icon name="mic-off" size={11} />
@@ -318,7 +327,6 @@ export function CallPanel({
         </div>
 
         <span className="absolute bottom-2 left-2 inline-flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-small border border-white/10 bg-black/70 px-2 py-1 text-tiny font-bold text-white backdrop-blur-sm">
-          {p.isMuted && <Icon name="mic-off" size={12} />}
           <span className="truncate">{name}</span>
           {p.isSpeaking && (
             <i
@@ -521,21 +529,40 @@ export function CallPanel({
         onClose={() => setSettingsOpen(false)}
       />
 
-      {participantMenu &&
-        menuParticipant &&
-        !menuParticipant.isLocal &&
-        canOpenMenuParticipant && (
+      {participantMenu && menuParticipant && (
           <ParticipantVolumeMenu
-            canMuteForEveryone={canModerateCall}
+            canMuteForEveryone={
+              !menuParticipant.isLocal &&
+              canModerateCall &&
+              canAdjustMenuParticipant
+            }
             isMutedForEveryone={menuParticipant.isMuted}
-            name={senders[menuParticipant.identity]?.name ?? "Unknown"}
-            showLocalControls={canAdjustMenuParticipant}
+            name={
+              menuParticipant.isLocal
+                ? "You"
+                : (senders[menuParticipant.identity]?.name ?? "Unknown")
+            }
+            showLocalControls={
+              !menuParticipant.isLocal && canAdjustMenuParticipant
+            }
             volume={menuParticipant.volume}
             x={participantMenu.x}
             y={participantMenu.y}
             onChange={(volume) =>
               setParticipantVolume(menuParticipant.identity, volume)
             }
+            onOpenProfile={() => {
+              const identity = senders[menuParticipant.identity];
+
+              setProfile({
+                id: menuParticipant.identity,
+                name: identity?.name ?? "Unknown",
+                avatarUrl: identity?.avatarUrl ?? null,
+                roles: identity?.roles ?? [],
+                status: identity?.status,
+              });
+              setParticipantMenu(null);
+            }}
             onToggleMute={() => toggleParticipantMute(menuParticipant.identity)}
             onMuteForEveryone={async () => {
               if (await muteParticipantForEveryone(menuParticipant.identity)) {
@@ -545,6 +572,8 @@ export function CallPanel({
             onClose={() => setParticipantMenu(null)}
           />
         )}
+
+      <UserProfileModal profile={profile} onClose={() => setProfile(null)} />
 
       <div
         aria-label="Resize call panel"
