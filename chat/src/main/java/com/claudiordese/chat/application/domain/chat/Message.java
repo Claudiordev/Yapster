@@ -24,7 +24,12 @@ public record Message(
     }
 
     public static Message system(UUID conversationId, SystemEvent event, UUID subjectId) {
-        return new Message(UUID.randomUUID(), conversationId, null, "", Instant.now(), 0L,
+        return system(conversationId, event, subjectId, "");
+    }
+
+    /** A system message that carries a value of its own in the body (e.g. a group's new name). */
+    public static Message system(UUID conversationId, SystemEvent event, UUID subjectId, String body) {
+        return new Message(UUID.randomUUID(), conversationId, null, body, Instant.now(), 0L,
                 MessageType.SYSTEM, event, subjectId);
     }
 }

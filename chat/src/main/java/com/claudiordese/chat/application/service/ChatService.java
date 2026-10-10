@@ -10,6 +10,7 @@ import com.claudiordese.chat.application.domain.chat.types.SystemEvent;
 import com.claudiordese.chat.application.domain.chat.types.UserStatusType;
 import com.claudiordese.chat.application.domain.event.server.CallEndedEvent;
 import com.claudiordese.chat.application.domain.event.server.CallStartedEvent;
+import com.claudiordese.chat.application.domain.event.server.GroupRenamedEvent;
 import com.claudiordese.chat.application.domain.event.server.MembersChangedEvent;
 import com.claudiordese.chat.application.domain.event.server.MessageEvent;
 import com.claudiordese.chat.application.domain.event.server.ProfileChangedEvent;
@@ -81,7 +82,7 @@ public class ChatService {
                 new Conversation(
                         UUID.randomUUID(),
                         ConversationType.GROUP,
-                        name,
+                        name == null || name.isBlank() ? null : name.trim(),
                         null,
                         Instant.now(),
                         creator
@@ -200,7 +201,11 @@ public class ChatService {
 
     /** Persists a message authored by the system (no sender, no rate limit) and pushes it to recipients. */
     private void postSystemMessage(UUID conversationId, SystemEvent event, UUID subjectId, List<UUID> recipients) {
-        Message saved = messages.saveMessage(Message.system(conversationId, event, subjectId));
+        postSystemMessage(conversationId, event, subjectId, "", recipients);
+    }
+
+    private void postSystemMessage(UUID conversationId, SystemEvent event, UUID subjectId, String body, List<UUID> recipients) {
+        Message saved = messages.saveMessage(Message.system(conversationId, event, subjectId, body));
 
         MessageEvent messageEvent = new MessageEvent(saved.id().toString(), saved.seq(), conversationId.toString(),
                 null, saved.body(), saved.sentAt(), MessageType.SYSTEM, event, subjectId.toString());
@@ -208,6 +213,36 @@ public class ChatService {
         for (UUID m : recipients) {
             events.send(m.toString(), messageEvent);
         }
+    }
+
+    /** Any member can rename. A blank name clears it, so the group is shown as its members again. */
+    @Transactional
+    public void renameGroup(UUID conversationId, UUID requesterId, String name) {
+        Conversation conversation = conversations.findById(conversationId).orElseThrow(() -> new NotFound("not_found", "Conversation not found"));
+
+        if (conversation.type() != ConversationType.GROUP) {
+            throw new BadRequestException("not_a_group", "Only group conversations can be renamed");
+        }
+
+        if (!conversations.isMember(conversationId, requesterId)) {
+            throw new InterdictedException("not_a_member", "Not a member of this conversation");
+        }
+
+        String newName = name == null || name.isBlank() ? null : name.trim();
+
+        if (java.util.Objects.equals(newName, conversation.name())) {
+            return;
+        }
+
+        conversations.rename(conversationId, newName);
+
+        List<UUID> members = conversations.membersOf(conversationId);
+
+        postSystemMessage(conversationId, SystemEvent.GROUP_RENAMED, requesterId, newName == null ? "" : newName, members);
+
+        GroupRenamedEvent event = new GroupRenamedEvent(conversationId.toString(), newName);
+
+        afterCommit(() -> members.forEach(member -> events.send(member.toString(), event)));
     }
 
     @Transactional

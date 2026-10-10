@@ -87,7 +87,12 @@ export default function EventRow({ event, onJoin, onDonate, onWatch }: Props) {
             background: C.bg,
           }}
         >
-          {Icon && <Icon size={30} />}
+          {Icon ? (
+            <Icon size={30} />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img alt="" height={30} src={`/images/games/${event.game}.png`} width={30} />
+          )}
         </span>
 
         <span style={{ display: "flex", minWidth: 0, flexDirection: "column" }}>

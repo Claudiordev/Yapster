@@ -1,6 +1,5 @@
 package com.claudiordese.chat.infrastructure.controller.request;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 
@@ -8,7 +7,7 @@ import java.util.Set;
 import java.util.UUID;
 
 public record CreateGroupRequest(
-        @NotBlank
+        // Optional: a group without a name is shown as its members' names.
         @Size(max = 100)
         String groupName,
 

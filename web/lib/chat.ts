@@ -17,7 +17,15 @@ export function isUnread(c: Conversation): boolean {
 
 /** Display name: group name, else the DM peer's username, else a fallback. */
 export function conversationName(c: Conversation): string {
-  return c.name ?? c.members[0]?.username ?? "Direct message";
+  if (c.name) return c.name;
+  if (c.type === "GROUP") {
+    // Unnamed group: show who is in it.
+    const names = c.members.flatMap((m) => (m.username ? [m.username] : []));
+
+    return names.length > 0 ? names.join(", ") : "Group chat";
+  }
+
+  return c.members[0]?.username ?? "Direct message";
 }
 
 // --- Realtime events -------------------------------------------------------

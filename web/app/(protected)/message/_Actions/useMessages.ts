@@ -71,7 +71,9 @@ export function useMessages(
 
       const res = await fetch(`/api/chat/${conversationId}/message?${qs}`);
 
-      if (!res.ok) return [];
+      // Throw rather than return []: a failed refetch then keeps the messages
+      // already cached instead of replacing them with an empty thread.
+      if (!res.ok) throw new Error(`Could not load messages (${res.status})`);
 
       // Server returns newest-first; keep as-is (we sort for display).
       const dtos: ChatMessageDto[] = await res.json();

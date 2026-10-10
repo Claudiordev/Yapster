@@ -10,8 +10,11 @@ import { StatusDot } from "@/components/StatusDot/StatusDot";
 import { Icon } from "@/components/Icon/Icon";
 import { conversationName, isGroupCreator, isUnread } from "@/lib/chat";
 import type { Conversation } from "@/types/chat";
+import { COMPOSER_ACTION_BUTTON_CLASS } from "../_Message/MessageComposer";
 import { isImageOnlyBody } from "../_Message/utils/embeds";
+import type { ChatMutationResult } from "../ChatProvider";
 import { ConversationContextMenu } from "./ConversationContextMenu";
+import { RenameGroupModal } from "./RenameGroupModal";
 
 interface ChatListProps {
   conversations: Conversation[];
@@ -24,6 +27,10 @@ interface ChatListProps {
   onMarkRead: (conversationId: string) => void;
   onLeaveGroup: (conversationId: string) => void;
   onDeleteGroup: (conversationId: string) => void;
+  onRenameGroup: (
+    conversationId: string,
+    name: string,
+  ) => Promise<ChatMutationResult>;
 }
 
 /** Placeholder rows shown while the conversations request is in flight. */
@@ -63,7 +70,11 @@ export function ChatList({
   onMarkRead,
   onLeaveGroup,
   onDeleteGroup,
+  onRenameGroup,
 }: ChatListProps) {
+  // The group being renamed (kept apart from `menu`, which closes when Rename is picked).
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const renaming = conversations.find((c) => c.id === renameId) ?? null;
   // The row that was right-clicked, and where.
   const [menu, setMenu] = useState<{
     conversationId: string;
@@ -83,7 +94,7 @@ export function ChatList({
         <Button
           isIconOnly
           aria-label="New chat"
-          className="text-default-400 hover:text-foreground"
+          className={COMPOSER_ACTION_BUTTON_CLASS}
           size="sm"
           variant="light"
           onPress={onNewChat}
@@ -202,6 +213,7 @@ export function ChatList({
       {menu && menuConversation && (
         <ConversationContextMenu
           canDelete={isGroupCreator(menuConversation, currentUserId)}
+          canRename={menuConversation.type === "GROUP"}
           canLeave={
             menuConversation.type === "GROUP" &&
             !isGroupCreator(menuConversation, currentUserId)
@@ -214,6 +226,16 @@ export function ChatList({
           onDelete={() => onDeleteGroup(menuConversation.id)}
           onLeave={() => onLeaveGroup(menuConversation.id)}
           onMarkRead={() => onMarkRead(menuConversation.id)}
+          onRename={() => setRenameId(menuConversation.id)}
+        />
+      )}
+
+      {renaming && (
+        <RenameGroupModal
+          isOpen
+          currentName={renaming.name}
+          onClose={() => setRenameId(null)}
+          onSave={(name) => onRenameGroup(renaming.id, name)}
         />
       )}
     </aside>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+    />
+    <title>Choose what to share</title>
+    <style>
+      body { margin: 0; padding: 16px; background: #111214; color: #f2f3f5; font: 14px system-ui, sans-serif; }
+      h1 { margin: 0 0 12px; font-size: 16px; }
+      #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; max-height: 410px; overflow-y: auto; }
+      button.card { background: #1e1f22; border: 2px solid transparent; border-radius: 8px; padding: 8px; color: inherit; text-align: left; cursor: pointer; }
+      button.card:hover, button.card:focus-visible { border-color: #ff3f52; outline: none; }
+      button.card img.thumb { width: 100%; border-radius: 4px; display: block; background: #000; }
+      .label { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+      .label img { width: 16px; height: 16px; }
+      .label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      footer { display: flex; justify-content: flex-end; margin-top: 12px; }
+      #cancel { background: #34343b; border: 1px solid #4b4652; border-radius: 8px; color: inherit; padding: 8px 16px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <h1>Choose what to share</h1>
+    <div id="grid"></div>
+    <footer><button id="cancel" type="button">Cancel</button></footer>
+    <script>
+      document.getElementById("cancel").onclick = () => window.picker.choose(null);
+
+      window.picker.sources().then((sources) => {
+        const grid = document.getElementById("grid");
+
+        for (const source of sources) {
+          const card = document.createElement("button");
+          card.className = "card";
+          card.type = "button";
+
+          const thumb = document.createElement("img");
+          thumb.className = "thumb";
+          thumb.src = source.thumbnail;
+          card.append(thumb);
+
+          const label = document.createElement("div");
+          label.className = "label";
+          if (source.icon) {
+            const icon = document.createElement("img");
+            icon.src = source.icon;
+            label.append(icon);
+          }
+          const name = document.createElement("span");
+          name.textContent = source.name;
+          label.append(name);
+          card.append(label);
+
+          card.onclick = () => window.picker.choose(source.id);
+          grid.append(card);
+        }
+      });
+    </script>
+  </body>
+</html>

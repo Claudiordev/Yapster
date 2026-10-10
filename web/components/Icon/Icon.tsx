@@ -39,7 +39,12 @@ export type IconName =
   | "screen-share"
   | "maximize"
   | "minimize"
-  | "close";
+  | "close"
+  | "arrow-right"
+  | "counter-strike"
+  | "valorant"
+  | "league-of-legends"
+  | "rocket-league";
 
 interface IconProps {
   name: IconName;

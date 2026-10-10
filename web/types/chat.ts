@@ -47,7 +47,11 @@ export interface ChatMessageDto {
 
 /** USER = written by a member; SYSTEM = announced by the chat itself (no sender). */
 export type MessageKind = "USER" | "SYSTEM";
-export type SystemEventCode = "MEMBER_ADDED" | "MEMBER_REMOVED" | "MEMBER_LEFT";
+export type SystemEventCode =
+  | "MEMBER_ADDED"
+  | "MEMBER_REMOVED"
+  | "MEMBER_LEFT"
+  | "GROUP_RENAMED";
 
 export type EventType =
   | "MESSAGE"
@@ -59,7 +63,8 @@ export type EventType =
   | "CALL_PARTICIPANTS"
   | "ROLES_CHANGED"
   | "MEMBERS_CHANGED"
-  | "PROFILE_CHANGED";
+  | "PROFILE_CHANGED"
+  | "GROUP_RENAMED";
 
 /** Pushed when a new message lands — matches the backend MessageEvent. */
 export interface MessageEvent {
@@ -166,6 +171,16 @@ export interface ProfileChangedEvent {
   userId: string;
 }
 
+/**
+ * A group was renamed — matches the backend GroupRenamedEvent. `name` is the new name,
+ * or null when it was cleared (the group is shown as its members again).
+ */
+export interface GroupRenamedEvent {
+  type: "GROUP_RENAMED";
+  conversationId: string;
+  name: string | null;
+}
+
 /** Any event the server can push over the socket. */
 export type ServerEvent =
   | MessageEvent
@@ -177,7 +192,8 @@ export type ServerEvent =
   | CallParticipantsEvent
   | RolesChangedEvent
   | MembersChangedEvent
-  | ProfileChangedEvent;
+  | ProfileChangedEvent
+  | GroupRenamedEvent;
 
 /**
  * Anything the client may send UP the socket — mirrors the backend's

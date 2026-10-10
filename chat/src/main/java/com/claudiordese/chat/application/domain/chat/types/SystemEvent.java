@@ -4,5 +4,6 @@ package com.claudiordese.chat.application.domain.chat.types;
 public enum SystemEvent {
     MEMBER_ADDED,
     MEMBER_REMOVED,
-    MEMBER_LEFT
+    MEMBER_LEFT,
+    GROUP_RENAMED // subject = who renamed it, body = the new name ("" when cleared)
 }

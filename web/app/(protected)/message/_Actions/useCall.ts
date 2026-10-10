@@ -1570,7 +1570,7 @@ export function useCall(conversationId: string | null): UseCallState {
           // VP8: unlike H264, Chrome negotiates it as one payload type per m= section
           // (no profile-level-id/packetization-mode fragmentation), so the start-bitrate
           // hint can't land on an unused sibling payload the way it did with H264.
-          videoCodec: "vp8",
+          videoCodec: "vp9",
           backupCodec: false,
           simulcast: true,
           // Matches the fix in LiveKit's own SDKs (client-sdk-swift #1050/#1121): under
@@ -1592,7 +1592,7 @@ export function useCall(conversationId: string | null): UseCallState {
       if (enabled && screenTrack) {
         // "vp8" here matches the videoCodec passed to setScreenShareEnabled above --
         // must stay in sync so the right SDP payload types get the hint.
-        setStartBitrateTarget(screenTrack.mediaStreamTrack.id, "vp8", maxBitrate / 1000);
+        setStartBitrateTarget(screenTrack.mediaStreamTrack.id, "vp9", maxBitrate / 1000);
       } else if (outgoingTrackId) {
         clearStartBitrateTarget(outgoingTrackId);
       }

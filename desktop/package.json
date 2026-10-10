@@ -1,0 +1,28 @@
+{
+  "name": "inarow-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop shell for InARow",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc && node scripts/copy-assets.mjs",
+    "dev": "npm run build && electron .",
+    "start": "electron .",
+    "typecheck": "tsc --noEmit",
+    "dist": "npm run build && electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "typescript": "^5.8.0"
+  },
+  "build": {
+    "appId": "com.inarow.desktop",
+    "productName": "InARow",
+    "directories": { "output": "release" },
+    "files": ["dist/**/*", "package.json"],
+    "win": { "target": ["nsis"] },
+    "nsis": { "oneClick": true, "perMachine": false }
+  }
+}

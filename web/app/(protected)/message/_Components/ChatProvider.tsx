@@ -37,9 +37,9 @@ interface ChatContextValue {
     user: PlatformUser,
     options?: { call?: boolean },
   ) => Promise<void>;
-  /** Creates a group (name + up to 14 other members) and navigates to it. */
+  /** Creates a group (optional name + up to 14 other members) and navigates to it. */
   createGroup: (
-    name: string,
+    name: string | null,
     members: PlatformUser[],
   ) => Promise<ChatMutationResult>;
   /** Adds one member to an existing group. */
@@ -51,6 +51,11 @@ interface ChatContextValue {
   removeMember: (
     conversationId: string,
     userId: string,
+  ) => Promise<ChatMutationResult>;
+  /** Renames a group (any member); a blank name clears it (shown as its members). */
+  renameGroup: (
+    conversationId: string,
+    name: string,
   ) => Promise<ChatMutationResult>;
   /** Creator-only: deletes a group entirely (and leaves /message/<id> if that chat was open). */
   deleteGroup: (conversationId: string) => Promise<ChatMutationResult>;
@@ -95,6 +100,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     addConversation,
     addMemberToConversation,
     removeMemberFromConversation,
+    setConversationName,
     removeConversation,
     markRead,
     refreshCallParticipants,
@@ -194,13 +200,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   );
 
   const createGroup = useCallback(
-    async (name: string, members: PlatformUser[]) => {
+    async (name: string | null, members: PlatformUser[]) => {
       try {
         const res = await fetch("/api/chat/group", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            groupName: name,
+            groupName: name?.trim() || undefined,
             memberIds: members.map((m) => m.id),
           }),
         });
@@ -289,6 +295,33 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [removeMemberFromConversation],
   );
 
+  const renameGroup = useCallback(
+    async (conversationId: string, name: string) => {
+      const trimmed = name.trim();
+
+      try {
+        const res = await fetch(`/api/chat/${conversationId}/name`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: trimmed || null }),
+        });
+
+        if (!res.ok) {
+          return {
+            ok: false as const,
+            detail: await readProblemDetail(res, "Could not rename group"),
+          };
+        }
+        setConversationName(conversationId, trimmed || null);
+
+        return { ok: true as const };
+      } catch {
+        return { ok: false as const, detail: "Could not rename group" };
+      }
+    },
+    [setConversationName],
+  );
+
   const deleteGroup = useCallback(
     async (conversationId: string) => {
       try {
@@ -347,6 +380,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       createGroup,
       addMember,
       removeMember,
+      renameGroup,
       deleteGroup,
       leaveGroup,
       setActiveCall,
@@ -363,6 +397,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       createGroup,
       addMember,
       removeMember,
+      renameGroup,
       deleteGroup,
       leaveGroup,
       setActiveCall,

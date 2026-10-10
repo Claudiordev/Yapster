@@ -8,6 +8,7 @@ import com.claudiordese.chat.application.domain.chat.types.ConversationType;
 import com.claudiordese.chat.application.domain.chat.types.MessageType;
 import com.claudiordese.chat.application.domain.chat.types.SystemEvent;
 import com.claudiordese.chat.application.domain.chat.types.UserStatusType;
+import com.claudiordese.chat.application.domain.event.server.GroupRenamedEvent;
 import com.claudiordese.chat.application.domain.event.server.MembersChangedEvent;
 import com.claudiordese.chat.application.domain.event.server.MessageEvent;
 import com.claudiordese.chat.application.domain.event.server.ProfileChangedEvent;
@@ -216,6 +217,91 @@ class ChatServiceTest {
     }
 
     @Test
+    void createGroup_withoutAName_storesNoName() {
+        Conversation group = service.createGroup(UUID.randomUUID(), "  ", java.util.Set.of(UUID.randomUUID()));
+
+        assertThat(group.name()).isNull();
+    }
+
+    @Test
+    void renameGroup_setsTheNameAndTellsTheMembers() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId, other);
+
+        service.renameGroup(conversationId, creatorId, "  Late-night crew ");
+
+        assertThat(conversations.conversation.orElseThrow().name()).isEqualTo("Late-night crew");
+        assertThat(gateway.recipientsOf(GroupRenamedEvent.class))
+                .containsExactlyInAnyOrder(creatorId.toString(), other.toString());
+        assertThat(gateway.events).filteredOn(GroupRenamedEvent.class::isInstance)
+                .allSatisfy(event -> assertThat(((GroupRenamedEvent) event).getName()).isEqualTo("Late-night crew"));
+        // Announced in the thread too, as the creator renaming it.
+        assertThat(gateway.events).filteredOn(MessageEvent.class::isInstance)
+                .allSatisfy(event -> {
+                    MessageEvent message = (MessageEvent) event;
+                    assertThat(message.getSystemEvent()).isEqualTo(SystemEvent.GROUP_RENAMED);
+                    assertThat(message.getSubjectId()).isEqualTo(creatorId.toString());
+                    assertThat(message.getBody()).isEqualTo("Late-night crew");
+                });
+        assertThat(gateway.recipientsOf(MessageEvent.class))
+                .containsExactlyInAnyOrder(creatorId.toString(), other.toString());
+    }
+
+    @Test
+    void renameGroup_toTheSameName_isANoOp() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId);
+
+        service.renameGroup(conversationId, creatorId, " Group ");
+
+        assertThat(gateway.events).isEmpty();
+    }
+
+    @Test
+    void renameGroup_withABlankName_clearsIt() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId);
+
+        service.renameGroup(conversationId, creatorId, " ");
+
+        assertThat(conversations.conversation.orElseThrow().name()).isNull();
+    }
+
+    @Test
+    void renameGroup_byAnyMember_isAllowed() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId, other);
+
+        service.renameGroup(conversationId, other, "Mine");
+
+        assertThat(conversations.conversation.orElseThrow().name()).isEqualTo("Mine");
+        assertThat(gateway.events).filteredOn(MessageEvent.class::isInstance)
+                .allSatisfy(event -> assertThat(((MessageEvent) event).getSubjectId()).isEqualTo(other.toString()));
+    }
+
+    @Test
+    void renameGroup_byANonMember_isRefused() {
+        UUID conversationId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        conversations.conversation = Optional.of(group(conversationId, creatorId));
+        conversations.members = List.of(creatorId);
+
+        assertThatThrownBy(() -> service.renameGroup(conversationId, UUID.randomUUID(), "Mine"))
+                .isInstanceOf(com.claudiordese.exceptions.InterdictedException.class);
+        assertThat(conversations.conversation.orElseThrow().name()).isEqualTo("Group");
+    }
+
+    @Test
     void deleteGroup_tellsTheMembersItIsGone() {
         UUID conversationId = UUID.randomUUID();
         UUID creatorId = UUID.randomUUID();
@@ -419,6 +505,12 @@ class ChatServiceTest {
         @Override
         public void removeMember(UUID conversationId, UUID userId) {
             members = members.stream().filter(member -> !member.equals(userId)).toList();
+        }
+
+        @Override
+        public void rename(UUID conversationId, String name) {
+            conversation = conversation.map(c -> new Conversation(
+                    c.id(), c.type(), name, c.dmKey(), c.createdAt(), c.creatorId()));
         }
 
         @Override

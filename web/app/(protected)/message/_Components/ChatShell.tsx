@@ -11,6 +11,9 @@ import { useChat } from "./ChatProvider";
 import { EventsPanel } from "./_Events/EventsPanel";
 import { GameServersPanel } from "./_GameServers/GameServersPanel";
 import { PremiumPanel } from "./_Premium/PremiumPanel";
+import { ServerRail } from "./_Servers/ServerRail";
+import { ServerSidebar } from "./_Servers/ServerSidebar";
+import { OpenPanelContext } from "./_Panels/OpenPanelContext";
 import { type PanelKey } from "./_Panels/utils/panels";
 
 /**
@@ -20,13 +23,14 @@ import { type PanelKey } from "./_Panels/utils/panels";
  */
 export function ChatShell({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const params = useParams<{ conversationId?: string }>();
+  const params = useParams<{ conversationId?: string; serverId?: string }>();
   const {
     conversations,
     isLoading,
     markRead,
     leaveGroup,
     deleteGroup,
+    renameGroup,
     account,
   } = useChat();
 
@@ -40,25 +44,35 @@ export function ChatShell({ children }: { children: ReactNode }) {
       });
   };
   const [activePanel, setActivePanel] = useState<PanelKey | null>(null);
+  const serverId = params.serverId ?? null;
 
   return (
     <div className="flex flex-row flex-grow min-h-0 text-foreground overflow-hidden">
+      <ServerRail />
+
       <div className="w-80 flex-shrink-0 flex flex-col min-h-0 bg-content1 dark:bg-surface-sidebar">
-        <ChatNav activePanel={activePanel} onSelectPanel={setActivePanel} />
+        {serverId ? (
+          <ServerSidebar serverId={serverId} />
+        ) : (
+          <>
+            <ChatNav activePanel={activePanel} onSelectPanel={setActivePanel} />
 
-        <div className="h-px bg-divider" />
+            <div className="h-px bg-divider" />
 
-        <ChatList
-          activeConversationId={params.conversationId ?? null}
-          conversations={conversations}
-          currentUserId={account.userId}
-          isLoading={isLoading}
-          onDeleteGroup={(id) => void report(deleteGroup(id))}
-          onLeaveGroup={(id) => void report(leaveGroup(id))}
-          onMarkRead={markRead}
-          onNewChat={() => router.push("/message")}
-          onSelect={(id) => router.push(`/message/${id}`)}
-        />
+            <ChatList
+              activeConversationId={params.conversationId ?? null}
+              conversations={conversations}
+              currentUserId={account.userId}
+              isLoading={isLoading}
+              onDeleteGroup={(id) => void report(deleteGroup(id))}
+              onLeaveGroup={(id) => void report(leaveGroup(id))}
+              onMarkRead={markRead}
+              onNewChat={() => router.push("/message")}
+              onRenameGroup={renameGroup}
+              onSelect={(id) => router.push(`/message/${id}`)}
+            />
+          </>
+        )}
 
         <ChatProfile />
       </div>
@@ -66,17 +80,19 @@ export function ChatShell({ children }: { children: ReactNode }) {
       <div className="w-px flex-shrink-0 bg-default-200 dark:bg-surface-border" />
 
       <div className="relative flex flex-col flex-grow min-h-0">
-        {children}
+        <OpenPanelContext.Provider value={setActivePanel}>
+          {children}
+        </OpenPanelContext.Provider>
 
-        {activePanel === "game-servers" && (
+        {!serverId && activePanel === "game-servers" && (
           <GameServersPanel onClose={() => setActivePanel(null)} />
         )}
 
-        {activePanel === "events" && (
+        {!serverId && activePanel === "events" && (
           <EventsPanel onClose={() => setActivePanel(null)} />
         )}
 
-        {activePanel === "premium" && (
+        {!serverId && activePanel === "premium" && (
           <PremiumPanel onClose={() => setActivePanel(null)} />
         )}
       </div>

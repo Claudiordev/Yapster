@@ -5,7 +5,7 @@ import { withAuth } from "@/lib/bff";
 import type { Conversation } from "@/types/chat";
 
 interface CreateGroupBody {
-  groupName: string;
+  groupName?: string;
   memberIds: string[];
 }
 
