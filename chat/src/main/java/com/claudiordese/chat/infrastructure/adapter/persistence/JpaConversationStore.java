@@ -69,6 +69,14 @@ public class JpaConversationStore implements ConversationStore {
     }
 
     @Override
+    public void rename(UUID conversationId, String name) {
+        conversations.findById(conversationId).ifPresent(entity -> {
+            entity.setName(name);
+            conversations.save(entity);
+        });
+    }
+
+    @Override
     public void delete(UUID conversationId) {
         conversations.deleteById(conversationId);
     }
