@@ -12,11 +12,14 @@ interface ConversationContextMenuProps {
   hasUnread: boolean;
   /** Members can leave a group they don't own. */
   canLeave: boolean;
+  /** Any member can rename a group. */
+  canRename: boolean;
   /** Only the creator can delete a group. */
   canDelete: boolean;
   x: number;
   y: number;
   onMarkRead: () => void;
+  onRename: () => void;
   onLeave: () => void;
   onDelete: () => void;
   onClose: () => void;
@@ -27,17 +30,19 @@ const ITEM_CLASS =
   "flex w-full items-center gap-2 rounded-small px-3 py-2 text-left text-small transition-colors hover:bg-default-100 disabled:pointer-events-none disabled:opacity-40";
 
 /**
- * Right-click menu for one conversation in the chat list: mark it read, leave it (groups you
- * don't own) or delete it (groups you created). Leaving and deleting ask for confirmation.
+ * Right-click menu for one conversation in the chat list: mark it read, rename it (groups), leave it (groups you don't own) or delete it
+ * (groups you created). Leaving and deleting ask for confirmation.
  */
 export function ConversationContextMenu({
   name,
   hasUnread,
   canLeave,
+  canRename,
   canDelete,
   x,
   y,
   onMarkRead,
+  onRename,
   onLeave,
   onDelete,
   onClose,
@@ -91,7 +96,8 @@ export function ConversationContextMenu({
     );
   }
 
-  const itemCount = 1 + (canLeave ? 1 : 0) + (canDelete ? 1 : 0);
+  const itemCount =
+    1 + (canRename ? 1 : 0) + (canLeave ? 1 : 0) + (canDelete ? 1 : 0);
 
   return (
     <FloatingMenu
@@ -117,6 +123,21 @@ export function ConversationContextMenu({
         <Icon name="check" size={14} />
         Mark as read
       </button>
+
+      {canRename && (
+        <button
+          className={ITEM_CLASS}
+          role="menuitem"
+          type="button"
+          onClick={() => {
+            onRename();
+            onClose();
+          }}
+        >
+          <Icon name="edit" size={14} />
+          Rename group
+        </button>
+      )}
 
       {canLeave && (
         <button

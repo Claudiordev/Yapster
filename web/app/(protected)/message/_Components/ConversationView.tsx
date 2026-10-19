@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { addToast } from "@heroui/toast";
 
 import { AddMemberModal } from "./_Chat/AddMemberModal";
+import { RenameGroupModal } from "./_Chat/RenameGroupModal";
 import { CallPresenceStrip } from "./_Chat/CallPresenceStrip";
 import { ChatThread } from "./_Chat/ChatThread";
 import type { UserStatus } from "@/types/chat";
@@ -36,11 +37,13 @@ export function ConversationView({
     refreshCallParticipants,
     myStatus,
     isConnected,
+    renameGroup,
   } = useChat();
   const { callConversationId, startCall, participantRoles } = useCallSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
 
   // The call belongs to the provider, not to this view: navigating between
   // chats no longer ends it. This chat shows the panel only while it's THE call.
@@ -224,6 +227,7 @@ export function ConversationView({
         }}
         members={isGroup ? panelMembers : undefined}
         onAddMember={isGroup ? () => setAddMemberOpen(true) : undefined}
+        onRename={isGroup ? () => setRenameOpen(true) : undefined}
         onLoadMore={loadMore}
         onStartCall={() => startCall(conversationId)}
         typingNames={typingNames}
@@ -237,6 +241,15 @@ export function ConversationView({
           isOpen={addMemberOpen}
           onAdd={addGroupMember}
           onClose={() => setAddMemberOpen(false)}
+        />
+      )}
+
+      {isGroup && (
+        <RenameGroupModal
+          currentName={active?.name ?? null}
+          isOpen={renameOpen}
+          onClose={() => setRenameOpen(false)}
+          onSave={(name) => renameGroup(conversationId, name)}
         />
       )}
     </>
