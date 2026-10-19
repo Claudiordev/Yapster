@@ -244,13 +244,13 @@ async function applyAdaptiveScreenShareTier(
     // Best-effort -- scaleResolutionDownBy + maxFramerate below still apply.
   }
   if (typeof track.setDegradationPreference === "function") {
-    await track.setDegradationPreference("maintain-resolution");
+    await track.setDegradationPreference("balanced");
   }
 
   const parameters = sender.getParameters();
   const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
 
-  parameters.degradationPreference = "maintain-resolution";
+  parameters.degradationPreference = "balanced";
   parameters.encodings = encodings.map((encoding) => ({
     ...encoding,
     ...(scaleResolutionDownBy !== undefined ? { scaleResolutionDownBy } : {}),
@@ -295,7 +295,7 @@ async function restoreConfiguredScreenShare(
   });
 
   if (typeof track.setDegradationPreference === "function") {
-    await track.setDegradationPreference("maintain-resolution");
+    await track.setDegradationPreference("balanced");
   }
 
   await enforceConfiguredScreenShareSender(track);
@@ -314,7 +314,7 @@ async function enforceConfiguredScreenShareSender(
   const parameters = sender.getParameters();
   const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
 
-  parameters.degradationPreference = "maintain-resolution";
+  parameters.degradationPreference = "balanced";
   parameters.encodings = encodings.map((encoding) => {
     const restored = {
       ...encoding,
@@ -1570,14 +1570,14 @@ export function useCall(conversationId: string | null): UseCallState {
           // VP9: unlike H264, Chrome negotiates it as one payload type per m= section
           // (no profile-level-id/packetization-mode fragmentation), so the start-bitrate
           // hint can't land on an unused sibling payload the way it did with H264.
-          videoCodec: "vp9",
+          videoCodec: "vp8",
           backupCodec: false,
           simulcast: true,
           // Matches the fix in LiveKit's own SDKs (client-sdk-swift #1050/#1121): under
           // constraint, prefer dropping frames over resolution, so shared text/UI stays
           // sharp instead of blurring. The reviewer noted this mattered more than the
           // start-bitrate hint for their reported case.
-          degradationPreference: "maintain-resolution",
+          degradationPreference: "balanced",
         },
       );
 
@@ -1592,7 +1592,7 @@ export function useCall(conversationId: string | null): UseCallState {
       if (enabled && screenTrack) {
         // "vp9" here matches the videoCodec passed to setScreenShareEnabled above --
         // must stay in sync so the right SDP payload types get the hint.
-        setStartBitrateTarget(screenTrack.mediaStreamTrack.id, "vp9", maxBitrate / 1000);
+        setStartBitrateTarget(screenTrack.mediaStreamTrack.id, "vp8", maxBitrate / 1000);
       } else if (outgoingTrackId) {
         clearStartBitrateTarget(outgoingTrackId);
       }
