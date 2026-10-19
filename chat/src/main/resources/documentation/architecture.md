@@ -37,3 +37,9 @@ send("alice",evt)        send("bob",evt)     send("carol",evt)
 Alice's laptop  Alice's phone  Bob's laptop   ← browsers receive JSON
 
 ## Conversations read are saved by conversation_member lastReadSeq
+
+## Running several replicas
+
+`WebSocketEventGateway` keeps the real `WebSocketSession`s of its own JVM only. The shared state
+(who is connected, with which status) lives in Redis and events for sockets held by another
+replica travel over Redis pub/sub. See `redis-sockets.md` for the design.
