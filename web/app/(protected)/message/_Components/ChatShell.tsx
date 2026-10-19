@@ -27,6 +27,7 @@ export function ChatShell({ children }: { children: ReactNode }) {
     markRead,
     leaveGroup,
     deleteGroup,
+    renameGroup,
     account,
   } = useChat();
 
@@ -57,6 +58,7 @@ export function ChatShell({ children }: { children: ReactNode }) {
           onLeaveGroup={(id) => void report(leaveGroup(id))}
           onMarkRead={markRead}
           onNewChat={() => router.push("/message")}
+          onRenameGroup={renameGroup}
           onSelect={(id) => router.push(`/message/${id}`)}
         />
 

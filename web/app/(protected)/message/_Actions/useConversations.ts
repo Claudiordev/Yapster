@@ -76,6 +76,17 @@ export function useConversations(myUserId: string | null) {
     });
   }, [subscribe]);
 
+  // A rename carries the new name, so the row updates in place without a reload.
+  useEffect(() => {
+    return subscribe("GROUP_RENAMED", (event) => {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === event.conversationId ? { ...c, name: event.name } : c,
+        ),
+      );
+    });
+  }, [subscribe]);
+
   // Live messages update the matching row in place: preview, ordering, and the
   // Membership or a profile changed somewhere: reload the list, which is where names and
   // pictures are resolved. Several events can land together (a new group tells every
@@ -203,6 +214,16 @@ export function useConversations(myUserId: string | null) {
     [],
   );
 
+  /** Sets a group's name in the list (null = unnamed, shown as its members). */
+  const setConversationName = useCallback(
+    (conversationId: string, name: string | null) => {
+      setConversations((prev) =>
+        prev.map((c) => (c.id === conversationId ? { ...c, name } : c)),
+      );
+    },
+    [],
+  );
+
   /** Drops a conversation entirely (the creator deleted the group). */
   const removeConversation = useCallback((conversationId: string) => {
     setConversations((prev) => prev.filter((c) => c.id !== conversationId));
@@ -269,6 +290,7 @@ export function useConversations(myUserId: string | null) {
     addConversation,
     addMemberToConversation,
     removeMemberFromConversation,
+    setConversationName,
     removeConversation,
     markRead,
     refreshCallParticipants,

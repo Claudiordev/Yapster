@@ -51,6 +51,8 @@ interface ChatThreadProps {
     onRemove: (member: PanelMember) => void;
   };
   onAddMember?: () => void;
+  /** Groups only: opens the rename dialog (any member can rename). */
+  onRename?: () => void;
   /** Starts a voice call in this conversation. */
   onStartCall?: () => void;
   /** True while a call panel is already open for this conversation. */
@@ -96,6 +98,7 @@ export function ChatThread({
   members,
   memberActions,
   onAddMember,
+  onRename,
   onStartCall,
   inCall,
 }: ChatThreadProps) {
@@ -183,6 +186,18 @@ export function ChatThread({
           size="sm"
         />
         <h2 className="font-semibold truncate text-foreground">{title}</h2>
+        {onRename && (
+          <Button
+            isIconOnly
+            aria-label="Rename group"
+            className="min-w-7 h-7 flex-shrink-0 text-default-400 hover:text-foreground"
+            size="sm"
+            variant="light"
+            onPress={onRename}
+          >
+            <Icon name="edit" size={15} />
+          </Button>
+        )}
         <div className="ml-auto flex items-center gap-2">
           {onStartCall && (
             <Button
@@ -260,7 +275,11 @@ export function ChatThread({
                         ? `${subject} was added to the chat`
                         : m.system.event === "MEMBER_LEFT"
                           ? `${subject} left the chat`
-                          : `${subject} was removed from the chat`;
+                          : m.system.event === "GROUP_RENAMED"
+                            ? m.body
+                              ? `${subject} renamed the group to "${m.body}"`
+                              : `${subject} removed the group name`
+                            : `${subject} was removed from the chat`;
 
                     return (
                       <p
