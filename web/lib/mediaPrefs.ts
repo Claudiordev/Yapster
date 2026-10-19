@@ -58,11 +58,6 @@ export const VIDEO_RESOLUTIONS: Record<
   VideoResolution,
   { width: number; height: number; bitrate: number }
 > = {
-  "720p": {
-    width: 1280,
-    height: 720,
-    bitrate: 3_500_000,
-  },
   "1080p": {
     width: 1920,
     height: 1080,
@@ -105,6 +100,11 @@ export const ADAPTIVE_RESOLUTIONS: Record<
   { width: number; height: number; bitrate: number }
 > = {
   ...VIDEO_RESOLUTIONS,
+  "720p": {
+    width: 1280,
+    height: 720,
+    bitrate: 3_500_000,
+  },
   "480p": {
     width: 854,
     height: 480,
@@ -129,7 +129,7 @@ export const DEFAULT_VIDEO_PREFS: VideoPrefs = {
 // clamp): the voice service enforces the same limits from the user's *current* roles,
 // so a tampered client is still cut off. Keep both in step (ScreenSharePolicy in voice).
 
-const RESOLUTION_RANK: readonly VideoResolution[] = ["720p", "1080p", "1440p", "2160p"];
+const RESOLUTION_RANK: readonly VideoResolution[] = ["1080p", "1440p", "2160p"];
 
 export function maxResolutionForRoles(roles: readonly string[]): VideoResolution {
   if (["ADMIN", "MODERATOR", "PREMIUM_PLUS"].some((role) => roles.includes(role))) return "2160p";

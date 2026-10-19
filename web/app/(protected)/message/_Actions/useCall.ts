@@ -1567,10 +1567,10 @@ export function useCall(conversationId: string | null): UseCallState {
           // Keep screen video and screen audio in the same MediaStream for
           // better A/V synchronization on subscribers.
           stream: "screen-share",
-          // VP8: unlike H264, Chrome negotiates it as one payload type per m= section
+          // VP9: unlike H264, Chrome negotiates it as one payload type per m= section
           // (no profile-level-id/packetization-mode fragmentation), so the start-bitrate
           // hint can't land on an unused sibling payload the way it did with H264.
-          videoCodec: "vp8",
+          videoCodec: "vp9",
           backupCodec: false,
           simulcast: true,
           // Matches the fix in LiveKit's own SDKs (client-sdk-swift #1050/#1121): under
@@ -1590,9 +1590,9 @@ export function useCall(conversationId: string | null): UseCallState {
       )?.track as LocalVideoTrack | undefined;
 
       if (enabled && screenTrack) {
-        // "vp8" here matches the videoCodec passed to setScreenShareEnabled above --
+        // "vp9" here matches the videoCodec passed to setScreenShareEnabled above --
         // must stay in sync so the right SDP payload types get the hint.
-        setStartBitrateTarget(screenTrack.mediaStreamTrack.id, "vp8", maxBitrate / 1000);
+        setStartBitrateTarget(screenTrack.mediaStreamTrack.id, "vp9", maxBitrate / 1000);
       } else if (outgoingTrackId) {
         clearStartBitrateTarget(outgoingTrackId);
       }
