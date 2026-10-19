@@ -5,6 +5,7 @@ import com.claudiordese.chat.application.service.ChatService;
 import com.claudiordese.chat.infrastructure.controller.request.AddMemberRequest;
 import com.claudiordese.chat.infrastructure.controller.request.CreateGroupRequest;
 import com.claudiordese.chat.infrastructure.controller.request.MarkReadRequest;
+import com.claudiordese.chat.infrastructure.controller.request.RenameGroupRequest;
 import com.claudiordese.chat.infrastructure.controller.request.SendMessageRequest;
 import com.claudiordese.chat.infrastructure.controller.request.StartDmRequest;
 import com.claudiordese.chat.infrastructure.controller.responses.*;
@@ -73,6 +74,12 @@ public class ChatController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void leaveGroup(@PathVariable UUID conversationId, Authentication auth) {
         chatService.leaveGroup(conversationId, loggedUser(auth));
+    }
+
+    @PutMapping("/{conversationId}/name")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void renameGroup(@PathVariable UUID conversationId, @RequestBody @Valid RenameGroupRequest request, Authentication auth) {
+        chatService.renameGroup(conversationId, loggedUser(auth), request.name());
     }
 
     @DeleteMapping("/{conversationId}")

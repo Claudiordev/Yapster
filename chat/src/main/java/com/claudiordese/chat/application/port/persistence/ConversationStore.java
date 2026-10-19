@@ -46,6 +46,11 @@ public interface ConversationStore {
     void removeMember(UUID conversationId, UUID userId);
 
     /**
+     * Sets (or, with null, clears) a conversation's name.
+     */
+    void rename(UUID conversationId, String name);
+
+    /**
      * Deletes a conversation entirely (members and messages cascade with it).
      */
     void delete(UUID conversationId);
