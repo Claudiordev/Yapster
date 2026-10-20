@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Voxsy</title>
+  <defs>
+    <linearGradient id="shield" x1="12" y1="7" x2="52" y2="57" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ff6675"/>
+      <stop offset="1" stop-color="#d81732"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="20" y1="14" x2="45" y2="50" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff"/>
+      <stop offset="1" stop-color="#ffd7db"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#5b0716" flood-opacity=".7"/>
+    </filter>
+  </defs>
+  <path d="M32 3 55 13v17c0 14.6-9.3 24.8-23 31C18.3 54.8 9 44.6 9 30V13L32 3Z" fill="#6f0a1b" opacity=".9"/>
+  <path d="M32 6.5 52 15v15c0 12.4-7.7 21.4-20 27.4C19.7 51.4 12 42.4 12 30V15l20-8.5Z" fill="url(#shield)" stroke="#ff8a95" stroke-width="2"/>
+  <path d="M18 20.5 26.6 43h10.8L46 20.5h-8.4L32 36l-5.6-15.5H18Z" fill="url(#shine)" filter="url(#shadow)"/>
+  <path d="M20.5 15.5c6.7-3.3 16.3-3.3 23 0" fill="none" stroke="#fff" stroke-linecap="round" stroke-width="2.5" opacity=".75"/>
+  <circle cx="17.5" cy="15.5" r="2" fill="#fff" opacity=".85"/>
+  <circle cx="46.5" cy="15.5" r="2" fill="#fff" opacity=".85"/>
+</svg>
