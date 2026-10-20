@@ -10,6 +10,7 @@ import { StatusDot } from "@/components/StatusDot/StatusDot";
 import { Icon } from "@/components/Icon/Icon";
 import { conversationName, isGroupCreator, isUnread } from "@/lib/chat";
 import type { Conversation } from "@/types/chat";
+import { COMPOSER_ACTION_BUTTON_CLASS } from "../_Message/MessageComposer";
 import { isImageOnlyBody } from "../_Message/utils/embeds";
 import type { ChatMutationResult } from "../ChatProvider";
 import { ConversationContextMenu } from "./ConversationContextMenu";
@@ -93,7 +94,7 @@ export function ChatList({
         <Button
           isIconOnly
           aria-label="New chat"
-          className="text-default-400 hover:text-foreground"
+          className={COMPOSER_ACTION_BUTTON_CLASS}
           size="sm"
           variant="light"
           onPress={onNewChat}

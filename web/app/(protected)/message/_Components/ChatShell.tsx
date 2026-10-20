@@ -11,6 +11,7 @@ import { useChat } from "./ChatProvider";
 import { EventsPanel } from "./_Events/EventsPanel";
 import { GameServersPanel } from "./_GameServers/GameServersPanel";
 import { PremiumPanel } from "./_Premium/PremiumPanel";
+import { OpenPanelContext } from "./_Panels/OpenPanelContext";
 import { type PanelKey } from "./_Panels/utils/panels";
 
 /**
@@ -68,7 +69,9 @@ export function ChatShell({ children }: { children: ReactNode }) {
       <div className="w-px flex-shrink-0 bg-default-200 dark:bg-surface-border" />
 
       <div className="relative flex flex-col flex-grow min-h-0">
-        {children}
+        <OpenPanelContext.Provider value={setActivePanel}>
+          {children}
+        </OpenPanelContext.Provider>
 
         {activePanel === "game-servers" && (
           <GameServersPanel onClose={() => setActivePanel(null)} />
