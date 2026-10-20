@@ -1,18 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { Button } from "@heroui/button";
-
-import { Icon } from "@/components/Icon/Icon";
-
-import { NewGroupModal } from "./_Chat/NewGroupModal";
-import { UserSearch } from "./_Chat/UserSearch";
+import { EventsPromo } from "./_Chat/EventsPromo";
+import { StartChatForm } from "./_Chat/StartChatForm";
 import { useChat } from "./ChatProvider";
 
 /** The "Main" home panel shown at /message when no conversation is open. */
 export function MainPage() {
   const { startConversation, createGroup } = useChat();
-  const [groupModalOpen, setGroupModalOpen] = useState(false);
 
   return (
     <div className="flex flex-col flex-grow min-h-0 bg-background dark:bg-surface-chat">
@@ -21,26 +15,22 @@ export function MainPage() {
       </div>
 
       <div className="flex-grow overflow-y-auto flex flex-col items-center justify-center p-6">
-        <div className="start-card w-full max-w-[470px] px-6 py-8 text-center sm:px-9">
-          <h1 className="mb-7 text-[27px] font-bold leading-tight tracking-tight text-foreground">
+        <div className="start-card w-full max-w-[520px] px-6 py-8 text-center sm:px-9">
+          <EventsPromo />
+
+          <div className="my-7 h-px bg-white/10" />
+
+          <h1 className="text-[27px] font-bold leading-tight tracking-tight text-foreground">
             Start a conversation.
           </h1>
+          <p className="mb-6 mt-2 text-sm text-default-500">
+            Pick one friend or a few.
+          </p>
 
-          <UserSearch onStartConversation={startConversation} />
-
-          <div className="my-5 flex items-center gap-3 text-xs text-default-400">
-            <span className="h-px flex-1 bg-white/10" />
-            or
-            <span className="h-px flex-1 bg-white/10" />
-          </div>
-
-          <Button
-            className="btn-coral min-h-[45px] w-full rounded-[10px] text-sm font-bold"
-            startContent={<Icon name="users" size={16} />}
-            onPress={() => setGroupModalOpen(true)}
-          >
-            Create a group
-          </Button>
+          <StartChatForm
+            onCreateGroup={createGroup}
+            onStartConversation={startConversation}
+          />
         </div>
 
         <p className="mt-7 text-sm text-default-400">
@@ -48,12 +38,6 @@ export function MainPage() {
           <span className="text-default-600">Your voice.</span>
         </p>
       </div>
-
-      <NewGroupModal
-        isOpen={groupModalOpen}
-        onClose={() => setGroupModalOpen(false)}
-        onCreate={createGroup}
-      />
     </div>
   );
 }

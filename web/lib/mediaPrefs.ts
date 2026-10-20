@@ -155,6 +155,10 @@ export function setScreenShareRoles(roles: readonly string[]): void {
   activeRoles = roles;
 }
 
+export function getScreenShareRoles(): readonly string[] {
+  return activeRoles;
+}
+
 /** An explicit local preference wins; absent preference defaults to enabled. */
 export function readScreenShareAudioPref(): boolean {
   if (typeof window === "undefined") return DEFAULT_SCREEN_SHARE_AUDIO;
@@ -167,6 +171,11 @@ export function readScreenShareAudioPref(): boolean {
 export function writeScreenShareAudioPref(enabled: boolean): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(SCREEN_SHARE_AUDIO_KEY, String(enabled));
+}
+
+export function writeVideoResolution(resolution: VideoResolution): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(VIDEO_RESOLUTION_KEY, resolution);
 }
 
 export function readVideoPrefs(): VideoPrefs {

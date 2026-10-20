@@ -27,7 +27,7 @@ import {
 import { MicGainProcessor } from "@/lib/micGainProcessor";
 import { useSound } from "react-sounds";
 
-import { ADAPTIVE_RESOLUTION_LADDER, ADAPTIVE_RESOLUTIONS, DEFAULT_SCREEN_SHARE_AUDIO, readAudioProcessingPrefs, readScreenShareAudioPref, readVideoPrefs, videoCaptureSettings } from "@/lib/mediaPrefs";
+import { ADAPTIVE_RESOLUTION_LADDER, ADAPTIVE_RESOLUTIONS, DEFAULT_SCREEN_SHARE_AUDIO, getScreenShareRoles, readAudioProcessingPrefs, readScreenShareAudioPref, readVideoPrefs, videoCaptureSettings } from "@/lib/mediaPrefs";
 import type { AdaptiveResolutionTier } from "@/types/media";
 import { readProblemDetail } from "@/lib/problemDetails";
 import { useRealtime } from "@/lib/hooks/useRealtime";
@@ -37,6 +37,7 @@ import {
   installStartBitrateOverride,
   setStartBitrateTarget,
 } from "./utils/startBitrateOverride";
+import { pickDesktopScreenShare } from "./utils/desktopScreenShare";
 
 /**
  * The slice of a raw WebRTC stats report the screen-share logging reads.
@@ -1562,17 +1563,17 @@ export function useCall(conversationId: string | null): UseCallState {
           // from the higher Opus ceiling, especially for games and video.
           audioPreset: AudioPresets.musicHighQualityStereo,
           forceStereo: true,
-          dtx: false,
-          red: true,
+          dtx: true,
+          red: false,
           // Keep screen video and screen audio in the same MediaStream for
           // better A/V synchronization on subscribers.
           stream: "screen-share",
           // VP9: unlike H264, Chrome negotiates it as one payload type per m= section
           // (no profile-level-id/packetization-mode fragmentation), so the start-bitrate
           // hint can't land on an unused sibling payload the way it did with H264.
-          videoCodec: "vp8",
-          backupCodec: false,
-          simulcast: true,
+          videoCodec: "vp9",
+          backupCodec: true,
+          simulcast: false,
           // Matches the fix in LiveKit's own SDKs (client-sdk-swift #1050/#1121): under
           // constraint, prefer dropping frames over resolution, so shared text/UI stays
           // sharp instead of blurring. The reviewer noted this mattered more than the
@@ -1592,7 +1593,7 @@ export function useCall(conversationId: string | null): UseCallState {
       if (enabled && screenTrack) {
         // "vp9" here matches the videoCodec passed to setScreenShareEnabled above --
         // must stay in sync so the right SDP payload types get the hint.
-        setStartBitrateTarget(screenTrack.mediaStreamTrack.id, "vp8", maxBitrate / 1000);
+        setStartBitrateTarget(screenTrack.mediaStreamTrack.id, "vp9", maxBitrate / 1000);
       } else if (outgoingTrackId) {
         clearStartBitrateTarget(outgoingTrackId);
       }
@@ -2299,6 +2300,9 @@ export function useCall(conversationId: string | null): UseCallState {
     const next = !screenSharing;
 
     try {
+      // Desktop app: pick the source and stream quality in one modal first.
+      if (next && !(await pickDesktopScreenShare(getScreenShareRoles()))) return;
+
       const includeAudio = next
         ? readScreenShareAudioPref()
         : screenAudioEnabledRef.current;
