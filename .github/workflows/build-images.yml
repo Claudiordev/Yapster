@@ -12,7 +12,7 @@ on:
         required: false
         type: choice
         default: auto
-        options: [auto, all, session, router, comms, voice, chat, discovery, web]
+        options: [auto, all, session, router, comms, voice, chat, discovery, web, showcase]
 
 permissions:
   contents: read
@@ -72,6 +72,8 @@ jobs:
               - 'pom.xml'
             web:
               - 'web/**'
+            showcase:
+              - 'showcase/**'
 
       - name: Decide which services to build
         id: decide
@@ -88,7 +90,7 @@ jobs:
               echo 'services=${{ steps.filter.outputs.changes }}' >> "$GITHUB_OUTPUT"
               ;;
             all)
-              echo 'services=["session","router","comms","voice","chat","discovery","web"]' >> "$GITHUB_OUTPUT"
+              echo 'services=["session","router","comms","voice","chat","discovery","web","showcase"]' >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo 'services=["${{ github.event.inputs.service }}"]' >> "$GITHUB_OUTPUT"
@@ -121,8 +123,8 @@ jobs:
       - name: Set build context
         id: ctx
         run: |
-          if [ "${{ matrix.service }}" = "web" ]; then
-            echo "context=web" >> "$GITHUB_OUTPUT"
+          if [ "${{ matrix.service }}" = "web" ] || [ "${{ matrix.service }}" = "showcase" ]; then
+            echo "context=${{ matrix.service }}" >> "$GITHUB_OUTPUT"
           else
             echo "context=." >> "$GITHUB_OUTPUT"
           fi
