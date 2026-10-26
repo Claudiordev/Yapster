@@ -14,7 +14,7 @@ import { Icon } from "@/components/Icon/Icon";
 import { siteConfig } from "@/config/site";
 import { POPUP_MOTION_PROPS } from "@/lib/popupMotion";
 import { useAccount } from "@/lib/hooks/useAccount";
-import { clampResolution, DEFAULT_VIDEO_PREFS, isResolutionAllowed, DEFAULT_SCREEN_SHARE_AUDIO, ECHO_CANCELLATION_KEY, NOISE_SUPPRESSION_KEY, readAudioProcessingPrefs, readVideoPrefs, readScreenShareAudioPref, VIDEO_RESOLUTION_KEY, VIDEO_RESOLUTIONS, writeAudioProcessingPref, writeScreenShareAudioPref } from "@/lib/mediaPrefs";
+import { clampResolution, DEFAULT_STREAMING_MODE, DEFAULT_VIDEO_PREFS, readStreamingMode, STREAMING_MODE_RESOLUTION, writeStreamingMode, writeVideoResolution, isResolutionAllowed, DEFAULT_SCREEN_SHARE_AUDIO, ECHO_CANCELLATION_KEY, NOISE_SUPPRESSION_KEY, readAudioProcessingPrefs, readVideoPrefs, readScreenShareAudioPref, VIDEO_RESOLUTIONS, writeAudioProcessingPref, writeScreenShareAudioPref } from "@/lib/mediaPrefs";
 import {
   INPUT_DEVICE_KEY,
   INPUT_VOLUME_KEY,
@@ -25,7 +25,7 @@ import {
   readInputVolume,
   readOutputVolume,
 } from "@/lib/audioSettings";
-import type { VideoResolution } from "@/types/media";
+import type { StreamingMode, VideoResolution } from "@/types/media";
 
 interface AudioDevice {
   id: string;
@@ -77,9 +77,8 @@ export function SettingsPanel() {
   const [videoResolution, setVideoResolution] = useState<VideoResolution>(
     DEFAULT_VIDEO_PREFS.resolution,
   );
-  const [screenShareAudio, setScreenShareAudio] = useState(
-    DEFAULT_SCREEN_SHARE_AUDIO,
-  );
+  const [streamingMode, setStreamingMode] = useState<StreamingMode>(DEFAULT_STREAMING_MODE);
+  const [screenShareAudio, setScreenShareAudio] = useState(DEFAULT_SCREEN_SHARE_AUDIO);
   const [serverInformationOpen, setServerInformationOpen] = useState(false);
   const [userRolesOpen, setUserRolesOpen] = useState(false);
   const [featuresOpen, setFeaturesOpen] = useState(false);
@@ -105,6 +104,7 @@ export function SettingsPanel() {
 
     setVideoResolution(videoPrefs.resolution);
     setScreenShareAudio(readScreenShareAudioPref());
+    setStreamingMode(readStreamingMode());
     const md =
       typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
 
@@ -292,7 +292,7 @@ export function SettingsPanel() {
         </p>
       </div>
 
-      <div className="flex flex-col gap-6 sm:flex-row">
+      <div className="flex flex-col gap-6">
         <div className="w-full">
           <Select
             popoverProps={{ motionProps: POPUP_MOTION_PROPS }}
@@ -309,7 +309,7 @@ export function SettingsPanel() {
               if (!isResolutionAllowed(value, roles)) return;
 
               setVideoResolution(value);
-              localStorage.setItem(VIDEO_RESOLUTION_KEY, value);
+              writeVideoResolution(value);
             }}
           >
             {(Object.keys(VIDEO_RESOLUTIONS) as VideoResolution[]).map(
@@ -325,6 +325,31 @@ export function SettingsPanel() {
                 </SelectItem>
               ),
             )}
+          </Select>
+        </div>
+        <div className="w-full">
+          <Select
+            popoverProps={{ motionProps: POPUP_MOTION_PROPS }}
+            label="Stream type"
+            labelPlacement="outside"
+            selectedKeys={[streamingMode]}
+            variant="bordered"
+            onSelectionChange={(keys) => {
+              const value =
+                (Array.from(keys)[0] as StreamingMode) ?? DEFAULT_STREAMING_MODE;
+              const resolution = clampResolution(
+                STREAMING_MODE_RESOLUTION[value],
+                roles,
+              );
+
+              setStreamingMode(value);
+              writeStreamingMode(value);
+              setVideoResolution(resolution);
+              writeVideoResolution(resolution);
+            }}
+          >
+            <SelectItem key="gaming">Gaming / video</SelectItem>
+            <SelectItem key="screenshare">Screen share (text &amp; UI)</SelectItem>
           </Select>
         </div>
       </div>
@@ -348,8 +373,10 @@ export function SettingsPanel() {
       <p className="text-tiny text-default-400">
         Sends up to{" "}
         {(VIDEO_RESOLUTIONS[videoResolution].bitrate / 1_000_000).toFixed(1)}{" "}
-        Mbps at 60 fps. Higher resolutions look sharper but need more upload
-        bandwidth.
+        Mbps at 60 fps.{" "}
+        {streamingMode === "gaming"
+          ? "Gaming keeps motion smooth and softens detail when bandwidth is short."
+          : "Screen share keeps text and UI sharp and drops frames when bandwidth is short."}
       </p>
 
       <div className="h-px bg-divider" />

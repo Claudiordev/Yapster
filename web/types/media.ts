@@ -1,7 +1,10 @@
-export type VideoResolution = "1080p" | "1440p" | "2160p";
+export type VideoResolution = "720p" | "1080p" | "1440p" | "2160p";
 
 /** Screen share is 60 fps only. */
 export type VideoFrameRate = 60;
+
+/** "gaming" favours smooth motion; "screenshare" favours sharp text/UI. */
+export type StreamingMode = "gaming" | "screenshare";
 
 export interface VideoPrefs {
   resolution: VideoResolution;

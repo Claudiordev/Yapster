@@ -1,6 +1,6 @@
 "use client";
 
-import type { AdaptiveResolutionTier, AudioProcessingPrefs, VideoFrameRate, VideoPrefs, VideoResolution } from "@/types/media";
+import type { AdaptiveResolutionTier, AudioProcessingPrefs, StreamingMode, VideoFrameRate, VideoPrefs, VideoResolution } from "@/types/media";
 
 /**
  * Mic processing preferences, shared between the Settings panel (which writes
@@ -41,40 +41,56 @@ export function writeAudioProcessingPref(key: string, enabled: boolean): void {
 
 export const VIDEO_RESOLUTION_KEY = "video-resolution";
 export const SCREEN_SHARE_AUDIO_KEY = "screen-share-audio";
+export const STREAMING_MODE_KEY = "screen-share-mode";
+export const DEFAULT_STREAMING_MODE: StreamingMode = "screenshare";
+
+/** Resolution each mode starts from; the role clamp still applies, and the picker can override it. */
+export const STREAMING_MODE_RESOLUTION: Record<StreamingMode, VideoResolution> = {
+  gaming: "1440p",
+  screenshare: "1080p",
+};
+
+/** Hint for the browser's encoder: motion ramps bitrate for games/video, text keeps edges sharp. */
+export const STREAMING_MODE_CONTENT_HINT: Record<StreamingMode, "motion" | "text"> = {
+  gaming: "motion",
+  screenshare: "text",
+};
 /** Shared default used by the settings page, in-call settings, and call hook. */
 export const DEFAULT_SCREEN_SHARE_AUDIO = true;
 
 /**
  * Capture size and target bitrate per resolution.
  *
- * The bitrates are the "quality" half of the setting: resolution alone only
- * decides how many pixels are captured, and without raising the ceiling the
- * encoder just spends the same bits on more of them, which looks *worse* (soft,
- * blocky on motion). These are geared to screen content — mostly static, but
- * needing crisp text — and are roughly double what you'd use for camera video
- * at the same size. Every value is for 60 fps, the only frame rate offered.
+ * The bitrates are the 60 fps column of Fluxer's screen-share table (see
+ * BITRATE_KBPS in fluxer_app/.../ScreenShareOptions.ts), capped at 6 Mbps:
+ * beyond that, users far from the server hit loss and the share stalls rather
+ * than looking better. Higher resolutions therefore share the same ceiling and
+ * trade sharpness for pixels. Every value is for 60 fps, the only frame rate
+ * offered.
  */
 export const VIDEO_RESOLUTIONS: Record<
   VideoResolution,
   { width: number; height: number; bitrate: number }
 > = {
+  "720p": {
+    width: 1280,
+    height: 720,
+    bitrate: 4_500_000,
+  },
   "1080p": {
     width: 1920,
     height: 1080,
-    bitrate: 7_500_000,
+    bitrate: 6_000_000,
   },
   "1440p": {
     width: 2560,
     height: 1440,
-    bitrate: 13_000_000,
+    bitrate: 8_500_000,
   },
   "2160p": {
     width: 3840,
     height: 2160,
-    // 4K60 screen content needs more than camera video to keep fine text edges
-    // legible with smooth motion, but this is only a ceiling: 18 Mbps keeps
-    // worst-case SFU traffic down (25 Mbps was the previous ceiling).
-    bitrate: 18_000_000,
+    bitrate: 12_000_000,
   },
 };
 
@@ -100,17 +116,12 @@ export const ADAPTIVE_RESOLUTIONS: Record<
   { width: number; height: number; bitrate: number }
 > = {
   ...VIDEO_RESOLUTIONS,
-  "720p": {
-    width: 1280,
-    height: 720,
-    bitrate: 3_500_000,
-  },
   "480p": {
     width: 854,
     height: 480,
-    bitrate: 1_800_000,
+    bitrate: 3_000_000,
   },
-  "240p": { width: 426, height: 240, bitrate: 600_000 },
+  "240p": { width: 426, height: 240, bitrate: 700_000 },
 };
 
 /** Screen share is always 60 fps; only the resolution is user-selectable. */
@@ -129,7 +140,7 @@ export const DEFAULT_VIDEO_PREFS: VideoPrefs = {
 // clamp): the voice service enforces the same limits from the user's *current* roles,
 // so a tampered client is still cut off. Keep both in step (ScreenSharePolicy in voice).
 
-const RESOLUTION_RANK: readonly VideoResolution[] = ["1080p", "1440p", "2160p"];
+const RESOLUTION_RANK: readonly VideoResolution[] = ["720p", "1080p", "1440p", "2160p"];
 
 export function maxResolutionForRoles(roles: readonly string[]): VideoResolution {
   if (["ADMIN", "MODERATOR", "PREMIUM_PLUS"].some((role) => roles.includes(role))) return "2160p";
@@ -173,9 +184,19 @@ export function writeScreenShareAudioPref(enabled: boolean): void {
   window.localStorage.setItem(SCREEN_SHARE_AUDIO_KEY, String(enabled));
 }
 
+const SCREEN_SHARE_PREFS_EVENT = "screen-share-prefs-changed";
+
+/** Fires (same tab) when the stream type or resolution is saved, so a running share can apply it. */
+export function onScreenSharePrefsChanged(listener: () => void): () => void {
+  window.addEventListener(SCREEN_SHARE_PREFS_EVENT, listener);
+
+  return () => window.removeEventListener(SCREEN_SHARE_PREFS_EVENT, listener);
+}
+
 export function writeVideoResolution(resolution: VideoResolution): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(VIDEO_RESOLUTION_KEY, resolution);
+  window.dispatchEvent(new Event(SCREEN_SHARE_PREFS_EVENT));
 }
 
 export function readVideoPrefs(): VideoPrefs {
@@ -195,13 +216,53 @@ export function readVideoPrefs(): VideoPrefs {
   };
 }
 
+export function readStreamingMode(): StreamingMode {
+  if (typeof window === "undefined") return DEFAULT_STREAMING_MODE;
+
+  const stored = window.localStorage.getItem(STREAMING_MODE_KEY);
+
+  return stored === "screenshare" || stored === "gaming" ? stored : DEFAULT_STREAMING_MODE;
+}
+
+export function writeStreamingMode(mode: StreamingMode): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(STREAMING_MODE_KEY, mode);
+  window.dispatchEvent(new Event(SCREEN_SHARE_PREFS_EVENT));
+}
+
+/** Below this the encoder has too little to spend on frames, so protect resolution instead. */
+const MIN_MAINTAIN_FRAMERATE_BITRATE = 500_000;
+
+/**
+ * What the encoder gives up when bandwidth runs short. Frame rate is the
+ * default (motion stays smooth, quality softens briefly); resolution is kept
+ * where the viewer needs to read detail: screenshare mode, 4K, or a bitrate too
+ * low to spend on frames.
+ */
+export function screenShareDegradationPreference(
+  mode: StreamingMode,
+  resolution: VideoResolution | AdaptiveResolutionTier,
+  maxBitrate: number,
+): "maintain-framerate" | "maintain-resolution" {
+  if (mode === "screenshare") return "maintain-resolution";
+  if (resolution === "2160p") return "maintain-resolution";
+  if (maxBitrate < MIN_MAINTAIN_FRAMERATE_BITRATE) return "maintain-resolution";
+
+  return "maintain-framerate";
+}
+
 /** Capture constraints + publish bitrate for the current video preferences. */
 export function videoCaptureSettings(prefs: VideoPrefs = readVideoPrefs()) {
   const { width, height, bitrate } = VIDEO_RESOLUTIONS[prefs.resolution];
+  const mode = readStreamingMode();
 
   return {
     resolution: { width, height, frameRate: prefs.frameRate },
     maxBitrate: bitrate,
     maxFramerate: prefs.frameRate,
+    resolutionId: prefs.resolution,
+    mode,
+    contentHint: STREAMING_MODE_CONTENT_HINT[mode],
+    degradationPreference: screenShareDegradationPreference(mode, prefs.resolution, bitrate),
   };
 }
