@@ -42,7 +42,7 @@ class ScreenShareEnforcementServiceTest {
     void policy_mapsRolesToCeiling() {
         assertThat(ScreenSharePolicy.maxHeight(Set.of())).isEqualTo(1080);
         assertThat(ScreenSharePolicy.maxHeight(Set.of("USER"))).isEqualTo(1080);
-        assertThat(ScreenSharePolicy.maxHeight(Set.of("PREMIUM"))).isEqualTo(1440);
+        assertThat(ScreenSharePolicy.maxHeight(Set.of("PREMIUM"))).isEqualTo(2160);
         assertThat(ScreenSharePolicy.maxHeight(Set.of("PREMIUM_PLUS"))).isEqualTo(2160);
         assertThat(ScreenSharePolicy.maxHeight(Set.of("MODERATOR"))).isEqualTo(2160);
         assertThat(ScreenSharePolicy.maxHeight(Set.of("USER", "ADMIN"))).isEqualTo(2160);
@@ -98,7 +98,7 @@ class ScreenShareEnforcementServiceTest {
 
     @Test
     void enforceEverywhere_rechecksEveryActiveRoomWithFreshRoles() throws Exception {
-        rolesByUser.put("u1", Set.of("PREMIUM")); // just downgraded from PREMIUM_PLUS
+        rolesByUser.put("u1", Set.of("USER")); // just lost PREMIUM
         track = new ScreenShareTrack("TR_1", 3840, 2160);
 
         service.enforceEverywhere("u1");

@@ -1532,15 +1532,7 @@ export function useCall(conversationId: string | null): UseCallState {
         enabled,
         {
           resolution,
-          // Use the high-motion encoder path so games and video can ramp to the
-          // selected bitrate. Timed startup keyframes above still refresh a
-          // static document after WebRTC's initial bandwidth estimate rises.
           contentHint: "motion",
-          // Ask Chromium for the selected source's audio. Chrome still
-          // requires the user to select "Share tab audio" in its picker.
-          // `restrictOwnAudio` is the capture hint used by the known-working
-          // screen-share implementation and prevents the tab from receiving
-          // an unintended copy of the local call audio.
           audio: includeAudio
             ? {
                 // Screen audio is music/media, not speech. Avoid voice
@@ -1559,41 +1551,24 @@ export function useCall(conversationId: string | null): UseCallState {
         },
         {
           screenShareEncoding: { maxBitrate, maxFramerate, priority: "high" },
-          // The default music preset is 48 kbps. Screen/tab audio benefits
-          // from the higher Opus ceiling, especially for games and video.
           audioPreset: AudioPresets.musicHighQualityStereo,
           forceStereo: true,
           dtx: true,
           red: false,
-          // Keep screen video and screen audio in the same MediaStream for
-          // better A/V synchronization on subscribers.
           stream: "screen-share",
-          // VP9: unlike H264, Chrome negotiates it as one payload type per m= section
-          // (no profile-level-id/packetization-mode fragmentation), so the start-bitrate
-          // hint can't land on an unused sibling payload the way it did with H264.
-          videoCodec: "vp9",
+          videoCodec: "vp8",
           backupCodec: true,
           simulcast: false,
-          // Matches the fix in LiveKit's own SDKs (client-sdk-swift #1050/#1121): under
-          // constraint, prefer dropping frames over resolution, so shared text/UI stays
-          // sharp instead of blurring. The reviewer noted this mattered more than the
-          // start-bitrate hint for their reported case.
           degradationPreference: "balanced",
         },
       );
 
-      // livekit-client already hints ~90% of maxBitrate as the WebRTC start bitrate;
-      // this forces the full target instead. Still only a hint -- Chromium's own
-      // congestion controller can lower the actual send rate if the network can't
-      // sustain it (see startBitrateOverride.ts for the mechanism and its limits).
       const screenTrack = room.localParticipant.getTrackPublication(
         Track.Source.ScreenShare,
       )?.track as LocalVideoTrack | undefined;
 
       if (enabled && screenTrack) {
-        // "vp9" here matches the videoCodec passed to setScreenShareEnabled above --
-        // must stay in sync so the right SDP payload types get the hint.
-        setStartBitrateTarget(screenTrack.mediaStreamTrack.id, "vp9", maxBitrate / 1000);
+        setStartBitrateTarget(screenTrack.mediaStreamTrack.id, "vp8", maxBitrate / 1000);
       } else if (outgoingTrackId) {
         clearStartBitrateTarget(outgoingTrackId);
       }

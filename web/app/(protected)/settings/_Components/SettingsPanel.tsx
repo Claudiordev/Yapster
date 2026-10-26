@@ -316,11 +316,7 @@ export function SettingsPanel() {
               (key) => (
                 <SelectItem key={key}>
                   {`${key} (${VIDEO_RESOLUTIONS[key].width}×${VIDEO_RESOLUTIONS[key].height})${
-                    lockedResolutions.includes(key)
-                      ? key === "2160p"
-                        ? " — Premium+ only"
-                        : " — Premium only"
-                      : ""
+                    lockedResolutions.includes(key) ? " — Premium only" : ""
                   }`}
                 </SelectItem>
               ),

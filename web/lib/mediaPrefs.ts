@@ -58,23 +58,25 @@ export const VIDEO_RESOLUTIONS: Record<
   VideoResolution,
   { width: number; height: number; bitrate: number }
 > = {
+  "720p": {
+    width: 1280,
+    height: 720,
+    bitrate: 4_500_000,
+  },
   "1080p": {
     width: 1920,
     height: 1080,
-    bitrate: 7_500_000,
+    bitrate: 6_500_000,
   },
   "1440p": {
     width: 2560,
     height: 1440,
-    bitrate: 13_000_000,
+    bitrate: 12_000_000,
   },
   "2160p": {
     width: 3840,
     height: 2160,
-    // 4K60 screen content needs more than camera video to keep fine text edges
-    // legible with smooth motion, but this is only a ceiling: 18 Mbps keeps
-    // worst-case SFU traffic down (25 Mbps was the previous ceiling).
-    bitrate: 18_000_000,
+    bitrate: 15_000_000,
   },
 };
 
@@ -100,11 +102,6 @@ export const ADAPTIVE_RESOLUTIONS: Record<
   { width: number; height: number; bitrate: number }
 > = {
   ...VIDEO_RESOLUTIONS,
-  "720p": {
-    width: 1280,
-    height: 720,
-    bitrate: 3_500_000,
-  },
   "480p": {
     width: 854,
     height: 480,
@@ -122,18 +119,11 @@ export const DEFAULT_VIDEO_PREFS: VideoPrefs = {
   frameRate: SCREEN_SHARE_FRAME_RATE,
 };
 
-// ── Who may use which resolution ────────────────────────────────────────────
-//
-// 1440p: PREMIUM, PREMIUM_PLUS, MODERATOR, ADMIN. 2160p: PREMIUM_PLUS, MODERATOR, ADMIN.
-// Everyone else is capped at 1080p. This is the UX half only (locked options, capture
-// clamp): the voice service enforces the same limits from the user's *current* roles,
-// so a tampered client is still cut off. Keep both in step (ScreenSharePolicy in voice).
 
-const RESOLUTION_RANK: readonly VideoResolution[] = ["1080p", "1440p", "2160p"];
+const RESOLUTION_RANK: readonly VideoResolution[] = ["720p", "1080p", "1440p", "2160p"];
 
 export function maxResolutionForRoles(roles: readonly string[]): VideoResolution {
-  if (["ADMIN", "MODERATOR", "PREMIUM_PLUS"].some((role) => roles.includes(role))) return "2160p";
-  if (roles.includes("PREMIUM")) return "1440p";
+  if (["ADMIN", "MODERATOR", "PREMIUM_PLUS", "PREMIUM"].some((role) => roles.includes(role))) return "2160p";
 
   return "1080p";
 }

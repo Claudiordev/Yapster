@@ -32,11 +32,7 @@ export async function pickDesktopScreenShare(
         id,
         label: id,
         detail: `${width}×${height} · up to ${(bitrate / 1_000_000).toFixed(1)} Mbps · 60 fps`,
-        locked: isResolutionAllowed(id, roles)
-          ? null
-          : id === "2160p"
-            ? "Premium+ only"
-            : "Premium only",
+        locked: isResolutionAllowed(id, roles) ? null : "Premium only",
       };
     },
   );
