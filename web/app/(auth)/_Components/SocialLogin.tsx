@@ -6,8 +6,8 @@ import { Button } from "@heroui/button";
 import { FEATURE_OAUTH2_LOGIN } from "@/lib/constants";
 
 /**
- * Google sign-in as a logo-only button (the accessible name stays "Continue with Google"). A plain link, not a fetch: the browser is redirected to
- * Google and back (see /api/auth/google/start and /callback).
+ * Google sign-in as a logo-only button (the accessible name stays "Continue with Google"). A plain link, not a fetch: the browser goes to
+ * Keycloak, which hands off to Google (see /api/auth/login and /callback).
  */
 export function SocialLogin() {
   const callbackUrl = useSearchParams().get("callbackUrl");
@@ -15,8 +15,8 @@ export function SocialLogin() {
   if (!FEATURE_OAUTH2_LOGIN) return null;
 
   const href = callbackUrl
-    ? `/api/auth/google/start?next=${encodeURIComponent(callbackUrl)}`
-    : "/api/auth/google/start";
+    ? `/api/auth/login?idp=google&next=${encodeURIComponent(callbackUrl)}`
+    : "/api/auth/login?idp=google";
 
   return (
     <>

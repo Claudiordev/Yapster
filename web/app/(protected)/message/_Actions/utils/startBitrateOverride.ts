@@ -19,6 +19,8 @@ interface Target {
   /** Codec name as it appears in the SDP's a=rtpmap (e.g. "H264", "VP8"). */
   codec: string;
   startKbps: number;
+  /** Floor for Chromium's target bitrate; stops it decaying while the content is static. */
+  minKbps: number;
 }
 
 // trackId (RTCRtpSender track id, i.e. MediaStreamTrack.id) -> desired start bitrate.
@@ -26,9 +28,18 @@ const targets = new Map<string, Target>();
 
 let installed = false;
 
-/** Registers the desired start bitrate (kbps) for a locally published video track. */
-export function setStartBitrateTarget(trackId: string, codec: string, startKbps: number): void {
-  targets.set(trackId, { codec: codec.toUpperCase(), startKbps: Math.max(1, Math.round(startKbps)) });
+/**
+ * Registers the desired start and minimum bitrates (kbps) for a locally published video
+ * track. The minimum keeps Chromium's congestion controller from letting the target sink
+ * when the track sends little (e.g. a static text page), which otherwise makes the encoder
+ * drop frames and lose quality until the estimate climbs back.
+ */
+export function setStartBitrateTarget(trackId: string, codec: string, startKbps: number, minKbps: number): void {
+  targets.set(trackId, {
+    codec: codec.toUpperCase(),
+    startKbps: Math.max(1, Math.round(startKbps)),
+    minKbps: Math.max(1, Math.round(minKbps)),
+  });
 }
 
 export function clearStartBitrateTarget(trackId: string): void {
@@ -46,7 +57,7 @@ export function clearStartBitrateTarget(trackId: string): void {
  * fmtp with no x-google-start-bitrate at all, while an unused sibling payload had it.
  * So every payload for the codec gets the hint, not just the first.
  */
-function applyStartBitrate(sdp: string, trackId: string, codec: string, startKbps: number): string {
+function applyStartBitrate(sdp: string, trackId: string, codec: string, startKbps: number, minKbps: number): string {
   const sections = sdp.split(/(?=^m=)/m);
   const rtpmapRe = new RegExp(`^a=rtpmap:(\\d+) ${codec}/90000$`, "gim");
 
@@ -60,17 +71,18 @@ function applyStartBitrate(sdp: string, trackId: string, codec: string, startKbp
       if (payloadTypes.length === 0) return section;
 
       let patched = section;
+      const bitrateParams = `x-google-start-bitrate=${startKbps};x-google-min-bitrate=${minKbps}`;
 
       for (const payloadType of payloadTypes) {
         const fmtpRe = new RegExp(`^a=fmtp:${payloadType} (.*)$`, "m");
         const fmtpMatch = patched.match(fmtpRe);
 
         if (fmtpMatch) {
-          const cleaned = fmtpMatch[1].replace(/;?x-google-start-bitrate=\d+/gi, "");
+          const cleaned = fmtpMatch[1].replace(/;?x-google-(?:start|min)-bitrate=\d+/gi, "");
 
           patched = patched.replace(
             fmtpRe,
-            `a=fmtp:${payloadType} ${cleaned}${cleaned ? ";" : ""}x-google-start-bitrate=${startKbps}`,
+            `a=fmtp:${payloadType} ${cleaned}${cleaned ? ";" : ""}${bitrateParams}`,
           );
         } else {
           // No existing fmtp line for this payload (can happen for VP8) -- add one
@@ -79,7 +91,7 @@ function applyStartBitrate(sdp: string, trackId: string, codec: string, startKbp
 
           patched = patched.replace(
             rtpmapLineRe,
-            (line) => `${line}\r\na=fmtp:${payloadType} x-google-start-bitrate=${startKbps}`,
+            (line) => `${line}\r\na=fmtp:${payloadType} ${bitrateParams}`,
           );
         }
       }
@@ -108,13 +120,41 @@ export function installStartBitrateOverride(): void {
       let sdp = description.sdp;
 
       for (const [trackId, target] of Array.from(targets.entries())) {
-        sdp = applyStartBitrate(sdp, trackId, target.codec, target.startKbps);
+        sdp = applyStartBitrate(sdp, trackId, target.codec, target.startKbps, target.minKbps);
       }
 
-      return (original as (description?: RTCLocalSessionDescriptionInit) => Promise<void>).call(this, {
-        ...description,
-        sdp,
-      });
+      const patched = sdp !== description.sdp;
+      const pc = this;
+
+      // eslint-disable-next-line no-console
+      console.info(
+        "[screen-share] start-bitrate override",
+        JSON.stringify({
+          targets: Array.from(targets.keys()),
+          patched,
+          offered: sdp.match(/^a=fmtp:\d+ .*x-google-[a-z-]+=\d+.*$/gim),
+        }),
+      );
+
+      return (original as (description?: RTCLocalSessionDescriptionInit) => Promise<void>)
+        .call(this, { ...description, sdp })
+        .then(
+          () => {
+            // eslint-disable-next-line no-console
+            console.info(
+              "[screen-share] local description set",
+              JSON.stringify({
+                kept: pc.localDescription?.sdp.match(/^a=fmtp:\d+ .*x-google-[a-z-]+=\d+.*$/gim),
+                remote: pc.remoteDescription?.sdp.match(/^a=fmtp:\d+ .*x-google-[a-z-]+=\d+.*$/gim),
+              }),
+            );
+          },
+          (error) => {
+            // eslint-disable-next-line no-console
+            console.warn("[screen-share] patched offer rejected", error);
+            throw error;
+          },
+        );
     }
 
     return (original as (description?: RTCLocalSessionDescriptionInit) => Promise<void>).call(this, description);

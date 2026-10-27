@@ -1,0 +1,42 @@
+# Standalone lab — does not touch the root docker-compose.
+# Run:  docker compose -f .interview-prep/10-keycloak/lab/docker-compose.yaml up -d
+# Admin console: http://localhost:8180  (admin / admin)
+services:
+  keycloak_postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+      POSTGRES_DB: keycloak
+    volumes:
+      - keycloak_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 5s
+      retries: 10
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: keycloak
+    command: start-dev --import-realm        # start-dev = HTTP + relaxed. NOT for prod.
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak_postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: http://localhost:8180     # fixed hostname => stable `iss`
+      KC_HTTP_PORT: 8180
+      KC_HEALTH_ENABLED: "true"
+      KEYCLOAK_WEB_CLIENT_SECRET: lab-secret   # substituted into voxsi-realm.json
+    ports:
+      - "8180:8180"                          # 8080 is the router in this repo
+    volumes:
+      - ./realm:/opt/keycloak/data/import:ro # realm JSON imported on first boot
+    depends_on:
+      keycloak_postgres:
+        condition: service_healthy
+
+volumes:
+  keycloak_postgres:

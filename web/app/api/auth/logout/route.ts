@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { apiPost } from "@/lib/apiClient";
 import { clearAuthCookies, getRefreshToken } from "@/lib/auth";
+import { endKeycloakSession } from "@/lib/keycloak";
 
 export async function POST() {
   const refreshToken = await getRefreshToken();
 
   if (refreshToken) {
     try {
-      await apiPost("/auth/logout", { refreshToken });
+      await endKeycloakSession(refreshToken);
     } catch (error) {
-      console.error("Failed to revoke refresh token on backend:", error);
+      console.error("Failed to end the Keycloak session:", error);
     }
   }
 

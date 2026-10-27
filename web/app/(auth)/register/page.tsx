@@ -1,11 +1,6 @@
-import { Suspense } from "react";
+import { redirect } from "next/navigation";
 
-import { RegisterForm } from "@/app/(auth)/register/_Components/RegisterForm";
-
+/** Registration lives on Keycloak now; this just sends the browser to its registration form. */
 export default function RegisterPage() {
-  return (
-    <Suspense>
-      <RegisterForm />
-    </Suspense>
-  );
+  redirect("/api/auth/login?mode=register");
 }

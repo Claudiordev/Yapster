@@ -158,6 +158,9 @@ const ADAPTIVE_STEP_UP_BASE_COOLDOWN_MS = 5_000;
 const ADAPTIVE_STEP_UP_MAX_COOLDOWN_MS = 30_000; // doubles each step-up, caps here
 const ADAPTIVE_BANDWIDTH_BITRATE_STEP_FACTOR = 0.6; // first move on a bandwidth limit: cut bitrate, not resolution
 
+// Floor for the sender target as a share of the resolution's ceiling; see setStartBitrateTarget.
+const SCREEN_SHARE_MIN_BITRATE_FRACTION = 0.7;
+
 const SCREEN_SHARE_STARTUP_KEYFRAME_DELAYS_MS = [500, 1_500, 3_000] as const;
 
 // High-quality-first by default. WebRTC reports a transient "bandwidth"
@@ -251,7 +254,7 @@ async function applyAdaptiveScreenShareTier(
   const parameters = sender.getParameters();
   const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
 
-  parameters.degradationPreference = "balanced";
+  parameters.degradationPreference = "maintain-resolution";
   parameters.encodings = encodings.map((encoding) => ({
     ...encoding,
     ...(scaleResolutionDownBy !== undefined ? { scaleResolutionDownBy } : {}),
@@ -315,7 +318,7 @@ async function enforceConfiguredScreenShareSender(
   const parameters = sender.getParameters();
   const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
 
-  parameters.degradationPreference = "balanced";
+  parameters.degradationPreference = "maintain-resolution";
   parameters.encodings = encodings.map((encoding) => {
     const restored = {
       ...encoding,
@@ -1528,47 +1531,69 @@ export function useCall(conversationId: string | null): UseCallState {
               ?.track as LocalVideoTrack | undefined
           )?.mediaStreamTrack.id;
 
-      await room.localParticipant.setScreenShareEnabled(
-        enabled,
-        {
-          resolution,
-          contentHint: "motion",
-          audio: includeAudio
-            ? {
-                // Screen audio is music/media, not speech. Avoid voice
-                // processing and request the browser's native stereo 48 kHz
-                // capture where supported.
-                restrictOwnAudio: { ideal: true },
-                channelCount: 2,
-                sampleRate: 48_000,
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
-              }
-            : false,
-          systemAudio: includeAudio ? "include" : "exclude",
-          suppressLocalAudioPlayback: false,
-        },
-        {
-          screenShareEncoding: { maxBitrate, maxFramerate, priority: "high" },
-          audioPreset: AudioPresets.musicHighQualityStereo,
-          forceStereo: true,
-          dtx: true,
-          red: false,
-          stream: "screen-share",
-          videoCodec: "vp8",
-          backupCodec: true,
-          simulcast: false,
-          degradationPreference: "balanced",
-        },
-      );
+      const registerBitrateTarget = (trackId: string) =>
+        setStartBitrateTarget(
+          trackId,
+          "vp8",
+          maxBitrate / 1000,
+          (maxBitrate * SCREEN_SHARE_MIN_BITRATE_FRACTION) / 1000,
+        );
+      // LiveKit emits this once the sender exists but BEFORE it negotiates the offer, so
+      // registering here lets the very first offer carry the bitrate hints; registering
+      // after setScreenShareEnabled resolves would only patch later renegotiations.
+      const onSenderCreated = (_sender: RTCRtpSender, track: Track) => {
+        if (track.source === Track.Source.ScreenShare) {
+          registerBitrateTarget(track.mediaStreamTrack.id);
+        }
+      };
+
+      if (enabled) room.localParticipant.on(ParticipantEvent.LocalSenderCreated, onSenderCreated);
+
+      try {
+        await room.localParticipant.setScreenShareEnabled(
+          enabled,
+          {
+            resolution,
+            contentHint: "motion",
+            audio: includeAudio
+              ? {
+                  // Screen audio is music/media, not speech. Avoid voice
+                  // processing and request the browser's native stereo 48 kHz
+                  // capture where supported.
+                  restrictOwnAudio: { ideal: true },
+                  channelCount: 2,
+                  sampleRate: 48_000,
+                  echoCancellation: false,
+                  noiseSuppression: false,
+                  autoGainControl: false,
+                }
+              : false,
+            systemAudio: includeAudio ? "include" : "exclude",
+            suppressLocalAudioPlayback: false,
+          },
+          {
+            screenShareEncoding: { maxBitrate, maxFramerate, priority: "high" },
+            audioPreset: AudioPresets.musicHighQualityStereo,
+            forceStereo: true,
+            dtx: true,
+            red: false,
+            stream: "screen-share",
+            videoCodec: "vp8",
+            backupCodec: true,
+            simulcast: false,
+            degradationPreference: "maintain-resolution",
+          },
+        );
+      } finally {
+        room.localParticipant.off(ParticipantEvent.LocalSenderCreated, onSenderCreated);
+      }
 
       const screenTrack = room.localParticipant.getTrackPublication(
         Track.Source.ScreenShare,
       )?.track as LocalVideoTrack | undefined;
 
       if (enabled && screenTrack) {
-        setStartBitrateTarget(screenTrack.mediaStreamTrack.id, "vp8", maxBitrate / 1000);
+        registerBitrateTarget(screenTrack.mediaStreamTrack.id);
       } else if (outgoingTrackId) {
         clearStartBitrateTarget(outgoingTrackId);
       }

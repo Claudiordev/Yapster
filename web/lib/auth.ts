@@ -1,17 +1,13 @@
 import { cookies } from "next/headers";
-import { importSPKI, jwtVerify, type JWTPayload } from "jose";
 
-import { apiPost, ApiError } from "./apiClient";
 import {
   AUTH_COOKIE_NAME,
   AUTH_COOKIE_OPTIONS,
-  JWT_PUBLIC_KEY,
   REFRESH_COOKIE_MAX_AGE_SECONDS,
   REFRESH_COOKIE_NAME,
 } from "./constants";
+import { refreshWithKeycloak, verifyKeycloakToken } from "./keycloak";
 import type { AuthClaims, SessionTokenResponse, TokenPair } from "@/types/auth";
-
-const JWT_ALG = "RS256";
 
 export function rolesFromClaims(claims: AuthClaims | null): string[] {
   if (!claims) return [];
@@ -33,29 +29,8 @@ export function toTokenPair(response: SessionTokenResponse): TokenPair {
   };
 }
 
-let cachedKey: Promise<CryptoKey> | null = null;
-
-function getPublicKey(): Promise<CryptoKey> {
-  if (!cachedKey) {
-    if (!JWT_PUBLIC_KEY) {
-      throw new Error("JWT_PUBLIC_KEY is not configured");
-    }
-    cachedKey = importSPKI(JWT_PUBLIC_KEY, JWT_ALG);
-  }
-
-  return cachedKey;
-}
-
-export async function verifyJwt(token: string): Promise<AuthClaims | null> {
-  try {
-    const { payload } = await jwtVerify(token, await getPublicKey(), {
-      algorithms: [JWT_ALG],
-    });
-
-    return payload as AuthClaims;
-  } catch {
-    return null;
-  }
+export function verifyJwt(token: string): Promise<AuthClaims | null> {
+  return verifyKeycloakToken(token);
 }
 
 export async function getAuthToken(): Promise<string | undefined> {
@@ -107,7 +82,7 @@ export async function clearAuthCookies(): Promise<void> {
 }
 
 /**
- * The backend rotates refresh tokens and revokes a token that is presented
+ * Keycloak can be set to rotate refresh tokens and revoke a token that is presented
  * twice. Several callers can refresh with the same cookie at once — parallel
  * BFF requests behind an expired access token, several tabs reacting to one
  * ROLES_CHANGED push — so the exchange is single-flight per refresh token:
@@ -125,20 +100,8 @@ interface RefreshFlight {
 const refreshFlights = ((globalThis as { __refreshFlights?: Map<string, RefreshFlight> })
   .__refreshFlights ??= new Map<string, RefreshFlight>());
 
-async function exchangeRefreshToken(
-  refreshToken: string,
-): Promise<TokenPair | null> {
-  try {
-    const data = await apiPost<{ refreshToken: string }, SessionTokenResponse>(
-      "/auth/refresh",
-      { refreshToken },
-    );
-
-    return toTokenPair(data);
-  } catch (error) {
-    if (error instanceof ApiError) return null;
-    throw error;
-  }
+function exchangeRefreshToken(refreshToken: string): Promise<TokenPair | null> {
+  return refreshWithKeycloak(refreshToken);
 }
 
 export function refreshAccessToken(

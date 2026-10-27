@@ -1,71 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { importSPKI, jwtVerify } from "jose";
 
 import {
-  API_BASE_URL,
   AUTH_COOKIE_NAME,
   AUTH_COOKIE_OPTIONS,
-  JWT_PUBLIC_KEY,
   PUBLIC_ROUTES,
   REFRESH_COOKIE_MAX_AGE_SECONDS,
   REFRESH_COOKIE_NAME,
   ROUTES,
 } from "./lib/constants";
-
-const JWT_ALG = "RS256";
-
-let cachedKey: Promise<CryptoKey> | null = null;
-
-function getPublicKey(): Promise<CryptoKey> {
-  if (!cachedKey) {
-    if (!JWT_PUBLIC_KEY) {
-      throw new Error("JWT_PUBLIC_KEY is not configured");
-    }
-    cachedKey = importSPKI(JWT_PUBLIC_KEY, JWT_ALG);
-  }
-
-  return cachedKey;
-}
+import { refreshWithKeycloak, verifyKeycloakToken } from "./lib/keycloak";
 
 async function isTokenValid(token: string): Promise<boolean> {
-  try {
-    await jwtVerify(token, await getPublicKey(), { algorithms: [JWT_ALG] });
-
-    return true;
-  } catch {
-    return false;
-  }
+  return (await verifyKeycloakToken(token)) !== null;
 }
 
-interface RefreshResult {
-  accessToken: string;
-  refreshToken: string;
-  accessExpiresInSeconds: number;
-}
-
-async function refreshAccessToken(
-  refreshToken: string,
-): Promise<RefreshResult | null> {
+async function refreshAccessToken(refreshToken: string) {
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
-    });
-
-    if (!response.ok) return null;
-
-    const data = (await response.json()) as {
-      access_token: string;
-      refresh_token: string;
-      expires_in: number;
-    };
-
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      accessExpiresInSeconds: Math.max(1, Math.floor(data.expires_in / 1000)),
-    };
+    return await refreshWithKeycloak(refreshToken);
   } catch {
     return null;
   }
