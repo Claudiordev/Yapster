@@ -10,8 +10,6 @@ import { ServerInformationModal } from "./ServerInformationModal";
 import { FeatureFlagsModal } from "./FeatureFlagsModal";
 import { UserRolesModal } from "./UserRolesModal";
 
-import { Icon } from "@/components/Icon/Icon";
-import { siteConfig } from "@/config/site";
 import { POPUP_MOTION_PROPS } from "@/lib/popupMotion";
 import { useAccount } from "@/lib/hooks/useAccount";
 import { clampResolution, DEFAULT_VIDEO_PREFS, isResolutionAllowed, DEFAULT_SCREEN_SHARE_AUDIO, ECHO_CANCELLATION_KEY, NOISE_SUPPRESSION_KEY, readAudioProcessingPrefs, readVideoPrefs, readScreenShareAudioPref, VIDEO_RESOLUTION_KEY, VIDEO_RESOLUTIONS, writeAudioProcessingPref, writeScreenShareAudioPref } from "@/lib/mediaPrefs";
@@ -194,11 +192,13 @@ export function SettingsPanel() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-bold text-foreground">Settings</h1>
+        <h1 className="text-xl font-bold text-foreground">Audio and Video</h1>
         <p className="text-sm text-default-500">
           Choose your audio input and output devices.
         </p>
       </div>
+
+      <div className="h-px bg-divider" />
 
       {/* Microphone (input) + Speaker (output) side by side. */}
       <div className="flex flex-col gap-6 sm:flex-row">
@@ -364,10 +364,10 @@ export function SettingsPanel() {
         </p>
       )}
 
-      <div className="h-px bg-divider" />
-
       {isAdmin && (
         <>
+          <div className="h-px bg-divider" />
+
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               <h2 className="text-sm font-semibold text-foreground">
@@ -428,21 +428,8 @@ export function SettingsPanel() {
               Manage features
             </Button>
           </div>
-
-          <div className="h-px bg-divider" />
         </>
       )}
-
-      <a
-        aria-label="GitHub"
-        className="flex w-fit items-center gap-2 text-tiny text-default-400 transition-colors hover:text-foreground"
-        href={siteConfig.links.github}
-        rel="noopener noreferrer"
-        target="_blank"
-      >
-        <Icon name="github" size={16} />
-        View on GitHub
-      </a>
 
       <ServerInformationModal
         isOpen={serverInformationOpen}

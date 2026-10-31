@@ -14,7 +14,14 @@ export const metadata: Metadata = {
   },
   description: siteConfig.description,
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/voxsi-favicon-v3-16.png", type: "image/png", sizes: "16x16" },
+      { url: "/voxsi-favicon-v3-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/voxsi-favicon-v3-48.png", type: "image/png", sizes: "48x48" },
+      { url: "/voxsi-favicon-v3.svg", type: "image/svg+xml", sizes: "any" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: { url: "/voxsi-apple-icon-v3.png", sizes: "180x180" },
   },
 };
 

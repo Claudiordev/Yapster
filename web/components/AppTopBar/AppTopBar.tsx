@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 import NextLink from "next/link";
 import { Avatar } from "@heroui/avatar";
 import { Button } from "@heroui/button";
@@ -29,10 +30,8 @@ export function AppTopBar() {
         className="flex items-center gap-2 mr-1 text-foreground hover:opacity-80 transition-opacity"
         href="/message"
       >
-        <span className="text-brand">
-          <Icon name="logo" size={26} />
-        </span>
-        <span className="hidden font-bold tracking-tight sm:inline">Guild Voice</span>
+        <Image alt="" height={28} src="/images/voxsi-logo.png" width={28} />
+        <span className="hidden font-bold tracking-tight sm:inline">{siteConfig.name}</span>
       </NextLink>
 
       <nav className="flex items-center gap-1">
