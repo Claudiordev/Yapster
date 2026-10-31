@@ -1,13 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useInfiniteQuery,
   useQueryClient,
   type InfiniteData,
+  type QueryClient,
 } from "@tanstack/react-query";
 
+import { addToast } from "@heroui/toast";
+
+import {
+  applyReaction,
+  toThreadReactions,
+} from "@/app/(protected)/message/_Components/_Message/utils/reactions";
 import { randomId } from "@/lib/randomId";
+import { readProblemDetail } from "@/lib/problemDetails";
 import { useRealtime } from "@/lib/hooks/useRealtime";
 import type { ChatMessageDto } from "@/types/chat";
 import type { ThreadMessage } from "@/types/chat";
@@ -35,7 +43,27 @@ function toThreadMessage(m: ChatMessageDto, myUserId: string | null): ThreadMess
       m.messageType === "SYSTEM" && m.systemEvent && m.subjectId
         ? { event: m.systemEvent, subjectId: m.subjectId }
         : undefined,
+    reactions: toThreadReactions(m.reactions, myUserId),
   };
+}
+
+/** Rewrites one cached message in place; every other message keeps its identity. */
+function patchMessage(
+  queryClient: QueryClient,
+  key: ReturnType<typeof messagesKey>,
+  messageId: string,
+  update: (message: ThreadMessage) => ThreadMessage,
+) {
+  queryClient.setQueryData<MessagesData>(key, (old) =>
+    old
+      ? {
+          ...old,
+          pages: old.pages.map((page) =>
+            page.map((m) => (m.id === messageId ? update(m) : m)),
+          ),
+        }
+      : old,
+  );
 }
 
 /**
@@ -154,6 +182,7 @@ export function useMessages(
               event.messageType === "SYSTEM" && event.systemEvent && event.subjectId
                 ? { event: event.systemEvent, subjectId: event.subjectId }
                 : undefined,
+            reactions: [],
           };
 
           // Newest page is index 0; position within a page doesn't matter (we sort).
@@ -164,6 +193,100 @@ export function useMessages(
       );
     });
   }, [conversationId, myUserId, subscribe, queryClient]);
+
+  // Reactions from everyone, including the echo of our own: applying one twice changes nothing.
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const key = messagesKey(conversationId, myUserId);
+    const onReaction =
+      (added: boolean) =>
+      (event: { roomId: string; messageId: string; userId: string; emoji: string }) => {
+        if (event.roomId !== conversationId) return;
+
+        patchMessage(queryClient, key, event.messageId, (m) => ({
+          ...m,
+          reactions: applyReaction(m.reactions, event.emoji, event.userId, added, myUserId),
+        }));
+      };
+
+    const offAdded = subscribe("REACTION_ADDED", onReaction(true));
+    const offRemoved = subscribe("REACTION_REMOVED", onReaction(false));
+
+    return () => {
+      offAdded();
+      offRemoved();
+    };
+  }, [conversationId, myUserId, subscribe, queryClient]);
+
+  // Reactions with a request still running ("messageId:emoji"), so a double click costs one call.
+  const reactionsInFlight = useRef(new Set<string>());
+
+  /**
+   * Reacts (or takes the reaction back) right away, then tells the server. If the server refuses
+   * (rate limit, too many different emoji, ...) the change is undone and the reason is shown.
+   * "add" never removes: picking an emoji you already used does nothing.
+   */
+  const react = useCallback(
+    async (messageId: string, emoji: string, mode: "add" | "toggle") => {
+      if (!conversationId || myUserId === null) return;
+
+      const key = messagesKey(conversationId, myUserId);
+      const message = queryClient
+        .getQueryData<MessagesData>(key)
+        ?.pages.flat()
+        .find((m) => m.id === messageId);
+
+      if (!message) return;
+
+      const mine = message.reactions.some((r) => r.emoji === emoji && r.byMe);
+      const add = mode === "toggle" ? !mine : true;
+      const inFlightKey = `${messageId}:${emoji}`;
+
+      if ((add && mine) || reactionsInFlight.current.has(inFlightKey)) return;
+
+      reactionsInFlight.current.add(inFlightKey);
+
+      const apply = (added: boolean) =>
+        patchMessage(queryClient, key, messageId, (m) => ({
+          ...m,
+          reactions: applyReaction(m.reactions, emoji, myUserId, added, myUserId),
+        }));
+
+      apply(add);
+
+      try {
+        const res = await fetch(
+          `/api/chat/${conversationId}/message/${messageId}/reaction/${emoji}`,
+          { method: add ? "PUT" : "DELETE" },
+        );
+
+        if (!res.ok) {
+          apply(!add);
+          addToast({
+            title: await readProblemDetail(res, "Couldn't update your reaction"),
+            color: "danger",
+          });
+        }
+      } catch {
+        apply(!add);
+        addToast({ title: "Couldn't update your reaction", color: "danger" });
+      } finally {
+        reactionsInFlight.current.delete(inFlightKey);
+      }
+    },
+    [conversationId, myUserId, queryClient],
+  );
+
+  const addReaction = useCallback(
+    (messageId: string, emoji: string) => react(messageId, emoji, "add"),
+    [react],
+  );
+
+  const toggleReaction = useCallback(
+    (messageId: string, emoji: string) => react(messageId, emoji, "toggle"),
+    [react],
+  );
 
   const sendMessage = useCallback(
     async (body: string) => {
@@ -179,6 +302,7 @@ export function useMessages(
         seq: PENDING_SEQ,
         fromMe: true,
         pending: true,
+        reactions: [],
       };
 
       queryClient.setQueryData<MessagesData>(key, (old) => {
@@ -249,6 +373,8 @@ export function useMessages(
   return {
     messages,
     sendMessage,
+    addReaction,
+    toggleReaction,
     isSending,
     isLoading,
     isLoadingMore: isFetchingNextPage,

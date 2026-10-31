@@ -72,6 +72,8 @@ export function ConversationView({
   const {
     messages,
     sendMessage,
+    addReaction,
+    toggleReaction,
     isSending,
     isLoading,
     isLoadingMore,
@@ -235,7 +237,9 @@ export function ConversationView({
         onLoadMore={loadMore}
         onStartCall={() => startCall(conversationId)}
         typingNames={typingNames}
+        onAddReaction={addReaction}
         onSend={sendMessage}
+        onToggleReaction={toggleReaction}
         onType={notifyTyping}
       />
 

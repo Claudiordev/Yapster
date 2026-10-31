@@ -6,10 +6,13 @@ import { Avatar } from "@heroui/avatar";
 import { Button } from "@heroui/button";
 import { Skeleton } from "@heroui/skeleton";
 
+import { EmojiPicker } from "../_Message/EmojiPicker";
 import { MessageComposer } from "../_Message/MessageComposer";
 import { MessageEmbeds } from "../_Message/MessageEmbeds";
+import { MessageReactions } from "../_Message/MessageReactions";
 import { MessageText } from "../_Message/MessageText";
 import { isImageOnlyBody } from "../_Message/utils/embeds";
+import { toReactionKey } from "../_Message/utils/reactions";
 import { TypingIndicator } from "../_Message/TypingIndicator";
 import type { ThreadMessage } from "@/types/chat";
 import { formatClock } from "@/app/(protected)/message/_Components/_Chat/utils/dateTime";
@@ -20,6 +23,7 @@ import { UserProfileModal } from "./UserProfileModal";
 import type { UserProfile } from "@/types/user";
 
 import { Icon } from "@/components/Icon/Icon";
+import { useAccount } from "@/lib/hooks/useAccount";
 import type { UserStatus } from "@/types/chat";
 import type { UserIdentity } from "@/types/user";
 
@@ -35,6 +39,10 @@ interface ChatThreadProps {
   onLoadMore: () => void;
   isSending: boolean;
   onSend: (body: string) => void;
+  /** Reacts to a message with an emoji key; a no-op if you already used it. */
+  onAddReaction: (messageId: string, emoji: string) => void;
+  /** Clicking a reaction pill: reacts, or takes your reaction back. */
+  onToggleReaction: (messageId: string, emoji: string) => void;
   /** Display names of other members currently composing. */
   typingNames: string[];
   onType: () => void;
@@ -93,6 +101,8 @@ export function ChatThread({
   onLoadMore,
   isSending,
   onSend,
+  onAddReaction,
+  onToggleReaction,
   typingNames,
   onType,
   members,
@@ -109,22 +119,30 @@ export function ChatThread({
   // Whether the viewer is pinned to the latest message. GIFs/images grow the thread
   // after they load, so we re-pin then instead of only when `messages` changes.
   const stickRef = useRef(true);
+  // Id of the newest message at the last scroll decision, to tell "a new message" from "a reaction".
+  const lastMessageIdRef = useRef<string | null>(null);
+
+  const { isFeatureEnabled } = useAccount();
+  // Adding a reaction uses the same emoji picker as the composer, so it follows the same switch.
+  const canReact = isFeatureEnabled("emojis");
 
   const [messageMenu, setMessageMenu] = useState<{
-    body: string;
+    message: ThreadMessage;
     x: number;
     y: number;
   } | null>(null);
+  // The message whose reaction picker is open (from its hover toolbar or the right-click menu).
+  const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [showMembers, setShowMembers] = useState(false);
 
   function handleMessageContextMenu(
     event: ReactMouseEvent<HTMLDivElement>,
-    body: string,
+    message: ThreadMessage,
   ) {
     event.preventDefault();
-    setMessageMenu({ body, x: event.clientX, y: event.clientY });
+    setMessageMenu({ message, x: event.clientX, y: event.clientY });
   }
 
   useLayoutEffect(() => {
@@ -137,9 +155,18 @@ export function ChatThread({
       el.scrollTop += el.scrollHeight - anchorRef.current;
       anchorRef.current = null;
     } else {
-      // Initial load / new message — stick to the bottom.
-      el.scrollTop = el.scrollHeight;
-      stickRef.current = true;
+      // Initial load / new message — stick to the bottom. A reaction changes `messages` too, but
+      // must not drag someone reading older messages down, so only a new last message does that,
+      // or a viewer who is already at the bottom (the new pills grow the last message).
+      const lastId = messages[messages.length - 1]?.id ?? null;
+      const hasNewLast = lastId !== lastMessageIdRef.current;
+
+      lastMessageIdRef.current = lastId;
+
+      if (hasNewLast || stickRef.current) {
+        el.scrollTop = el.scrollHeight;
+        stickRef.current = true;
+      }
     }
   }, [messages]);
 
@@ -313,11 +340,18 @@ export function ChatThread({
                   return (
                     <div
                       key={m.id}
-                      className={`flex gap-3 -mx-4 px-4 py-0.5 rounded-medium hover:bg-content2/60 ${
-                        startsGroup ? "mt-4 first:mt-0" : "mt-0.5"
-                      }`}
+                      className={`group relative flex gap-3 -mx-4 px-4 py-0.5 rounded-medium ${
+                        // While a reaction picker is open, only its own message stays highlighted:
+                        // the pointer crosses other rows on its way to the picker and they
+                        // must not light up and show their toolbars one after another.
+                        reactionPickerFor === m.id
+                          ? "bg-content2/60"
+                          : reactionPickerFor === null
+                            ? "hover:bg-content2/60"
+                            : ""
+                      } ${startsGroup ? "mt-4 first:mt-0" : "mt-0.5"}`}
                       onContextMenu={(event) =>
-                        handleMessageContextMenu(event, m.body)
+                        handleMessageContextMenu(event, m)
                       }
                     >
                       {startsGroup ? (
@@ -357,7 +391,53 @@ export function ChatThread({
                         {(!m.pending || isImageOnlyBody(m.body)) && (
                           <MessageEmbeds body={m.body} />
                         )}
+                        <MessageReactions
+                          canAdd={canReact && !m.pending}
+                          nameOf={(userId) => senders[userId]?.name ?? "Someone"}
+                          reactions={m.reactions}
+                          onAdd={(emoji) => onAddReaction(m.id, emoji)}
+                          onToggle={(emoji) => onToggleReaction(m.id, emoji)}
+                        />
                       </div>
+
+                      {/* Hover toolbar. Hidden by opacity, not display, so the picker has an anchor
+                          to open from when it is opened by the right-click menu. */}
+                      {canReact && !m.pending && (
+                        <div
+                          // No fade: sweeping the pointer down the thread would otherwise leave
+                          // several toolbars half-visible. Keyboard focus (not a click, which
+                          // leaves focus on the button after the picker closes) also shows it.
+                          className={`absolute -top-3 right-4 z-10 rounded-medium border border-divider bg-content1 shadow-small ${
+                            reactionPickerFor === m.id
+                              ? "opacity-100"
+                              : reactionPickerFor !== null
+                                ? "pointer-events-none opacity-0"
+                                : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100"
+                          }`}
+                        >
+                          <EmojiPicker
+                            isOpen={reactionPickerFor === m.id}
+                            trigger={
+                              <Button
+                                isIconOnly
+                                aria-label="Add reaction"
+                                className="min-w-7 h-7 text-default-400 hover:text-foreground"
+                                disableAnimation
+                                size="sm"
+                                variant="light"
+                              >
+                                <Icon name="smile" size={16} />
+                              </Button>
+                            }
+                            onOpenChange={(open) =>
+                              setReactionPickerFor(open ? m.id : null)
+                            }
+                            onSelect={(emoji) =>
+                              onAddReaction(m.id, toReactionKey(emoji))
+                            }
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -377,7 +457,12 @@ export function ChatThread({
 
           {messageMenu && (
             <MessageContextMenu
-              body={messageMenu.body}
+              body={messageMenu.message.body}
+              onAddReaction={
+                canReact && !messageMenu.message.pending
+                  ? () => setReactionPickerFor(messageMenu.message.id)
+                  : undefined
+              }
               x={messageMenu.x}
               y={messageMenu.y}
               onClose={() => setMessageMenu(null)}
