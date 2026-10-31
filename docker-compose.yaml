@@ -148,7 +148,7 @@ services:
       - chat_postgres
       - redis
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/jaeger:2.20.0   # same as yapprr-infra; keep <2.21 (Grafana datasource needs /api/* endpoints 2.21 removed)
     container_name: jaeger
     ports:
       - "16686:16686"
