@@ -19,6 +19,8 @@ interface Target {
   /** Codec name as it appears in the SDP's a=rtpmap (e.g. "H264", "VP8"). */
   codec: string;
   startKbps: number;
+  /** Optional `x-google-min-bitrate` floor for the bandwidth estimator, in kbps. */
+  minKbps?: number;
 }
 
 // trackId (RTCRtpSender track id, i.e. MediaStreamTrack.id) -> desired start bitrate.
@@ -27,8 +29,17 @@ const targets = new Map<string, Target>();
 let installed = false;
 
 /** Registers the desired start bitrate (kbps) for a locally published video track. */
-export function setStartBitrateTarget(trackId: string, codec: string, startKbps: number): void {
-  targets.set(trackId, { codec: codec.toUpperCase(), startKbps: Math.max(1, Math.round(startKbps)) });
+export function setStartBitrateTarget(
+  trackId: string,
+  codec: string,
+  startKbps: number,
+  minKbps?: number,
+): void {
+  targets.set(trackId, {
+    codec: codec.toUpperCase(),
+    startKbps: Math.max(1, Math.round(startKbps)),
+    minKbps: minKbps === undefined ? undefined : Math.max(1, Math.round(minKbps)),
+  });
 }
 
 export function clearStartBitrateTarget(trackId: string): void {
@@ -46,7 +57,15 @@ export function clearStartBitrateTarget(trackId: string): void {
  * fmtp with no x-google-start-bitrate at all, while an unused sibling payload had it.
  * So every payload for the codec gets the hint, not just the first.
  */
-function applyStartBitrate(sdp: string, trackId: string, codec: string, startKbps: number): string {
+function applyStartBitrate(
+  sdp: string,
+  trackId: string,
+  codec: string,
+  startKbps: number,
+  minKbps?: number,
+): string {
+  const params = `x-google-start-bitrate=${startKbps}${minKbps === undefined ? "" : `;x-google-min-bitrate=${minKbps}`}`;
+
   const sections = sdp.split(/(?=^m=)/m);
   const rtpmapRe = new RegExp(`^a=rtpmap:(\\d+) ${codec}/90000$`, "gim");
 
@@ -66,11 +85,11 @@ function applyStartBitrate(sdp: string, trackId: string, codec: string, startKbp
         const fmtpMatch = patched.match(fmtpRe);
 
         if (fmtpMatch) {
-          const cleaned = fmtpMatch[1].replace(/;?x-google-start-bitrate=\d+/gi, "");
+          const cleaned = fmtpMatch[1].replace(/;?x-google-(?:start|min)-bitrate=\d+/gi, "");
 
           patched = patched.replace(
             fmtpRe,
-            `a=fmtp:${payloadType} ${cleaned}${cleaned ? ";" : ""}x-google-start-bitrate=${startKbps}`,
+            `a=fmtp:${payloadType} ${cleaned}${cleaned ? ";" : ""}${params}`,
           );
         } else {
           // No existing fmtp line for this payload (can happen for VP8) -- add one
@@ -79,7 +98,7 @@ function applyStartBitrate(sdp: string, trackId: string, codec: string, startKbp
 
           patched = patched.replace(
             rtpmapLineRe,
-            (line) => `${line}\r\na=fmtp:${payloadType} x-google-start-bitrate=${startKbps}`,
+            (line) => `${line}\r\na=fmtp:${payloadType} ${params}`,
           );
         }
       }
@@ -108,7 +127,7 @@ export function installStartBitrateOverride(): void {
       let sdp = description.sdp;
 
       for (const [trackId, target] of Array.from(targets.entries())) {
-        sdp = applyStartBitrate(sdp, trackId, target.codec, target.startKbps);
+        sdp = applyStartBitrate(sdp, trackId, target.codec, target.startKbps, target.minKbps);
       }
 
       return (original as (description?: RTCLocalSessionDescriptionInit) => Promise<void>).call(this, {
