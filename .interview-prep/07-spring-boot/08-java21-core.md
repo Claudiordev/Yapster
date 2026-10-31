@@ -50,6 +50,51 @@ setters for proxying and dirty checking. That's part of why this codebase has
 
 ---
 
+## Java serialization, `serialVersionUID`, and RMI
+
+Java serialization converts an object into bytes so it can be stored or sent
+somewhere. Deserialization reconstructs the object from those bytes later.
+
+`serialVersionUID` is the compatibility identifier Java uses when it
+serializes and later deserializes an object:
+
+```java
+class InvalidAppCategoryException extends RuntimeException
+    implements Serializable {
+    private static final long serialVersionUID = 1L;
+}
+```
+
+`RuntimeException` already implements `Serializable`; explicitly writing it
+here is therefore optional. The `1L` is simply the initial version number.
+
+Typical use cases include:
+
+- HTTP session replication between application instances
+- distributed caches
+- Java RMI
+- serialized queues or files
+- restarting an application that stored serialized objects
+
+Java RMI (Remote Method Invocation) is an older Java-to-Java RPC mechanism.
+It lets one JVM call methods on an object living in another JVM. Arguments,
+return values, and exceptions may be serialized and sent over the network.
+
+Normally keep `serialVersionUID` at `1L` while the serialized form remains
+compatible. Change it deliberately, for example to `2L`, when making an
+incompatible serialization change:
+
+```java
+private static final long serialVersionUID = 2L;
+```
+
+For application exceptions such as `InvalidAppCategoryException`, which are
+only converted to HTTP error responses and never stored or sent through Java
+serialization, it is mainly present to silence the compiler warning and will
+usually remain `1L` permanently.
+
+---
+
 ## `Optional` — the rules
 
 ```java

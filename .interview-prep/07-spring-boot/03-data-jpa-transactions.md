@@ -218,6 +218,237 @@ Postgres's `READ_COMMITTED` is right for ~95% of work. Raising it globally to
 
 ---
 
+## SQL locks — what they protect
+
+A transaction can lock database data so another transaction cannot make a
+conflicting change at the same time. A lock is held until `COMMIT` or
+`ROLLBACK`.
+
+```sql
+BEGIN;
+
+SELECT *
+FROM account
+WHERE account_id = :id
+FOR UPDATE;                         -- row write lock
+
+-- read the balance, calculate the new balance, update it
+UPDATE account SET balance = balance - 50 WHERE account_id = :id;
+
+COMMIT;                             -- releases the lock
+```
+
+`FOR UPDATE` is not an ordinary read. It reads the row and locks it. A second
+transaction trying to update, delete, or `SELECT ... FOR UPDATE` that row waits
+until the first transaction finishes:
+
+These two queries are therefore different:
+
+```sql
+SELECT *
+FROM app_category_catalogue_lock;
+-- ordinary read: does not take a write lock
+
+SELECT *
+FROM app_category_catalogue_lock
+WHERE lock_id = 1
+FOR UPDATE;
+-- read this row and lock it for writing until the transaction ends
+```
+
+`FOR UPDATE` is the part that requests the lock. The query is still a
+`SELECT`, but it has a write-locking side effect. It only works inside an open
+transaction and only locks rows returned by the query.
+
+```text
+Transaction A: BEGIN; SELECT ... FOR UPDATE;  -- gets the lock
+Transaction B: BEGIN; SELECT ... FOR UPDATE;  -- waits
+Transaction A: COMMIT;                        -- unlocks
+Transaction B:                                  -- continues
+```
+
+A normal `SELECT` may still read the old committed version in PostgreSQL;
+locks mainly coordinate conflicting writes. The row must exist: `FOR UPDATE`
+on an empty result locks nothing.
+
+### Common lock types
+
+| Lock | What it locks | Typical SQL | Typical use |
+|---|---|---|---|
+| Row lock | Selected rows | `SELECT ... FOR UPDATE` | Update one account, order, seat, or job |
+| Table lock | An entire table | `LOCK TABLE account IN ... MODE` | A deliberate table-wide operation |
+| Shared/read row lock | Selected rows for shared reading | `SELECT ... FOR SHARE` | Several readers may coordinate; writers wait |
+| Exclusive/write row lock | Selected rows for writing | `SELECT ... FOR UPDATE` | Other conflicting readers/writers wait |
+
+PostgreSQL has several table-lock modes with different conflict rules. Avoid
+table locks in normal request code: they block more work than necessary and are
+database-specific. Prefer a row lock or a database constraint.
+
+### Use case: two users modify the same record
+
+Without a lock, both requests can read quantity `10`, both calculate `15`, and
+the second update overwrites the first. Lock the row while calculating:
+
+```sql
+BEGIN;
+SELECT quantity FROM product WHERE product_id = 42 FOR UPDATE;
+UPDATE product SET quantity = quantity + 5 WHERE product_id = 42;
+COMMIT;
+```
+
+For ordinary CRUD, optimistic locking is often better: add a version column
+and let the second update fail instead of making it wait:
+
+```java
+@Version
+private long version;
+```
+
+Use pessimistic locking when the operation must serialize immediately or the
+row is highly contended. Use `@Version` when conflicts are uncommon and the
+caller can retry or report a conflict.
+
+### Use case: bank balance or inventory
+
+The lock protects the read-modify-write sequence, not just the final update:
+
+```sql
+BEGIN;
+SELECT balance FROM account WHERE account_id = 7 FOR UPDATE;
+-- check that balance >= 50 in application code
+UPDATE account SET balance = balance - 50 WHERE account_id = 7;
+COMMIT;
+```
+
+For a simple inventory decrement, one atomic SQL statement plus a constraint
+can be even better:
+
+```sql
+UPDATE stock
+SET available = available - 1
+WHERE product_id = 42 AND available > 0;
+```
+
+Check the affected-row count. `1` means it reserved stock; `0` means it was
+already unavailable. A lock is not a replacement for a `CHECK`, `UNIQUE`, or
+foreign-key constraint.
+
+### Use case: reserve a seat
+
+```sql
+BEGIN;
+SELECT status FROM seat WHERE seat_id = 18 FOR UPDATE;
+-- only change it when status = 'AVAILABLE'
+UPDATE seat SET status = 'RESERVED', reserved_by = :user_id
+WHERE seat_id = 18;
+COMMIT;
+```
+
+The second buyer waits, then sees `RESERVED` and receives a conflict instead of
+both buyers receiving the same seat.
+
+### Use case: process a job once with multiple workers
+
+`SKIP LOCKED` is useful for a queue. Each worker takes different rows instead
+of waiting for rows another worker already claimed:
+
+```sql
+BEGIN;
+
+SELECT job_id
+FROM jobs
+WHERE status = 'READY'
+ORDER BY job_id
+FOR UPDATE SKIP LOCKED
+LIMIT 10;
+
+UPDATE jobs SET status = 'RUNNING' WHERE job_id IN (...);
+COMMIT;
+```
+
+`SKIP LOCKED` is for work distribution, not for normal business reads. The
+claim and status update must be in a transaction, and jobs need retry/timeout
+handling if a worker crashes.
+
+### Use case: category ordering
+
+Category display orders are a property of the whole catalogue. Locking one
+category row is not enough: another request could insert or reorder a different
+row. A permanent singleton row gives every mutation one stable lock target:
+
+```sql
+BEGIN;
+
+SELECT lock_id
+FROM app_category_catalogue_lock
+WHERE lock_id = 1
+FOR UPDATE;
+
+-- create, delete, or reorder app_category rows
+
+COMMIT;
+```
+
+The lock row is not a category. It is a technical row that acts as a database
+mutex. It remains available even when the category table is empty or when a
+category such as `GENERAL` is deleted.
+
+### Hibernate / Spring Data JPA
+
+Spring Data maps a pessimistic repository lock to `SELECT ... FOR UPDATE`:
+
+```java
+public interface AccountRepository extends JpaRepository<AccountEntity, UUID> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from AccountEntity a where a.id = :id")
+    Optional<AccountEntity> findForUpdate(@Param("id") UUID id);
+}
+```
+
+The caller must be inside a transaction. Otherwise the database connection
+can release the lock as soon as the query returns:
+
+```java
+@Transactional
+public void withdraw(UUID accountId, BigDecimal amount) {
+    AccountEntity account = accounts.findForUpdate(accountId).orElseThrow();
+    account.withdraw(amount);       // managed entity; Hibernate flushes it
+}                                    // commit releases the lock
+```
+
+Other JPA lock modes:
+
+```java
+@Lock(LockModeType.PESSIMISTIC_READ)   // shared/read lock
+@Lock(LockModeType.PESSIMISTIC_WRITE)  // exclusive/write lock
+@Lock(LockModeType.OPTIMISTIC)         // use @Version checking
+```
+
+Database-specific options such as `NOWAIT` and `SKIP LOCKED` usually require a
+native query:
+
+```java
+@Query(value = """
+    select * from jobs
+    where status = 'READY'
+    order by job_id
+    for update skip locked
+    limit :limit
+    """, nativeQuery = true)
+List<JobEntity> claimableJobs(int limit);
+```
+
+Remember:
+
+- Keep locked transactions short; never wait for a remote HTTP call while
+  holding a database lock.
+- Always lock rows in a consistent order to reduce deadlocks.
+- A deadlock is detected by the database and one transaction is aborted; the
+  application should retry safe transactions.
+- A lock coordinates concurrent work; constraints enforce data correctness.
+
+---
+
 ## N+1 — the question you will be asked
 
 ```java

@@ -1,0 +1,5 @@
+-> Temas de servidores
+-> Procurar por communidades de coisas que queres jogar
+-> Clips de jogos, que podem ser postados no perfil do utilizador, profile gamer, roles
+-> Mini forum por jogo official da applicacao? Fazer parte para jogos na procura de servidores onde isto vai aparecer destacado. Consegue dar onboarding na applicacao do jogo?
+-> 
