@@ -155,8 +155,12 @@ export function ConversationView({
   const amCreator = active ? isGroupCreator(active, account.userId) : false;
   const memberIds = useMemo(
     () =>
-      [account.userId, ...(active?.members.map((m) => m.id) ?? [])].filter(
-        (id): id is string => id != null,
+      Array.from(
+        new Set(
+          [account.userId, ...(active?.members.map((m) => m.id) ?? [])].filter(
+            (id): id is string => id != null,
+          ),
+        ),
       ),
     [account.userId, active],
   );

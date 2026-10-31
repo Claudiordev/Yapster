@@ -11,7 +11,7 @@ export function MainPage() {
   return (
     <div className="flex flex-col flex-grow min-h-0 bg-background dark:bg-surface-chat">
       <div className="flex-shrink-0 flex items-center px-4 h-14 border-b border-divider shadow-sm">
-        <h2 className="font-semibold text-foreground">Main</h2>
+        <h2 className="font-semibold text-foreground">Start</h2>
       </div>
 
       <div className="flex-grow overflow-y-auto flex flex-col items-center justify-center p-6">
