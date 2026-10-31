@@ -1,7 +1,9 @@
 package com.claudiordese.chat.infrastructure.adapter.persistence.mapper;
 
 import com.claudiordese.chat.application.domain.chat.Message;
+import com.claudiordese.chat.application.domain.chat.Reaction;
 import com.claudiordese.chat.infrastructure.entity.MessageEntity;
+import com.claudiordese.chat.infrastructure.entity.MessageReactionEntity;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,6 +24,10 @@ public class MessageMapper {
                 e.getType(),
                 e.getSystemEvent(),
                 e.getSubjectId());
+    }
+
+    public Reaction toDomain(MessageReactionEntity e) {
+        return new Reaction(e.getMessageId(), e.getUserId(), e.getEmoji(), e.getCreatedAt());
     }
 
     public MessageEntity toEntity(Message m) {

@@ -1,9 +1,14 @@
 package com.claudiordese.chat.application.service;
 
 import com.claudiordese.chat.application.config.MessageRateLimitPolicy;
+import com.claudiordese.chat.application.config.ReactionPolicy;
+import com.claudiordese.chat.application.config.ReactionRateLimitPolicy;
 import com.claudiordese.chat.application.domain.chat.Conversation;
 import com.claudiordese.chat.application.domain.chat.ConversationSummary;
 import com.claudiordese.chat.application.domain.chat.Message;
+import com.claudiordese.chat.application.domain.chat.MessageWithReactions;
+import com.claudiordese.chat.application.domain.chat.Reaction;
+import com.claudiordese.chat.application.domain.chat.ReactionSummary;
 import com.claudiordese.chat.application.domain.chat.types.ConversationType;
 import com.claudiordese.chat.application.domain.chat.types.MessageType;
 import com.claudiordese.chat.application.domain.chat.types.SystemEvent;
@@ -14,6 +19,7 @@ import com.claudiordese.chat.application.domain.event.server.GroupRenamedEvent;
 import com.claudiordese.chat.application.domain.event.server.MembersChangedEvent;
 import com.claudiordese.chat.application.domain.event.server.MessageEvent;
 import com.claudiordese.chat.application.domain.event.server.ProfileChangedEvent;
+import com.claudiordese.chat.application.domain.event.server.ReactionEvent;
 import com.claudiordese.chat.application.domain.event.server.RolesChangedEvent;
 import com.claudiordese.chat.application.domain.event.server.TypingEvent;
 import com.claudiordese.chat.application.domain.event.server.UserStatusEvent;
@@ -21,6 +27,7 @@ import com.claudiordese.chat.application.port.socket.EventGateway;
 import com.claudiordese.chat.application.port.persistence.ConversationStore;
 import com.claudiordese.chat.application.port.persistence.MessageStore;
 import com.claudiordese.chat.application.port.ratelimit.RateLimitGuard;
+import com.claudiordese.chat.application.service.utils.ReactionValidator;
 import com.claudiordese.exceptions.BadRequestException;
 import com.claudiordese.exceptions.ConflictException;
 import com.claudiordese.exceptions.InterdictedException;
@@ -54,6 +61,9 @@ public class ChatService {
     private final EventGateway events;
     private final RateLimitGuard rateLimitGuard;
     private final MessageRateLimitPolicy messageRateLimitPolicy;
+    private final ReactionRateLimitPolicy reactionRateLimitPolicy;
+    private final ReactionPolicy reactionPolicy;
+    private final ReactionValidator reactionValidator;
 
     @Transactional
     public Conversation startDm(UUID a, UUID b) {
@@ -317,6 +327,73 @@ public class ChatService {
         return newMessage;
     }
 
+    /**
+     * @return true if the reaction was added, false if the user had already reacted with this emoji
+     */
+    @Transactional
+    public boolean addReaction(UUID conversationId, UUID userId, UUID messageId, String emoji) {
+        if (!rateLimitGuard.tryConsume(
+                "reaction:" + userId + ":" + conversationId,
+                reactionRateLimitPolicy.maxAttempts(),
+                reactionRateLimitPolicy.window())) {
+            throw new TooManyRequestsException(
+                    "reaction_rate_limit_exceeded",
+                    "Too many reactions. Please try again later");
+        }
+
+        reactionValidator.requireReactable(conversationId, userId, messageId, emoji);
+
+        Set<String> distinctEmoji = messages.findReactionsByMessageIds(List.of(messageId)).stream()
+                .map(Reaction::emoji)
+                .collect(Collectors.toSet());
+
+        // Joining an existing pill is always fine; only a new emoji counts toward the cap.
+        if (!distinctEmoji.contains(emoji) && distinctEmoji.size() >= reactionPolicy.maxDistinct()) {
+            throw new BadRequestException("too_many_reactions",
+                    "A message can have at most " + reactionPolicy.maxDistinct() + " different reactions");
+        }
+
+        boolean added = messages.addReaction(new Reaction(messageId, userId, emoji, Instant.now()));
+
+        // Reacting twice is a no-op: nothing changed, so there is nothing to tell the others.
+        if (added) {
+            ReactionEvent event = ReactionEvent.added(conversationId.toString(), messageId.toString(), userId.toString(), emoji);
+            List<UUID> members = conversations.membersOf(conversationId);
+
+            afterCommit(() -> members.forEach(member -> events.send(member.toString(), event)));
+        }
+
+        return added;
+    }
+
+    /**
+     * @return true if the reaction was removed, false if the user had none with this emoji
+     */
+    @Transactional
+    public boolean removeReaction(UUID conversationId, UUID userId, UUID messageId, String emoji) {
+        if (!rateLimitGuard.tryConsume(
+                "reaction:" + userId + ":" + conversationId,
+                reactionRateLimitPolicy.maxAttempts(),
+                reactionRateLimitPolicy.window())) {
+            throw new TooManyRequestsException(
+                    "reaction_rate_limit_exceeded",
+                    "Too many reactions. Please try again later");
+        }
+
+        reactionValidator.requireReactable(conversationId, userId, messageId, emoji);
+
+        boolean removed = messages.removeReaction(messageId, userId, emoji);
+
+        if (removed) {
+            ReactionEvent event = ReactionEvent.removed(conversationId.toString(), messageId.toString(), userId.toString(), emoji);
+            List<UUID> members = conversations.membersOf(conversationId);
+
+            afterCommit(() -> members.forEach(member -> events.send(member.toString(), event)));
+        }
+
+        return removed;
+    }
+
     public void sendTyping(UUID conversationId, UUID senderId) {
         List<UUID> members = conversations.membersOf(conversationId);
 
@@ -412,17 +489,20 @@ public class ChatService {
                 .forEach(user -> events.send(user.toString(),event));
     }
 
-    public List<Conversation> listConversations(UUID userId) {
-        return conversations.findForUser(userId);
-    }
-
-
-    public List<Message> history(UUID conv, UUID loggedUser, long beforeSeq, int limit) {
+    public List<MessageWithReactions> history(UUID conv, UUID loggedUser, long beforeSeq, int limit) {
         if (!conversations.isMember(conv, loggedUser)) {
             throw new InterdictedException("not_a_member", "Not a member of this conversation history");
         }
 
-        return messages.history(conv,beforeSeq,limit);
+        List<Message> page = messages.history(conv, beforeSeq, limit);
+
+        // One query for the reactions of the whole page, not one per message.
+        Map<UUID, List<ReactionSummary>> reactions = ReactionSummary.byMessage(
+                messages.findReactionsByMessageIds(page.stream().map(Message::id).toList()));
+
+        return page.stream()
+                .map(message -> new MessageWithReactions(message, reactions.getOrDefault(message.id(), List.of())))
+                .toList();
     }
 
     /**

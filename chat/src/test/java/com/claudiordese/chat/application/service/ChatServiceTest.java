@@ -1,9 +1,14 @@
 package com.claudiordese.chat.application.service;
 
 import com.claudiordese.chat.application.config.MessageRateLimitPolicy;
+import com.claudiordese.chat.application.config.ReactionPolicy;
+import com.claudiordese.chat.application.config.ReactionRateLimitPolicy;
 import com.claudiordese.chat.application.domain.chat.Conversation;
 import com.claudiordese.chat.application.domain.chat.ConversationMember;
 import com.claudiordese.chat.application.domain.chat.Message;
+import com.claudiordese.chat.application.domain.chat.MessageWithReactions;
+import com.claudiordese.chat.application.domain.chat.Reaction;
+import com.claudiordese.chat.application.domain.chat.ReactionSummary;
 import com.claudiordese.chat.application.domain.chat.types.ConversationType;
 import com.claudiordese.chat.application.domain.chat.types.MessageType;
 import com.claudiordese.chat.application.domain.chat.types.SystemEvent;
@@ -12,11 +17,15 @@ import com.claudiordese.chat.application.domain.event.server.GroupRenamedEvent;
 import com.claudiordese.chat.application.domain.event.server.MembersChangedEvent;
 import com.claudiordese.chat.application.domain.event.server.MessageEvent;
 import com.claudiordese.chat.application.domain.event.server.ProfileChangedEvent;
+import com.claudiordese.chat.application.domain.event.server.ReactionEvent;
+import com.claudiordese.chat.application.domain.event.types.EventType;
 import com.claudiordese.chat.application.domain.event.server.ServerEvent;
 import com.claudiordese.chat.application.port.persistence.ConversationStore;
 import com.claudiordese.chat.application.port.persistence.MessageStore;
 import com.claudiordese.chat.application.port.socket.EventGateway;
+import com.claudiordese.chat.application.service.utils.ReactionValidator;
 import com.claudiordese.chat.support.InMemoryRateLimitGuard;
+import com.claudiordese.exceptions.BadRequestException;
 import com.claudiordese.exceptions.TooManyRequestsException;
 import com.claudiordese.exceptions.InterdictedException;
 import com.claudiordese.exceptions.NotFound;
@@ -26,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -52,7 +62,10 @@ class ChatServiceTest {
                 conversations,
                 gateway,
                 new InMemoryRateLimitGuard(),
-                new MessageRateLimitPolicy(20, Duration.ofSeconds(10)));
+                new MessageRateLimitPolicy(20, Duration.ofSeconds(10)),
+                new ReactionRateLimitPolicy(20, Duration.ofSeconds(10)),
+                new ReactionPolicy(20),
+                new ReactionValidator(messageStore, conversations));
     }
 
     @Test
@@ -75,6 +88,273 @@ class ChatServiceTest {
         UUID anotherConversationId = UUID.randomUUID();
         assertThatCode(() -> service.sendMessage(anotherConversationId, senderId, "different conversation"))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void addReaction_storesReaction_andIsIdempotentForTheSameEmoji() {
+        UUID conversationId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        conversations.members = List.of(userId);
+        UUID messageId = service.sendMessage(conversationId, userId, "hello").id();
+
+        assertThat(service.addReaction(conversationId, userId, messageId, "1f44d")).isTrue();
+        assertThat(service.addReaction(conversationId, userId, messageId, "1f44d")).isFalse();
+
+        assertThat(messageStore.reactions).singleElement().satisfies(reaction -> {
+            assertThat(reaction.messageId()).isEqualTo(messageId);
+            assertThat(reaction.userId()).isEqualTo(userId);
+            assertThat(reaction.emoji()).isEqualTo("1f44d");
+        });
+    }
+
+    @Test
+    void addReaction_throwsInterdicted_whenUserIsNotAMember() {
+        UUID conversationId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        conversations.members = List.of(memberId);
+        UUID messageId = service.sendMessage(conversationId, memberId, "hello").id();
+
+        assertThatThrownBy(() -> service.addReaction(conversationId, UUID.randomUUID(), messageId, "1f44d"))
+                .isInstanceOf(InterdictedException.class);
+        assertThat(messageStore.reactions).isEmpty();
+    }
+
+    @Test
+    void addReaction_throwsNotFound_whenMessageBelongsToAnotherConversation() {
+        UUID conversationId = UUID.randomUUID();
+        UUID otherConversationId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        conversations.members = List.of(userId);
+        UUID messageId = service.sendMessage(otherConversationId, userId, "hello").id();
+
+        assertThatThrownBy(() -> service.addReaction(conversationId, userId, messageId, "1f44d"))
+                .isInstanceOf(NotFound.class);
+        assertThatThrownBy(() -> service.addReaction(conversationId, userId, UUID.randomUUID(), "1f44d"))
+                .isInstanceOf(NotFound.class);
+    }
+
+    @Test
+    void addReaction_throwsBadRequest_forSystemMessages() {
+        UUID conversationId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        conversations.members = List.of(userId);
+        Message system = messageStore.saveMessage(
+                Message.system(conversationId, SystemEvent.MEMBER_ADDED, userId, ""));
+
+        assertThatThrownBy(() -> service.addReaction(conversationId, userId, system.id(), "1f44d"))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void addReaction_acceptsSingleEmoji_includingComposedSequences() {
+        UUID conversationId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        conversations.members = List.of(userId);
+        UUID messageId = service.sendMessage(conversationId, userId, "hello").id();
+
+        for (String emoji : List.of(
+                "1f44d",                                     // 👍
+                "2764-fe0f",                                 // ❤️
+                "1f44d-1f3fd",                               // 👍🏽
+                "1f468-200d-1f469-200d-1f467-200d-1f466",    // 👨‍👩‍👧‍👦
+                "1f1f8-1f1ea",                               // 🇸🇪
+                "0031-fe0f-20e3",                            // 1️⃣
+                "1f3f4-e0067-e0062-e0065-e006e-e0067-e007f"  // 🏴󠁧󠁢󠁥󠁮󠁧󠁿
+        )) {
+            assertThatCode(() -> service.addReaction(conversationId, userId, messageId, emoji))
+                    .as(emoji)
+                    .doesNotThrowAnyException();
+        }
+    }
+
+    @Test
+    void addReaction_rejectsAnythingThatIsNotASingleEmoji() {
+        UUID conversationId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        conversations.members = List.of(userId);
+        UUID messageId = service.sendMessage(conversationId, userId, "hello").id();
+
+        for (String emoji : new String[]{
+                null, "", " ", "a", "zzzz", "👍",            // not a hex key (a raw emoji is rejected too)
+                "0031", "0023", "002a",                     // bare digit, # and *
+                "1F44D", "01f44d", "1f44d-",                // not canonical
+                "1f44d-1f44d", "1f44d-0061",                // more than one emoji
+                "200d", "110000",                           // lone joiner, not a code point
+                "1f44d-".repeat(15) + "1f44d"}) {
+            assertThatThrownBy(() -> service.addReaction(conversationId, userId, messageId, emoji))
+                    .as(String.valueOf(emoji))
+                    .isInstanceOf(BadRequestException.class);
+        }
+
+        assertThat(messageStore.reactions).isEmpty();
+    }
+
+    @Test
+    void addReaction_capsDistinctEmojiPerMessage_butStillAllowsJoiningExistingOnes() {
+        UUID conversationId = UUID.randomUUID();
+        List<UUID> users = Stream.generate(UUID::randomUUID).limit(21).toList();
+        conversations.members = users;
+        UUID messageId = service.sendMessage(conversationId, users.get(0), "hello").id();
+
+        // Each user has their own rate-limit budget, so 20 different users fill the 20 slots.
+        for (int i = 0; i < 20; i++) {
+            service.addReaction(conversationId, users.get(i), messageId, emojiNumber(i));
+        }
+
+        UUID latecomer = users.get(20);
+
+        assertThatThrownBy(() -> service.addReaction(conversationId, latecomer, messageId, emojiNumber(20)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("20");
+        assertThatCode(() -> service.addReaction(conversationId, latecomer, messageId, emojiNumber(0)))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void removeReaction_removesOnlyTheCallersReaction() {
+        UUID conversationId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        conversations.members = List.of(userId, otherId);
+        UUID messageId = service.sendMessage(conversationId, userId, "hello").id();
+        service.addReaction(conversationId, userId, messageId, "1f44d");
+        service.addReaction(conversationId, otherId, messageId, "1f44d");
+
+        assertThat(service.removeReaction(conversationId, userId, messageId, "1f44d")).isTrue();
+        assertThat(service.removeReaction(conversationId, userId, messageId, "1f44d")).isFalse();
+
+        assertThat(messageStore.reactions).singleElement()
+                .satisfies(reaction -> assertThat(reaction.userId()).isEqualTo(otherId));
+    }
+
+    @Test
+    void addReaction_tellsEveryMemberOnce_andStaysQuietWhenNothingChanged() {
+        UUID conversationId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        conversations.members = List.of(userId, otherId);
+        UUID messageId = service.sendMessage(conversationId, userId, "hello").id();
+
+        service.addReaction(conversationId, userId, messageId, "1f44d");
+        service.addReaction(conversationId, userId, messageId, "1f44d");
+
+        assertThat(gateway.recipientsOf(ReactionEvent.class))
+                .containsExactlyInAnyOrder(userId.toString(), otherId.toString());
+        // One copy per member, from the first call only.
+        assertThat(gateway.reactionEvents()).hasSize(2).allSatisfy(event -> {
+            assertThat(event.type()).isEqualTo(EventType.REACTION_ADDED);
+            assertThat(event.getRoomId()).isEqualTo(conversationId.toString());
+            assertThat(event.getMessageId()).isEqualTo(messageId.toString());
+            assertThat(event.getUserId()).isEqualTo(userId.toString());
+            assertThat(event.getEmoji()).isEqualTo("1f44d");
+        });
+    }
+
+    @Test
+    void removeReaction_tellsEveryMember_onlyWhenAReactionWasRemoved() {
+        UUID conversationId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        conversations.members = List.of(userId, otherId);
+        UUID messageId = service.sendMessage(conversationId, userId, "hello").id();
+        service.addReaction(conversationId, userId, messageId, "1f44d");
+
+        service.removeReaction(conversationId, userId, messageId, "1f44d");
+        service.removeReaction(conversationId, userId, messageId, "1f44d");
+
+        // Two members: two copies of the add, two of the remove, and nothing for the repeated remove.
+        assertThat(gateway.reactionEvents())
+                .extracting(ReactionEvent::type)
+                .containsExactly(EventType.REACTION_ADDED, EventType.REACTION_ADDED,
+                        EventType.REACTION_REMOVED, EventType.REACTION_REMOVED);
+    }
+
+    @Test
+    void removeReaction_throwsInterdicted_whenUserIsNotAMember() {
+        UUID conversationId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        conversations.members = List.of(memberId);
+        UUID messageId = service.sendMessage(conversationId, memberId, "hello").id();
+
+        assertThatThrownBy(() -> service.removeReaction(conversationId, UUID.randomUUID(), messageId, "1f44d"))
+                .isInstanceOf(InterdictedException.class);
+    }
+
+    @Test
+    void reactions_throwTooManyRequests_afterTwentyAddsAndRemovesForUserAndConversation() {
+        UUID conversationId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        conversations.members = List.of(userId);
+        UUID messageId = service.sendMessage(conversationId, userId, "hello").id();
+
+        // Adding and removing share one budget, so toggling cannot be used to spam.
+        for (int i = 0; i < 10; i++) {
+            service.addReaction(conversationId, userId, messageId, "1f44d");
+            service.removeReaction(conversationId, userId, messageId, "1f44d");
+        }
+
+        assertThatThrownBy(() -> service.addReaction(conversationId, userId, messageId, "1f44d"))
+                .isInstanceOf(TooManyRequestsException.class)
+                .hasMessage("Too many reactions. Please try again later");
+
+        UUID anotherConversationId = UUID.randomUUID();
+        UUID otherMessageId = service.sendMessage(anotherConversationId, userId, "different conversation").id();
+        assertThatCode(() -> service.addReaction(anotherConversationId, userId, otherMessageId, "1f44d"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void history_groupsReactionsPerMessageAndEmoji_withOneQueryForThePage() {
+        UUID conversationId = UUID.randomUUID();
+        UUID alice = UUID.randomUUID();
+        UUID bob = UUID.randomUUID();
+        UUID carol = UUID.randomUUID();
+        conversations.members = List.of(alice, bob, carol);
+        UUID first = service.sendMessage(conversationId, alice, "first").id();
+        UUID second = service.sendMessage(conversationId, alice, "second").id();
+        UUID third = service.sendMessage(conversationId, alice, "third").id();
+        service.addReaction(conversationId, alice, first, "1f44d");
+        service.addReaction(conversationId, bob, first, "1f44d");
+        service.addReaction(conversationId, alice, first, "2764-fe0f");
+        service.addReaction(conversationId, carol, second, "1f600");
+        messageStore.reactionQueries = 0;
+
+        List<MessageWithReactions> page = service.history(conversationId, alice, Long.MAX_VALUE, 20);
+
+        assertThat(page).hasSize(3);
+        assertThat(messageStore.reactionQueries).isEqualTo(1);
+        assertThat(reactionsOf(page, first)).satisfiesExactly(
+                thumbs -> {
+                    assertThat(thumbs.emoji()).isEqualTo("1f44d");
+                    assertThat(thumbs.userIds()).containsExactly(alice, bob);
+                },
+                heart -> {
+                    assertThat(heart.emoji()).isEqualTo("2764-fe0f");
+                    assertThat(heart.userIds()).containsExactly(alice);
+                });
+        assertThat(reactionsOf(page, second)).singleElement()
+                .satisfies(smile -> assertThat(smile.userIds()).containsExactly(carol));
+        assertThat(reactionsOf(page, third)).isEmpty();
+    }
+
+    @Test
+    void history_throwsInterdicted_whenUserIsNotAMember() {
+        UUID conversationId = UUID.randomUUID();
+        conversations.members = List.of(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.history(conversationId, UUID.randomUUID(), Long.MAX_VALUE, 20))
+                .isInstanceOf(InterdictedException.class);
+    }
+
+    private static List<ReactionSummary> reactionsOf(List<MessageWithReactions> page, UUID messageId) {
+        return page.stream()
+                .filter(entry -> entry.message().id().equals(messageId))
+                .findFirst().orElseThrow()
+                .reactions();
+    }
+
+    private static String emojiNumber(int index) {
+        return Integer.toHexString(0x1F600 + index);
     }
 
     @Test
@@ -420,11 +700,41 @@ class ChatServiceTest {
     private static final class InMemoryMessageStore implements MessageStore {
 
         private final List<Message> messages = new ArrayList<>();
+        private final List<Reaction> reactions = new ArrayList<>();
+        private int reactionQueries;
 
         @Override
         public Message saveMessage(Message message) {
             messages.add(message);
             return message;
+        }
+
+        @Override
+        public Optional<Message> findById(UUID messageId) {
+            return messages.stream().filter(message -> message.id().equals(messageId)).findFirst();
+        }
+
+        @Override
+        public boolean addReaction(Reaction reaction) {
+            boolean exists = reactions.stream().anyMatch(existing ->
+                    existing.messageId().equals(reaction.messageId())
+                            && existing.userId().equals(reaction.userId())
+                            && existing.emoji().equals(reaction.emoji()));
+
+            return !exists && reactions.add(reaction);
+        }
+
+        @Override
+        public boolean removeReaction(UUID messageId, UUID userId, String emoji) {
+            return reactions.removeIf(reaction -> reaction.messageId().equals(messageId)
+                    && reaction.userId().equals(userId)
+                    && reaction.emoji().equals(emoji));
+        }
+
+        @Override
+        public List<Reaction> findReactionsByMessageIds(Collection<UUID> messageIds) {
+            reactionQueries++;
+            return reactions.stream().filter(reaction -> messageIds.contains(reaction.messageId())).toList();
         }
 
         @Override
@@ -535,6 +845,13 @@ class ChatServiceTest {
         private final List<String> sentTo = new ArrayList<>();
         private final List<ServerEvent> events = new ArrayList<>();
         private final List<String> eventRecipients = new ArrayList<>();
+
+        List<ReactionEvent> reactionEvents() {
+            return events.stream()
+                    .filter(ReactionEvent.class::isInstance)
+                    .map(ReactionEvent.class::cast)
+                    .toList();
+        }
 
         /** Who got an event of this type. */
         List<String> recipientsOf(Class<? extends ServerEvent> type) {

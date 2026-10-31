@@ -129,6 +129,22 @@ public class ChatController {
         );
     }
 
+    /**
+     * Idempotent: reacting again with the same emoji is a no-op. {@code emoji} is the unified hex key
+     * ("1f44d"), plain ASCII, so it needs no URL-encoding.
+     */
+    @PutMapping("/{conversationId}/message/{messageId}/reaction/{emoji}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void addReaction(@PathVariable UUID conversationId, @PathVariable UUID messageId, @PathVariable String emoji, Authentication auth) {
+        chatService.addReaction(conversationId, loggedUser(auth), messageId, emoji);
+    }
+
+    @DeleteMapping("/{conversationId}/message/{messageId}/reaction/{emoji}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removeReaction(@PathVariable UUID conversationId, @PathVariable UUID messageId, @PathVariable String emoji, Authentication auth) {
+        chatService.removeReaction(conversationId, loggedUser(auth), messageId, emoji);
+    }
+
     @GetMapping("/{conversationId}/message")
     public List<MessageResponse> getMessages(@PathVariable UUID conversationId,
                                              @RequestParam(defaultValue = "9223372036854775807") long beforeSeq,
