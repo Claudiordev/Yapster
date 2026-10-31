@@ -1568,7 +1568,7 @@ export function useCall(conversationId: string | null): UseCallState {
       )?.track as LocalVideoTrack | undefined;
 
       if (enabled && screenTrack) {
-        setStartBitrateTarget(screenTrack.mediaStreamTrack.id, "vp8", maxBitrate / 1000);
+        setStartBitrateTarget(screenTrack.mediaStreamTrack.id, "vp8", maxBitrate / 1000, (maxBitrate * 0.7) / 1000);
       } else if (outgoingTrackId) {
         clearStartBitrateTarget(outgoingTrackId);
       }
