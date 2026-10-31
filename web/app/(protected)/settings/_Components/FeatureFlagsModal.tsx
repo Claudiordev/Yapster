@@ -16,6 +16,7 @@ const FEATURE_LABELS: Record<string, string> = {
   "game-servers": "Game servers",
   events: "Events",
   premium: "Premium",
+  billing: "Billing",
   gif: "GIF button",
   emojis: "Emoji button",
 };
