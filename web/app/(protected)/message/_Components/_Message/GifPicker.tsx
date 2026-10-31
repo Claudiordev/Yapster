@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@heroui/popover";
 
 import { useGifLibrary } from "@/app/(protected)/message/_Actions/useGifLibrary";
 import { Icon } from "@/components/Icon/Icon";
-import { POPUP_MOTION_PROPS } from "@/lib/popupMotion";
+import { DROP_IN_MOTION_PROPS } from "@/lib/popupMotion";
 import type { Gif, GifPage, SavedGif } from "@/types/gif";
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -280,7 +280,7 @@ export function GifPicker({
   return (
     <Popover
       isOpen={isOpen}
-      motionProps={POPUP_MOTION_PROPS}
+      motionProps={DROP_IN_MOTION_PROPS}
       placement="top-end"
       onOpenChange={(open) => {
         setIsOpen(open);

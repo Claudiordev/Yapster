@@ -1121,3 +1121,9 @@
   opacity: 0.5;
   box-shadow: none;
 }
+
+/* emoji-picker-react fades every emoji's hover background in and out over 0.2s, so moving the
+   pointer from one emoji to the next shows both highlighted for a moment. Switch it instantly. */
+.epr-main .epr-emoji {
+  transition: none !important;
+}

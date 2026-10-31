@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@heroui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@heroui/popover";
@@ -8,10 +8,20 @@ import { EmojiStyle, Theme, type EmojiClickData } from "emoji-picker-react";
 import { useTheme } from "next-themes";
 
 import { Icon } from "@/components/Icon/Icon";
-import { POPUP_MOTION_PROPS } from "@/lib/popupMotion";
+import { DROP_IN_MOTION_PROPS } from "@/lib/popupMotion";
+
+import { seedFrequentEmojis } from "./utils/frequentEmojis";
 
 // Loaded on first open: the picker and its emoji data are sizeable and touch `window`.
-const Picker = dynamic(() => import("emoji-picker-react"), { ssr: false });
+// The loader runs once, right before the first render, which is when "Frequently Used" is read.
+const Picker = dynamic(
+  () => {
+    seedFrequentEmojis();
+
+    return import("emoji-picker-react");
+  },
+  { ssr: false },
+);
 
 const token = (name: string) => `hsl(var(--heroui-${name}))`;
 
@@ -54,16 +64,30 @@ interface EmojiPickerProps {
   isDisabled?: boolean;
   /** Applied to the trigger button so it matches the Send/GIF buttons (see COMPOSER_ACTION_BUTTON_CLASS). */
   triggerClassName?: string;
+  /** Replaces the default smile button, e.g. the add-reaction buttons on a message. */
+  trigger?: ReactNode;
+  /** Opens/closes the popup from outside (a menu item); it manages itself when omitted. */
+  isOpen?: boolean;
+  onOpenChange?: (isOpen: boolean) => void;
   onSelect: (emoji: string) => void;
 }
 
 export function EmojiPicker({
   isDisabled,
   triggerClassName,
+  trigger,
+  isOpen: controlledOpen,
+  onOpenChange,
   onSelect,
 }: EmojiPickerProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
   const { resolvedTheme } = useTheme();
+  const isOpen = controlledOpen ?? ownOpen;
+
+  function setIsOpen(open: boolean) {
+    setOwnOpen(open);
+    onOpenChange?.(open);
+  }
 
   function pick({ emoji }: EmojiClickData) {
     setIsOpen(false);
@@ -73,24 +97,26 @@ export function EmojiPicker({
   return (
     <Popover
       isOpen={isOpen}
-      motionProps={POPUP_MOTION_PROPS}
+      motionProps={DROP_IN_MOTION_PROPS}
       placement="top-end"
       onOpenChange={setIsOpen}
     >
       <PopoverTrigger>
-        <Button
-          aria-label="Add an emoji"
-          className={triggerClassName}
-          isDisabled={isDisabled}
-          // The popup is anchored to this button, so it must not scale/shift
-          // on press or the popup jumps as it opens.
-          disableAnimation
-          isIconOnly
-          size="sm"
-          variant="light"
-        >
-          <Icon name="smile" size={18} />
-        </Button>
+        {trigger ?? (
+          <Button
+            aria-label="Add an emoji"
+            className={triggerClassName}
+            isDisabled={isDisabled}
+            // The popup is anchored to this button, so it must not scale/shift
+            // on press or the popup jumps as it opens.
+            disableAnimation
+            isIconOnly
+            size="sm"
+            variant="light"
+          >
+            <Icon name="smile" size={18} />
+          </Button>
+        )}
       </PopoverTrigger>
 
       <PopoverContent className="w-[30rem] max-w-[calc(100vw-1.5rem)] overflow-hidden p-0">

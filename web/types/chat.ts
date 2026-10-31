@@ -43,6 +43,15 @@ export interface ChatMessageDto {
   messageType: MessageKind;
   systemEvent: SystemEventCode | null;
   subjectId: string | null; // user a SYSTEM message is about
+  reactions: ReactionDto[]; // empty for a message nobody reacted to
+}
+
+/** One emoji on a message and who used it — matches the backend ReactionResponse. */
+export interface ReactionDto {
+  /** Unified hex key of the emoji, e.g. "1f44d" or "2764-fe0f" (see `toReactionKey`). */
+  emoji: string;
+  count: number;
+  userIds: string[]; // in the order they reacted
 }
 
 /** USER = written by a member; SYSTEM = announced by the chat itself (no sender). */
@@ -64,7 +73,9 @@ export type EventType =
   | "ROLES_CHANGED"
   | "MEMBERS_CHANGED"
   | "PROFILE_CHANGED"
-  | "GROUP_RENAMED";
+  | "GROUP_RENAMED"
+  | "REACTION_ADDED"
+  | "REACTION_REMOVED";
 
 /** Pushed when a new message lands — matches the backend MessageEvent. */
 export interface MessageEvent {
@@ -181,6 +192,27 @@ export interface GroupRenamedEvent {
   name: string | null;
 }
 
+/**
+ * Someone reacted to a message — matches the backend ReactionEvent. Also sent back to the person
+ * who reacted, which is harmless: applying a reaction twice changes nothing.
+ */
+export interface ReactionAddedEvent {
+  type: "REACTION_ADDED";
+  roomId: string; // = conversationId
+  messageId: string;
+  userId: string;
+  emoji: string; // unified hex key
+}
+
+/** Someone took their reaction back — matches the backend ReactionEvent. */
+export interface ReactionRemovedEvent {
+  type: "REACTION_REMOVED";
+  roomId: string;
+  messageId: string;
+  userId: string;
+  emoji: string;
+}
+
 /** Any event the server can push over the socket. */
 export type ServerEvent =
   | MessageEvent
@@ -193,7 +225,9 @@ export type ServerEvent =
   | RolesChangedEvent
   | MembersChangedEvent
   | ProfileChangedEvent
-  | GroupRenamedEvent;
+  | GroupRenamedEvent
+  | ReactionAddedEvent
+  | ReactionRemovedEvent;
 
 /**
  * Anything the client may send UP the socket — mirrors the backend's
@@ -245,4 +279,15 @@ export interface ThreadMessage {
   pending?: boolean;
   /** Set for chat-authored (SYSTEM) messages, which render without a sender. */
   system?: { event: SystemEventCode; subjectId: string };
+  /** Oldest reaction first, which is the order the pills are shown in. */
+  reactions: ThreadReaction[];
+}
+
+export interface ThreadReaction {
+  /** Unified hex key of the emoji, e.g. "1f44d". */
+  emoji: string;
+  /** Everyone who used it; the count is its length. */
+  userIds: string[];
+  /** Whether the current user is one of them (highlights the pill). */
+  byMe: boolean;
 }
