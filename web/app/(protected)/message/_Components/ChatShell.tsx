@@ -48,7 +48,7 @@ export function ChatShell({ children }: { children: ReactNode }) {
       <div className="w-80 flex-shrink-0 flex flex-col min-h-0 bg-content1 dark:bg-surface-sidebar">
         <ChatNav activePanel={activePanel} onSelectPanel={setActivePanel} />
 
-        <div className="h-px bg-divider" />
+        <div className="-mt-px h-px bg-divider" />
 
         <ChatList
           activeConversationId={params.conversationId ?? null}

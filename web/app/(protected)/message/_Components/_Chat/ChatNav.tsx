@@ -25,12 +25,9 @@ export function ChatNav({ activePanel, onSelectPanel }: ChatNavProps) {
   }
 
   return (
-    <div className="flex flex-shrink-0 flex-col gap-2 p-3">
-      <div className="flex items-center gap-2 px-1">
-      </div>
-
-      <div className="flex flex-col gap-1">
-        {/* Messages — the main view; selecting it closes any open panel. */}
+    <div className="flex flex-shrink-0 flex-col">
+      {/* Messages — the main view; selecting it closes any open panel. */}
+      <div className="flex h-14 items-center px-3">
         <Button
           className={itemClass(activePanel === null)}
           size="md"
@@ -40,13 +37,13 @@ export function ChatNav({ activePanel, onSelectPanel }: ChatNavProps) {
         >
           Messages
         </Button>
+      </div>
 
-        {/* Feature views that open on top of the messages page. */}
-        {CHAT_PANELS.map((panel) => (
+      {/* Feature views that open on top of the messages page. */}
+      {CHAT_PANELS.filter((panel) => isFeatureEnabled(panel.key)).map((panel) => (
+        <div key={panel.key} className="flex h-14 items-center px-3">
           <Button
-            key={panel.key}
             className={itemClass(activePanel === panel.key)}
-            isDisabled={!isFeatureEnabled(panel.key)}
             size="md"
             startContent={<Icon name={panel.icon} size={18} />}
             variant={activePanel === panel.key ? "flat" : "light"}
@@ -54,8 +51,8 @@ export function ChatNav({ activePanel, onSelectPanel }: ChatNavProps) {
           >
             {panel.label}
           </Button>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 }
