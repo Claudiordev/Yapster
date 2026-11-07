@@ -49,7 +49,11 @@ export type IconName =
   | "counter-strike"
   | "valorant"
   | "league-of-legends"
-  | "rocket-league";
+  | "rocket-league"
+  | "among-us"
+  | "apex-legends"
+  | "sliders"
+  | "gift";
 
 interface IconProps {
   name: IconName;

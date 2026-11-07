@@ -1,213 +1,96 @@
-"use client";
+import { Button } from "@heroui/button";
 
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import type { GameEvent } from "@/types/event";
+import { GameTile } from "./GameTile";
+import { HostLogo } from "./HostLogo";
+import { getStarts, roundsText } from "./utils/eventDetails";
+import { formatPrize, getRowAction } from "./utils/eventFilters";
 
-import { C } from "@/app/(protected)/message/_Components/_GameServers/utils/palette";
-import { MinecraftIcon, AmongUsIcon, ValorantIcon, RustIcon } from "../_GameServers/GameIcons";
-import type { EventData } from "./EventsPage";
+/** Column layout shared by the header and every row. */
+export const EVENT_GRID =
+  "grid grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_7.5rem] items-center gap-4";
 
-const ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
-  minecraft: MinecraftIcon,
-  "among-us": AmongUsIcon,
-  valorant: ValorantIcon,
-  rust: RustIcon,
-};
-
-// Colors lifted straight from the showcase's card design (styles/globals.css:
-// --gold, --green, --brand, --brand-dark, --wine) so the row matches it exactly.
-const GOLD = "#ffca56";
-const GREEN = "#61d98b";
-const BRAND = "#ff3f52";
-const BRAND_DARK = "#8c1023";
-const WINE = "#530b18";
-const PURPLE = "#8b5cf6";
-const PURPLE_HOVER = "#a074ff";
-const PURPLE_BORDER = "#5b3fa0";
-const PURPLE_DARK = "#4c2889";
-const BRAND_HOVER = "#ff5c6d";
-const JOINED_HOVER = "#3aa267";
-
-function formatCountdown(ms: number) {
-  if (ms <= 0) return "Live now";
-
-  const totalSeconds = Math.floor(ms / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
-  return `${minutes}m ${seconds}s`;
+interface EventRowProps {
+  event: GameEvent;
+  onOpen: (id: string) => void;
 }
 
-interface Props {
-  event: EventData;
-  index: number;
-  onJoin: () => void;
-  onDonate: () => void;
-  onWatch: () => void;
-}
-
-export default function EventRow({ event, onJoin, onDonate, onWatch }: Props) {
-  const [now, setNow] = useState(() => Date.now());
-
-  // Drives the "starts in" timer so the row keeps ticking down live.
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  const Icon = ICONS[event.game];
-  const remaining = event.startsAt - now;
-  const isLive = remaining <= 0;
+export function EventRow({ event, onOpen }: EventRowProps) {
+  const action = getRowAction(event);
+  const starts = getStarts(event);
+  const fill = Math.min(100, (event.players / event.maxPlayers) * 100);
 
   return (
     <article
-      style={{
-        border: `2px solid ${C.bd}`,
-        borderRadius: "14px",
-        background: "rgba(43, 45, 49, 0.96)",
-        boxShadow: "0 5px 0 #1e1f22, 0 18px 44px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.035)",
-        padding: "14px 18px",
-      }}
+      className={`${EVENT_GRID} rounded-large border-2 border-surface-border bg-content1 px-4 py-3 shadow-[0_4px_0_#1e1f22] dark:bg-surface-chat`}
     >
-      {/* Topline: icon, event title, status pill */}
-      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-        <span
-          style={{
-            display: "grid",
-            flex: "0 0 auto",
-            width: "40px",
-            height: "40px",
-            placeItems: "center",
-            border: `1px solid ${C.bd}`,
-            borderRadius: "10px",
-            background: C.bg,
-          }}
-        >
-          {Icon && <Icon size={30} />}
-        </span>
-
-        <span style={{ display: "flex", minWidth: 0, flexDirection: "column" }}>
-          <small style={{ color: "#85878d", fontSize: "10px", fontWeight: 900, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-            {event.game.replace(/-/g, " ")}
-          </small>
-          <strong style={{ marginTop: "2px", color: "#fff", fontSize: "15px" }}>{event.name}</strong>
-        </span>
-
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "5px",
-            marginLeft: "auto",
-            padding: "5px 10px",
-            border: `1px solid ${isLive ? "rgba(97, 217, 139, 0.25)" : "rgba(97, 217, 139, 0.25)"}`,
-            borderRadius: "999px",
-            background: "rgba(97, 217, 139, 0.08)",
-            color: GREEN,
-            fontSize: "10px",
-            fontWeight: 800,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-          }}
-        >
-          <i style={{ width: "6px", height: "6px", borderRadius: "50%", background: GREEN, boxShadow: `0 0 7px ${GREEN}99` }} />
-          {isLive ? "Live" : "Open"}
-        </span>
-      </div>
-
-      {/* Stats row: prize, spots, starts-in, actions */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 0.85fr 1fr auto",
-          alignItems: "end",
-          gap: "16px",
-          marginTop: "13px",
-          paddingTop: "12px",
-          borderTop: "1px solid rgba(255, 255, 255, 0.07)",
-        }}
-      >
-        <span style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          <small style={{ color: "#85878d", fontSize: "10px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            1st prize
-          </small>
-          <strong style={{ color: GOLD, fontSize: "16px", letterSpacing: "-0.02em" }}>${event.prize.toLocaleString()}</strong>
-        </span>
-
-        <span style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          <small style={{ color: "#85878d", fontSize: "10px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Spots
-          </small>
-          <strong style={{ color: "#fff", fontSize: "13px" }}>
-            {event.spots} / {event.maxSpots}
-          </strong>
-        </span>
-
-        <span style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          <small style={{ color: "#85878d", fontSize: "10px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            {isLive ? "Status" : "Starts in"}
-          </small>
-          <strong style={{ color: isLive ? GREEN : "#fff", fontSize: "13px" }}>{formatCountdown(remaining)}</strong>
-        </span>
-
-        <div style={{ display: "flex", gap: "8px" }}>
-          <motion.button
-            type="button"
-            onClick={onDonate}
-            whileHover={{ backgroundColor: PURPLE_HOVER, scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-              height: "34px",
-              minWidth: "94px",
-              padding: "0 14px",
-              border: `1px solid ${PURPLE_BORDER}`,
-              borderRadius: "8px",
-              backgroundColor: PURPLE,
-              color: "#fff",
-              fontSize: "12px",
-              fontWeight: 800,
-              cursor: "pointer",
-              boxShadow: `0 3px 0 ${PURPLE_DARK}`,
-              fontFamily: "inherit",
-              transition: "background-color 0.18s",
-            }}
-          >
-            Donate
-          </motion.button>
-
-          <motion.button
-            type="button"
-            onClick={isLive ? onWatch : onJoin}
-            whileHover={{ backgroundColor: event.joined && !isLive ? JOINED_HOVER : BRAND_HOVER, scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            style={{
-              height: "34px",
-              minWidth: "118px",
-              padding: "0 14px",
-              border: `1px solid ${event.joined && !isLive ? "#2c7849" : WINE}`,
-              borderRadius: "8px",
-              backgroundColor: event.joined && !isLive ? "#318e54" : BRAND,
-              color: "#fff",
-              fontSize: "12px",
-              fontWeight: 800,
-              cursor: "pointer",
-              boxShadow: event.joined && !isLive ? "0 3px 0 #1e5b37" : `0 3px 0 ${BRAND_DARK}`,
-              fontFamily: "inherit",
-              transition: "background-color 0.18s",
-            }}
-          >
-            {isLive ? "Watch" : event.joined ? "Joined ✓" : "Join"}
-          </motion.button>
+      {/* Event */}
+      <div className="flex min-w-0 items-center gap-3">
+        <GameTile game={event.game} />
+        <div className="min-w-0">
+          <p className="truncate font-semibold text-foreground">{event.name}</p>
+          <p className="text-[11px] leading-snug text-default-500">
+            {event.format} · {roundsText(event)}
+          </p>
         </div>
       </div>
+
+      {/* Hosted by */}
+      <div className="flex min-w-0 items-center gap-2">
+        <HostLogo size={22} />
+        <p className="truncate text-sm font-medium text-foreground">{event.hostedBy}</p>
+      </div>
+
+      {/* Starts */}
+      <div className="min-w-0">
+        {event.status === "live" ? (
+          <span className="inline-flex items-center gap-1.5 rounded-small border border-brand/40 bg-brand/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand">
+            <span className="h-1.5 w-1.5 rounded-full bg-brand" />
+            Live now
+          </span>
+        ) : (
+          <p className="truncate text-sm font-semibold text-foreground">
+            {starts.label}
+          </p>
+        )}
+        <p className="mt-1 truncate text-tiny text-default-500">{starts.detail}</p>
+      </div>
+
+      {/* Players */}
+      <div>
+        <p className="text-sm font-semibold text-foreground">
+          {event.players}
+          <span className="font-normal text-default-500"> / {event.maxPlayers}</span>
+        </p>
+        <div className="mt-1.5 h-1 w-full max-w-[6.5rem] overflow-hidden rounded-full bg-default-200">
+          <div className="h-full rounded-full bg-[#f5b73b]" style={{ width: `${fill}%` }} />
+        </div>
+      </div>
+
+      {/* Prize pool */}
+      <div>
+        <p className="text-lg font-bold text-[#f5b73b]">{formatPrize(event.prizePool)}</p>
+        <p className="text-[10px] text-default-500">cash prize pool</p>
+      </div>
+
+      {/* Action */}
+      {action.tone === "brand" ? (
+        <Button
+          className="btn-coral h-9 w-full text-sm font-bold"
+          onPress={() => onOpen(event.id)}
+        >
+          {action.label}
+        </Button>
+      ) : (
+        <Button
+          className="chat-profile-action chat-profile-settings w-full text-sm font-semibold"
+          isDisabled={action.disabled}
+          variant="light"
+          onPress={() => action.opensDetail && onOpen(event.id)}
+        >
+          {action.label}
+        </Button>
+      )}
     </article>
   );
 }

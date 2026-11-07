@@ -1,148 +1,163 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { Button } from "@heroui/button";
+import { Input } from "@heroui/input";
 
-import { C } from "@/app/(protected)/message/_Components/_GameServers/utils/palette";
-import EventRow from "./EventRow";
+import { Icon } from "@/components/Icon/Icon";
+import type { EventsState } from "../../_Actions/useEvents";
+import { EVENT_GAMES } from "./utils/eventGames";
+import {
+  countActiveFilters,
+  EVENT_TABS,
+} from "./utils/eventFilters";
+import { EventRow, EVENT_GRID } from "./EventRow";
+import { EventsFiltersModal } from "./EventsFiltersModal";
+import { GameCard } from "./GameCard";
 
-export interface EventData {
-  id: string;
-  game: string;
-  name: string;
-  prize: number;
-  spots: number;
-  maxSpots: number;
-  startsAt: number;
-  joined: boolean;
-}
+const COLUMNS = ["Event", "Hosted by", "Starts", "Players", "Prize pool"];
 
-const NOW = Date.now();
-
-const INITIAL_EVENTS: EventData[] = [
-  { id: "e1", game: "cs2", name: "Counter-Strike 2 Clash", prize: 1500, spots: 385, maxSpots: 500, startsAt: NOW + 1000 * 60 * 60 * 26, joined: false },
-  { id: "e2", game: "valorant", name: "Valorant Showdown", prize: 800, spots: 240, maxSpots: 300, startsAt: NOW + 1000 * 60 * 45, joined: false },
-  { id: "e3", game: "minecraft", name: "Minecraft Build-Off", prize: 250, spots: 64, maxSpots: 100, startsAt: NOW - 1000 * 60 * 5, joined: true },
-  { id: "e4", game: "rust", name: "Rust Wipe Night", prize: 500, spots: 48, maxSpots: 80, startsAt: NOW + 1000 * 60 * 60 * 24 * 3, joined: false },
-  { id: "e5", game: "among-us", name: "Among Us Mayhem", prize: 100, spots: 10, maxSpots: 10, startsAt: NOW + 1000 * 60 * 60 * 6, joined: false },
-];
-
-export default function EventsPage({ onClose }: { onClose?: () => void }) {
-  const [events, setEvents] = useState<EventData[]>(INITIAL_EVENTS);
-
-  function toggleJoin(id: string) {
-    setEvents((prev) =>
-      prev.map((e) =>
-        e.id === id
-          ? { ...e, joined: !e.joined, spots: e.joined ? e.spots - 1 : e.spots + 1 }
-          : e,
-      ),
-    );
-  }
-
-  function handleDonate(_id: string) {
-    // In a real app: open a payment flow. Here it's a no-op stub.
-  }
-
-  function handleWatch(_id: string) {
-    // In a real app: jump into the live stream/room. Here it's a no-op stub.
-  }
+export default function EventsPage({
+  events,
+  onClose,
+}: {
+  events: EventsState;
+  onClose?: () => void;
+}) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const activeFilters = countActiveFilters(events);
 
   return (
-    <div
-      style={{
-        backgroundColor: C.bg,
-        height: "100%",
-        overflowY: "auto",
-        position: "relative",
-        fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
-        color: C.w,
-      }}
-    >
+    <div className="relative h-full overflow-y-auto bg-content1 text-foreground dark:bg-surface-sidebar">
       {onClose && (
-        <button
+        <Button
+          isIconOnly
           aria-label="Close"
-          onClick={onClose}
-          style={{
-            position: "absolute",
-            top: "16px",
-            right: "20px",
-            zIndex: 3,
-            width: "34px",
-            height: "34px",
-            borderRadius: "50%",
-            border: `1px solid ${C.bd}`,
-            backgroundColor: C.surf,
-            color: C.gi,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-          }}
+          className="chat-profile-action chat-profile-settings absolute right-5 top-4 z-10"
+          variant="light"
+          onPress={onClose}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-            <line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" />
-          </svg>
-        </button>
+          <Icon name="close" size={16} />
+        </Button>
       )}
 
-      <div style={{ position: "relative", zIndex: 1, maxWidth: "980px", margin: "0 auto", padding: "40px 24px 72px" }}>
+      <div className="mx-auto max-w-[1100px] px-6 pb-16 pt-8">
+        <h1 className="text-[34px] font-bold leading-tight tracking-tight">
+          Find your next event.
+        </h1>
+        <p className="mt-1 text-sm text-default-500">
+          Pick your game. Bring your friends. Play for{" "}
+          <span className="font-bold text-[#f5b73b]">cash prizes</span>.
+        </p>
 
-        {/* ── Section row ─────────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}
-        >
-          <div>
-            <h2 style={{ color: C.gi, fontSize: "11px", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", margin: "0 0 2px" }}>
-              Upcoming Events
-            </h2>
-            <p style={{ color: C.ga, fontSize: "12px", margin: 0 }}>
-              {events.length} event{events.length !== 1 ? "s" : ""} open for registration
-            </p>
-          </div>
-        </motion.div>
-
-        {/* ── Rows ────────────────────────────────────────────── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <AnimatePresence>
-            {events.map((event, i) => (
-              <motion.div
-                key={event.id}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: i * 0.05 }}
-              >
-                <EventRow
-                  event={event}
-                  index={i}
-                  onJoin={() => toggleJoin(event.id)}
-                  onDonate={() => handleDonate(event.id)}
-                  onWatch={() => handleWatch(event.id)}
-                />
-              </motion.div>
-            ))}
-          </AnimatePresence>
+        {/* Game cards: toggle filters */}
+        <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {EVENT_GAMES.map((game) => (
+            <GameCard
+              key={game.id}
+              game={game}
+              liveEvents={events.gameStats[game.id]?.live ?? 0}
+              openEvents={events.gameStats[game.id]?.open ?? 0}
+              dimmed={events.game !== null && events.game !== game.id}
+              selected={events.game === game.id}
+              onPress={() => events.toggleGame(game.id)}
+            />
+          ))}
         </div>
 
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
-          style={{
-            color: C.ga,
-            fontSize: "11px",
-            letterSpacing: "0.16em",
-            textTransform: "uppercase",
-            textAlign: "center",
-            marginTop: "52px",
-            marginBottom: 0,
-          }}
-        >
-          Voxsi · Events
-        </motion.p>
+        {/* Tabs */}
+        <div className="mt-8 flex gap-6 border-b border-divider">
+          {EVENT_TABS.map((tab) => {
+            const active = events.tab === tab.id;
+
+            return (
+              <button
+                key={tab.id}
+                aria-pressed={active}
+                className={`-mb-px flex items-center gap-2 border-b-2 pb-3 text-sm font-semibold transition-colors ${
+                  active
+                    ? "border-brand text-foreground"
+                    : "border-transparent text-default-500 hover:text-foreground"
+                }`}
+                type="button"
+                onClick={() => events.setTab(tab.id)}
+              >
+                {tab.id === "live" && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-brand" />
+                )}
+                {tab.label}
+                <span
+                  className={`rounded-small px-1.5 text-tiny ${
+                    active ? "bg-brand-deep text-white" : "bg-default-200 text-default-500"
+                  }`}
+                >
+                  {events.counts[tab.id]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Search + filters */}
+        <div className="mt-4 flex items-center gap-3">
+          <Input
+            aria-label="Search events or organizers"
+            className="w-[22%] min-w-[14rem]"
+            classNames={{ inputWrapper: "h-10 border-[#46424d] bg-[#18191d]" }}
+            placeholder="Search events or organizers"
+            startContent={<Icon className="text-default-400" name="search" size={16} />}
+            value={events.query}
+            variant="bordered"
+            onValueChange={events.setQuery}
+          />
+          <Button
+            className="chat-profile-action chat-profile-settings ml-auto flex-shrink-0 px-4 text-sm font-semibold"
+            startContent={<Icon name="sliders" size={16} />}
+            variant="light"
+            onPress={() => setFiltersOpen(true)}
+          >
+            Filters
+            {activeFilters > 0 && (
+              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-brand px-1 text-[11px] font-bold text-white">
+                {activeFilters}
+              </span>
+            )}
+          </Button>
+        </div>
+
+        {/* List */}
+        <div className="mt-5 overflow-x-auto">
+          <div className="min-w-[820px]">
+            <div
+              className={`${EVENT_GRID} px-4 pb-2 text-[10px] font-semibold uppercase tracking-wider text-default-400`}
+            >
+              {COLUMNS.map((label) => (
+                <span key={label}>{label}</span>
+              ))}
+              <span />
+            </div>
+
+            <div className="flex flex-col gap-3 pb-1">
+              {events.visible.length === 0 ? (
+                <p className="py-10 text-center text-sm text-default-400">
+                  No events match your filters.
+                </p>
+              ) : (
+                events.visible.map((event) => (
+                  <EventRow key={event.id} event={event} onOpen={events.openEvent} />
+                ))
+              )}
+            </div>
+          </div>
+        </div>
       </div>
+
+      <EventsFiltersModal
+        isOpen={filtersOpen}
+        openSpotsOnly={events.openSpotsOnly}
+        onApply={(filters) => events.setOpenSpotsOnly(filters.openSpotsOnly)}
+        onClose={() => setFiltersOpen(false)}
+      />
     </div>
   );
 }
