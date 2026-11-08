@@ -169,10 +169,7 @@ export function ChatProfile() {
         <Icon name="settings" size={16} />
       </Button>
 
-      <ProfileModal
-        isOpen={profileOpen}
-        onClose={() => setProfileOpen(false)}
-      />
+      <ProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
       <SettingsModal
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}

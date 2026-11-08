@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { Button } from "@heroui/button";
 import { Select, SelectItem } from "@heroui/select";
-import { Switch } from "@heroui/switch";
 
 import { MicTest } from "./MicTest";
 import { ServerInformationModal } from "./ServerInformationModal";
 import { FeatureFlagsModal } from "./FeatureFlagsModal";
 import { UserRolesModal } from "./UserRolesModal";
 
+import { ToggleRow } from "@/components/OnOffToggle/OnOffToggle";
 import { POPUP_MOTION_PROPS } from "@/lib/popupMotion";
 import { useAccount } from "@/lib/hooks/useAccount";
 import { clampResolution, DEFAULT_VIDEO_PREFS, isResolutionAllowed, DEFAULT_SCREEN_SHARE_AUDIO, ECHO_CANCELLATION_KEY, NOISE_SUPPRESSION_KEY, readAudioProcessingPrefs, readVideoPrefs, readScreenShareAudioPref, VIDEO_RESOLUTION_KEY, VIDEO_RESOLUTIONS, writeAudioProcessingPref, writeScreenShareAudioPref } from "@/lib/mediaPrefs";
@@ -250,37 +250,27 @@ export function SettingsPanel() {
       {/* Mic processing. Applied by the browser on capture, so these take
           effect the next time you join a call, not mid-call. */}
       <div className="flex flex-col gap-3">
-        <Switch
-          isSelected={noiseSuppression}
-          size="sm"
-          onValueChange={(enabled) => {
+        <ToggleRow
+          checked={noiseSuppression}
+          description="Filters steady background noise."
+          label="Noise suppression"
+          title="Noise suppression"
+          onChange={(enabled) => {
             setNoiseSuppression(enabled);
             writeAudioProcessingPref(NOISE_SUPPRESSION_KEY, enabled);
           }}
-        >
-          <div className="flex flex-col">
-            <span className="text-small">Noise suppression</span>
-            <span className="text-tiny text-default-400">
-              Filters steady background noise.
-            </span>
-          </div>
-        </Switch>
+        />
 
-        <Switch
-          isSelected={echoCancellation}
-          size="sm"
-          onValueChange={(enabled) => {
+        <ToggleRow
+          checked={echoCancellation}
+          description="Stops others hearing themselves back."
+          label="Echo cancellation"
+          title="Echo cancellation"
+          onChange={(enabled) => {
             setEchoCancellation(enabled);
             writeAudioProcessingPref(ECHO_CANCELLATION_KEY, enabled);
           }}
-        >
-          <div className="flex flex-col">
-            <span className="text-small">Echo cancellation</span>
-            <span className="text-tiny text-default-400">
-              Stops others hearing themselves back.
-            </span>
-          </div>
-        </Switch>
+        />
       </div>
 
       <div className="h-px bg-divider" />
@@ -325,21 +315,16 @@ export function SettingsPanel() {
         </div>
       </div>
 
-      <Switch
-        isSelected={screenShareAudio}
-        size="sm"
-        onValueChange={(enabled) => {
+      <ToggleRow
+        checked={screenShareAudio}
+        description="Requests audio when you start sharing. Enabled by default."
+        label="Share screen audio"
+        title="Share screen audio"
+        onChange={(enabled) => {
           setScreenShareAudio(enabled);
           writeScreenShareAudioPref(enabled);
         }}
-      >
-        <div className="flex flex-col">
-          <span className="text-small">Share screen audio</span>
-          <span className="text-tiny text-default-400">
-            Requests audio when you start sharing. Enabled by default.
-          </span>
-        </div>
-      </Switch>
+      />
 
       <p className="text-tiny text-default-400">
         Sends up to{" "}

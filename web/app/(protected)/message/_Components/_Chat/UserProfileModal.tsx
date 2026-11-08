@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Avatar } from "@heroui/avatar";
+import { Button } from "@heroui/button";
 import { Modal, ModalBody, ModalContent } from "@heroui/modal";
 
-import { StatusDot } from "@/components/StatusDot/StatusDot";
-import { RoleBadge } from "@/components/RoleBadge/RoleBadge";
-import { badgesForRoles } from "@/lib/roleBadges";
+import { ProfileCard } from "./ProfileCard";
+import { mockProfileFor } from "./utils/mockProfiles";
+import { useChat } from "../ChatProvider";
 
+import { Icon } from "@/components/Icon/Icon";
+import { useAccount } from "@/lib/hooks/useAccount";
 import type { UserProfile, UserProfileData } from "@/types/user";
-import type { UserStatus } from "@/types/chat";
 
 interface UserProfileModalProps {
   profile: UserProfile | null;
@@ -17,12 +18,14 @@ interface UserProfileModalProps {
 }
 
 /**
- * Discord-style profile popup — avatar, name, status, role badges, bio. The
- * passed-in profile (from the conversation's cached members) renders
- * instantly; on open we fetch the user's live profile so avatar, roles and
- * bio are never stale, and swap them in when it lands.
+ * The profile popup for another person: banner, avatar with presence, role badges, name,
+ * Message / Call, and the About tab. The passed-in profile (from the conversation's
+ * cached members) renders instantly; on open we fetch the user's live profile so avatar,
+ * roles and bio are never stale, and swap them in when it lands.
  */
 export function UserProfileModal({ profile, onClose }: UserProfileModalProps) {
+  const { userId } = useAccount();
+  const { startConversation } = useChat();
   const [live, setLive] = useState<UserProfileData | null>(null);
   const [bioFailed, setBioFailed] = useState(false);
   const profileId = profile?.id ?? null;
@@ -49,51 +52,72 @@ export function UserProfileModal({ profile, onClose }: UserProfileModalProps) {
 
   const roles = live?.roles ?? profile?.roles ?? [];
   const avatarUrl = live ? live.avatarUrl : (profile?.avatarUrl ?? null);
-  const bio = live?.bio?.trim() || null;
-  const badges = badgesForRoles(roles);
+  const isOther = profile !== null && profile.id !== userId;
+  const mock = mockProfileFor(profile?.name);
+
+  function reach(call: boolean) {
+    if (!profile) return;
+    void startConversation(
+      { id: profile.id, username: profile.name, avatarUrl, roles },
+      { call },
+    );
+    onClose();
+  }
 
   return (
-    <Modal backdrop="blur" isOpen={profile !== null} size="sm" onClose={onClose}>
+    <Modal
+      backdrop="blur"
+      classNames={{
+        backdrop: "bg-black/70 backdrop-blur-2xl backdrop-saturate-50",
+        base: "max-w-[460px] overflow-hidden rounded-[22px] border border-[#514556] bg-[#25262c] shadow-[0_24px_80px_rgba(0,0,0,0.5)]",
+        closeButton: "right-4 top-4 z-10 rounded-[8px] border border-[#363842] bg-[#302b35] p-2",
+      }}
+      isOpen={profile !== null}
+      scrollBehavior="inside"
+      size="md"
+      onClose={onClose}
+    >
       <ModalContent>
         {profile && (
           <ModalBody className="gap-0 p-0">
-            <div className="h-20 w-full rounded-t-large bg-gradient-to-br from-brand to-brand-deep" />
-
-            <div className="flex flex-col items-center px-5 pb-5 -mt-10">
-              <div className="relative">
-                <Avatar
-                  className="h-20 w-20 bg-default-200 text-brand text-2xl ring-4 ring-content1"
-                  name={profile.name.charAt(0).toUpperCase()}
-                  src={avatarUrl ?? undefined}
-                />
-                {profile.status && (
-                  <StatusDot
-                    className="absolute bottom-1 right-1 h-4 w-4"
-                    name={profile.name}
-                    status={profile.status}
-                  />
-                )}
-              </div>
-
-              <p className="mt-3 text-lg font-semibold text-foreground">{profile.name}</p>
-
-              {badges.length > 0 && (
-                <div className="mt-2 flex flex-wrap justify-center gap-1.5">
-                  {badges.map((badge) => (
-                    <RoleBadge key={badge.role} badge={badge} />
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-4 w-full rounded-medium bg-content2 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-default-400">
-                  About Me
-                </p>
-                <p className="mt-1 whitespace-pre-wrap break-words text-sm text-default-500">
-                  {bio ?? (live || bioFailed ? "No bio yet." : "Loading…")}
-                </p>
-              </div>
-            </div>
+            <ProfileCard
+              embedded
+              bannerColor={mock?.bannerColor ?? "graphite"}
+              customStatus={mock?.customStatus}
+              memberSince={mock?.memberSince}
+              mutualFriends={mock?.mutualFriends}
+              mutualServers={mock?.mutualServers}
+              pronouns={mock?.pronouns}
+              tabs
+              actions={
+                  <>
+                    <Button
+                      className="min-h-11 flex-grow rounded-[10px] border border-[#ff667e] bg-[#ff3b58] text-sm font-bold text-white shadow-[0_4px_0_#a11d33] data-[hover=true]:bg-[#ff4d67]"
+                      isDisabled={!isOther}
+                      startContent={<Icon name="chat-bubble" size={16} />}
+                      onPress={() => reach(false)}
+                    >
+                      Message
+                    </Button>
+                    <Button
+                      className="min-h-11 rounded-[10px] border border-[#54515c] bg-[#3b3c43] text-sm font-bold shadow-[0_3px_0_#222128]"
+                      isDisabled={!isOther}
+                      startContent={<Icon name="phone" size={16} />}
+                      variant="flat"
+                      onPress={() => reach(true)}
+                    >
+                      Call
+                    </Button>
+                  </>
+              }
+              avatarUrl={avatarUrl}
+              bio={live?.bio ?? mock?.bio ?? null}
+              bioPlaceholder={live || bioFailed ? "No bio yet." : "Loading…"}
+              name={profile.name}
+              roles={roles}
+              status={profile.status}
+              username={profile.name}
+            />
           </ModalBody>
         )}
       </ModalContent>

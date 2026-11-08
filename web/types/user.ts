@@ -35,6 +35,20 @@ export interface UserProfileData extends PlatformUser {
   bio: string | null;
 }
 
+/** The preset banner colors on the profile page. */
+export type BannerColorId = "brand" | "plum" | "slate" | "graphite";
+
+/** What the profile page edits and previews. */
+export interface ProfileDraft {
+  pronouns: string;
+  customStatus: string;
+  bio: string;
+  bannerColor: BannerColorId;
+  /** Local preview URL of a banner image the user picked (not stored yet). */
+  bannerImageUrl: string | null;
+  showMemberSince: boolean;
+}
+
 /** Display identity for a person in the UI, resolved from conversation members. */
 export interface UserIdentity {
   name: string;

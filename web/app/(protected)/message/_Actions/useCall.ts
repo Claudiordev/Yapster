@@ -38,6 +38,7 @@ import {
   setStartBitrateTarget,
 } from "./utils/startBitrateOverride";
 import { pickDesktopScreenShare } from "./utils/desktopScreenShare";
+import { withWindowAudio } from "./utils/windowAudio";
 
 /**
  * The slice of a raw WebRTC stats report the screen-share logging reads.
@@ -1528,40 +1529,44 @@ export function useCall(conversationId: string | null): UseCallState {
               ?.track as LocalVideoTrack | undefined
           )?.mediaStreamTrack.id;
 
-      await room.localParticipant.setScreenShareEnabled(
-        enabled,
-        {
-          resolution,
-          contentHint: "motion",
-          audio: includeAudio
-            ? {
-                // Screen audio is music/media, not speech. Avoid voice
-                // processing and request the browser's native stereo 48 kHz
-                // capture where supported.
-                restrictOwnAudio: { ideal: true },
-                channelCount: 2,
-                sampleRate: 48_000,
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
-              }
-            : false,
-          systemAudio: includeAudio ? "include" : "exclude",
-          suppressLocalAudioPlayback: false,
-        },
-        {
-          screenShareEncoding: { maxBitrate, maxFramerate, priority: "high" },
-          audioPreset: AudioPresets.musicHighQualityStereo,
-          forceStereo: true,
-          dtx: true,
-          red: false,
-          stream: "screen-share",
-          videoCodec: "vp8",
-          backupCodec: true,
-          simulcast: false,
-          degradationPreference: "balanced",
-        },
-      );
+      const startShare = () =>
+        room.localParticipant.setScreenShareEnabled(
+          enabled,
+          {
+            resolution,
+            contentHint: "motion",
+            audio: includeAudio
+              ? {
+                  // Screen audio is music/media, not speech. Avoid voice
+                  // processing and request the browser's native stereo 48 kHz
+                  // capture where supported.
+                  restrictOwnAudio: { ideal: true },
+                  channelCount: 2,
+                  sampleRate: 48_000,
+                  echoCancellation: false,
+                  noiseSuppression: false,
+                  autoGainControl: false,
+                }
+              : false,
+            systemAudio: includeAudio ? "include" : "exclude",
+            suppressLocalAudioPlayback: false,
+          },
+          {
+            screenShareEncoding: { maxBitrate, maxFramerate, priority: "high" },
+            audioPreset: AudioPresets.musicHighQualityStereo,
+            forceStereo: true,
+            dtx: true,
+            red: false,
+            stream: "screen-share",
+            videoCodec: "vp8",
+            backupCodec: true,
+            simulcast: false,
+            degradationPreference: "balanced",
+          },
+        );
+
+      // Share a window with that window's audio only (Chrome), not the whole system's.
+      await (enabled && includeAudio ? withWindowAudio(startShare) : startShare());
 
       const screenTrack = room.localParticipant.getTrackPublication(
         Track.Source.ScreenShare,

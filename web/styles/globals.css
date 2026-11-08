@@ -878,6 +878,13 @@
   --call-role-depth: #8c1023;
 }
 
+.call-role-badge--off {
+  --call-role-border: #25262c;
+  --call-role-background: #4a4b53;
+  --call-role-text: #b9bac2;
+  --call-role-depth: #33343b;
+}
+
 .call-role-badge--moderator {
   --call-role-border: #123e72;
   --call-role-background: #3285dc;
@@ -897,6 +904,13 @@
   --call-role-background: #f0a020;
   --call-role-text: #fff;
   --call-role-depth: #b87400;
+}
+
+/* Role pills on the profile card: same colours, border and depth as in a call, just larger. */
+.profile-card .call-role-badge {
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-size: 12px;
 }
 
 @keyframes voice-wave {
